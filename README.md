@@ -73,7 +73,7 @@ npm install -g sql-analyzer-cli
 ### 从源码安装
 
 ```bash
-git clone https://github.com/yourusername/sql-analyzer-cli.git
+git clone https://github.com/sewardsheng/sql-analyzer-cli.git
 cd sql-analyzer-cli
 npm install
 npm link
