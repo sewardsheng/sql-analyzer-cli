@@ -63,13 +63,6 @@ flowchart TD
 ```
 
 ## 安装
-
-### 使用npm安装
-
-```bash
-npm install -g sql-analyzer-cli
-```
-
 ### 从源码安装
 
 ```bash
@@ -98,11 +91,18 @@ DEFAULT_DATABASE_TYPE=mysql
 
 ### 2. 配置API密钥（可选）
 
-你也可以使用交互式配置命令：
+你也可以使用交互式配置命令，它将直接更新项目目录中的`.env`文件：
 
 ```bash
 sql-analyzer config
 ```
+
+该命令将引导你完成以下配置项：
+- API密钥 (CUSTOM_API_KEY)
+- API基础URL (CUSTOM_BASE_URL)
+- 模型名称 (CUSTOM_MODEL)
+- 默认数据库类型 (DEFAULT_DATABASE_TYPE)
+- 嵌入模型名称 (CUSTOM_EMBEDDING_MODEL)
 
 ### 3. 加载知识库（可选但推荐）
 
@@ -235,7 +235,25 @@ sql-analyzer status
 
 ### `sql-analyzer config`
 
-交互式配置API密钥和模型设置。
+交互式配置API密钥和模型设置，将配置直接保存到项目目录的`.env`文件中。
+
+**配置项：**
+
+- API基础URL：AI服务的API端点
+- API密钥：用于访问AI服务的密钥
+- 模型名称：用于SQL分析的AI模型
+- 嵌入模型名称：用于知识库文档嵌入的模型
+- 默认数据库类型：默认的数据库类型（mysql, postgresql, oracle, sqlserver）
+
+
+**示例：**
+
+```bash
+# 启动交互式配置
+sql-analyzer config
+```
+
+**注意：** 该命令会直接修改项目目录中的`.env`文件，而不是创建单独的配置文件。
 
 ### `sql-analyzer init`
 
@@ -313,25 +331,12 @@ sql-analyzer analyze --file ./examples/mysql_examples.sql --database mysql
 sql-analyzer analyze --file ./examples/postgresql_examples.sql --database postgresql
 ```
 
-## 配置文件
+## 配置系统
 
-配置文件位于 `~/.sql-analyzer/config.json`，包含以下选项：
-
-```json
-{
-  "apiKey": "your_api_key",
-  "baseURL": "https://api.openai.com/v1",
-  "model": "gpt-3.5-turbo",
-  "defaultDatabaseType": "mysql",
-  "embeddingModel": "text-embedding-ada-002"
-}
-```
-
-## 环境变量
-
-你也可以通过环境变量设置配置：
+SQL分析器CLI使用环境变量进行配置，配置文件位于项目根目录的`.env`文件：
 
 ```env
+# API配置
 CUSTOM_API_KEY=your_api_key
 CUSTOM_BASE_URL=https://api.openai.com/v1
 CUSTOM_MODEL=gpt-3.5-turbo
@@ -339,9 +344,23 @@ DEFAULT_DATABASE_TYPE=mysql
 CUSTOM_EMBEDDING_MODEL=text-embedding-ada-002
 ```
 
+### 配置优先级
+
+1. 命令行参数（最高优先级）
+2. 环境变量（.env文件或系统环境变量）
+3. 默认值（最低优先级）
+
+### 配置方法
+
+1. 使用`sql-analyzer init`命令初始化配置文件
+2. 使用`sql-analyzer config`命令进行交互式配置
+3. 直接编辑项目根目录的`.env`文件
+
 ## 日志
 
 日志文件位于 `~/.sql-analyzer/logs/` 目录下，按日期命名（例如：`sql-analyzer-2023-11-15.log`）。
+
+**注意：** 日志目录仍然位于用户主目录下的`.sql-analyzer`文件夹中，与配置文件分离。
 
 ## 故障排除
 
@@ -418,15 +437,21 @@ sql-analyzer-cli/
 │   │   ├── interactive.js # 交互式模式
 │   │   └── learn.js     # 学习服务
 │   ├── utils/           # 工具函数
-│   │   ├── config.js    # 配置管理
+│   │   ├── config.js    # 配置管理（现在操作.env文件）
 │   │   ├── env.js       # 环境变量处理
 │   │   └── logger.js    # 错误处理和日志记录
 │   └── index.js         # 主入口文件
 ├── rules/               # 知识库规则文档目录
 ├── examples/            # 示例SQL文件
+├── .env                 # 配置文件（项目根目录）
 ├── .env.example         # 环境变量示例
 ├── package.json         # 项目配置
 └── README.md           # 项目文档
+
+# 用户数据目录（位于用户主目录）
+~/.sql-analyzer/
+├── logs/                # 日志文件目录
+│   └── sql-analyzer-YYYY-MM-DD.log
 ```
 
 ## 更新日志

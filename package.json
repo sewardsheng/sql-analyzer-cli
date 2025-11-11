@@ -2,7 +2,7 @@
   "name": "sql-analyzer-cli",
   "version": "1.0.0",
   "description": "SQL语句智能分析与扫描CLI工具",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "bin": {
     "sql-analyzer": "./bin/cli.js"
   },
