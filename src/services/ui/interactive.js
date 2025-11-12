@@ -1,11 +1,14 @@
-// 在 CommonJS 中使用 inquirer 的正确方式
-const inquirer = require('inquirer').default || require('inquirer');
-// 在 CommonJS 中使用 chalk 的正确方式
-const chalk = require('chalk').default;
-// 在 CommonJS 中使用 ora 的正确方式
-const ora = require('ora').default;
-const { analyzeSqlWithGraph } = require('../../core/graph/graphAnalyzer');
-const { readConfig } = require('../../utils/config');
+// 在 ES 模块中使用 inquirer 的正确方式
+import inquirerModule from 'inquirer';
+const inquirer = inquirerModule.default || inquirerModule;
+// 在 ES 模块中使用 chalk 的正确方式
+import chalkModule from 'chalk';
+const chalk = chalkModule.default || chalkModule;
+// 在 ES 模块中使用 ora 的正确方式
+import oraModule from 'ora';
+const ora = oraModule.default || oraModule;
+import { analyzeSqlWithGraph } from '../../core/graph/graphAnalyzer.js';
+import { readConfig } from '../../utils/config.js';
 
 /**
  * 交互式SQL分析模式
@@ -165,7 +168,7 @@ function displayResult(result) {
   }
 }
 
-module.exports = {
+export {
   interactiveMode,
   displayResult
 };

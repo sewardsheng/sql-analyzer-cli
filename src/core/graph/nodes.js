@@ -3,13 +3,13 @@
  * 实现LangGraph状态图中的各个节点
  */
 
-const { retrieveDocuments } = require('./vectorStore');
-const { ChatOpenAI } = require('@langchain/openai');
-const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
-const { z } = require('zod');
-const { updateState, completeStep } = require('./states');
-const { optimizedDocumentRetrieval } = require('../performance/performance');
-const { readConfig } = require('../../utils/config');
+import { retrieveDocuments } from './vectorStore.js';
+import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { z } from 'zod';
+import { updateState, completeStep } from './states.js';
+import { optimizedDocumentRetrieval } from '../performance/performance.js';
+import { readConfig } from '../../utils/config.js';
 
 /**
  * 系统提示词
@@ -249,7 +249,7 @@ async function postProcessResults(state) {
   }
 }
 
-module.exports = {
+export {
   initializeAndValidate,
   retrieveRelevantDocuments,
   analyzeSql,

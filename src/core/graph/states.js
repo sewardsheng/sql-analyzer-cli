@@ -136,7 +136,7 @@ function setError(state, error) {
   });
 }
 
-module.exports = {
+export {
   createInitialState,
   updateState,
   completeStep,

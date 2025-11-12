@@ -3,7 +3,7 @@
  * 在应用启动时初始化性能优化功能
  */
 
-const { startCacheCleanup, stopCacheCleanup } = require('./performance');
+import { startCacheCleanup, stopCacheCleanup } from './performance.js';
 
 // 全局定时器引用
 let cleanupTimer = null;
@@ -30,7 +30,7 @@ function stopPerformance() {
   }
 }
 
-module.exports = {
+export {
   initializePerformance,
   stopPerformance
 };

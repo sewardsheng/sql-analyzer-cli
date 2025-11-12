@@ -1,18 +1,20 @@
-const fs = require('fs').promises;
-const path = require('path');
+import fs from 'fs/promises';
+import path from 'path';
 
 // 在测试环境中不导入 inquirer
 let inquirer;
 if (process.env.NODE_ENV !== 'test') {
-  // 在 CommonJS 中使用 inquirer 的正确方式
-  inquirer = require('inquirer').default || require('inquirer');
+  // 在 ES 模块中使用 inquirer 的正确方式
+  inquirer = await import('inquirer');
+  inquirer = inquirer.default || inquirer;
 }
 
 // 在测试环境中不导入 chalk
 let chalk;
 if (process.env.NODE_ENV !== 'test') {
-  // 在 CommonJS 中使用 chalk 的正确方式
-  chalk = require('chalk').default;
+  // 在 ES 模块中使用 chalk 的正确方式
+  chalk = await import('chalk');
+  chalk = chalk.default || chalk;
 }
 
 // .env文件路径
@@ -253,7 +255,7 @@ async function setConfig(key, value) {
   }
 }
 
-module.exports = {
+export {
   readConfig,
   configureSettings,
   getConfig,

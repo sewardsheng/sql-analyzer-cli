@@ -1,17 +1,17 @@
-// 在 CommonJS 中使用 inquirer 的正确方式
-const inquirer = require('inquirer').default || require('inquirer');
-// 在 CommonJS 中使用 chalk 的正确方式
-const chalk = require('chalk').default;
-// 在 CommonJS 中使用 ora 的正确方式
-const ora = require('ora').default;
-const readline = require('readline');
-const { analyzeSqlWithGraph } = require('../../core/graph/graphAnalyzer');
-const { readConfig } = require('../../utils/config');
-const fs = require('fs').promises;
-const { initEnvironment } = require('../../utils/env');
-const { configureSettings } = require('../../utils/config');
-const { learnDocuments, showKnowledgeStatus } = require('../knowledge/learn');
-const HistoryService = require('../history/historyService');
+// 在 ES 模块中使用 inquirer 的正确方式
+import inquirer from 'inquirer';
+// 在 ES 模块中使用 chalk 的正确方式
+import chalk from 'chalk';
+// 在 ES 模块中使用 ora 的正确方式
+import ora from 'ora';
+import readline from 'readline';
+import { analyzeSqlWithGraph } from '../../core/graph/graphAnalyzer.js';
+import { readConfig } from '../../utils/config.js';
+import fs from 'fs/promises';
+import { initEnvironment } from '../../utils/env.js';
+import { configureSettings } from '../../utils/config.js';
+import { learnDocuments, showKnowledgeStatus } from '../knowledge/learn.js';
+import HistoryService from '../history/historyService.js';
 
 /**
  * 显示欢迎信息
@@ -153,8 +153,8 @@ async function handleLearn(graphConfig) {
  */
 async function handleStatus() {
   try {
-    // 调用showKnowledgeStatus函数
-    const { showKnowledgeStatus } = require('../knowledge/learn');
+    // 使用ES模块导入方式调用showKnowledgeStatus函数
+    const { showKnowledgeStatus } = await import('../knowledge/learn.js');
     await showKnowledgeStatus();
     return true;
     
@@ -518,11 +518,12 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
 }
 
 /**
- * 处理quire的特殊分析函数
+ * 处理追问的特殊分析函数
  */
 async function processFollowUp(question, originalAnalysis, config) {
-  const { ChatOpenAI } = require('@langchain/openai');
-  const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
+  // 使用ES模块导入方式
+  const { ChatOpenAI } = await import('@langchain/openai');
+  const { HumanMessage, SystemMessage } = await import('@langchain/core/messages');
   
   // 读取配置
   const appConfig = await readConfig();
@@ -631,7 +632,9 @@ async function handleHistoryList(historyService) {
     }
     
     // 创建表格
-    const Table = require('cli-table3');
+    // 使用ES模块导入方式
+    const cliTable3 = await import('cli-table3');
+    const Table = cliTable3.default || cliTable3;
     const table = new Table({
       head: [
         chalk.cyan('ID'),
@@ -997,9 +1000,7 @@ function getTypeDisplayName(type) {
   }
 }
 
-module.exports = {
-  terminalUIMode
-};
+export { terminalUIMode };
 
 /**
  * 处理分析后的追问功能

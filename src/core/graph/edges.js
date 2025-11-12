@@ -138,7 +138,7 @@ function decideNextAnalysisStep(state) {
   return "complete";
 }
 
-module.exports = {
+export {
   shouldRetrieveDocuments,
   shouldAnalyze,
   shouldPostProcess,

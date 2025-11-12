@@ -3,18 +3,18 @@
  * 用于管理全局的向量存储实例，支持文档加载和检索功能
  */
 
-const { DirectoryLoader } = require("@langchain/classic/document_loaders/fs/directory");
-const { TextLoader } = require("@langchain/classic/document_loaders/fs/text");
-const { CSVLoader } = require("@langchain/community/document_loaders/fs/csv");
-const { JSONLoader } = require("@langchain/classic/document_loaders/fs/json");
-const { DocxLoader } = require("@langchain/community/document_loaders/fs/docx");
-const { PDFLoader } = require("@langchain/community/document_loaders/fs/pdf");
-const { MemoryVectorStore } = require("@langchain/classic/vectorstores/memory");
-const { OpenAIEmbeddings } = require("@langchain/openai");
-const { RecursiveCharacterTextSplitter } = require("@langchain/textsplitters");
-const { readConfig } = require('../../utils/config');
-const path = require("path");
-const fs = require("fs");
+import { DirectoryLoader } from "@langchain/classic/document_loaders/fs/directory";
+import { TextLoader } from "@langchain/classic/document_loaders/fs/text";
+import { CSVLoader } from "@langchain/community/document_loaders/fs/csv";
+import { JSONLoader } from "@langchain/classic/document_loaders/fs/json";
+import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { readConfig } from '../../utils/config.js';
+import path from "path";
+import fs from "fs";
 
 // 全局向量存储实例
 let vectorStore = null;
@@ -358,7 +358,7 @@ function isVectorStoreInitialized() {
   return isVectorStorePersisted();
 }
 
-module.exports = {
+export {
   initializeVectorStore,
   loadDocumentsFromRulesDirectory,
   retrieveDocuments,

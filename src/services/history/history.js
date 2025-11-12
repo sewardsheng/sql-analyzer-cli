@@ -3,9 +3,10 @@
  * 实现历史记录的管理功能，包括查看、删除和统计
  */
 
-const chalk = require('chalk').default;
-const HistoryService = require('./historyService');
-const Table = require('cli-table3');
+import chalk from 'chalk';
+import HistoryService from './historyService.js';
+import Table from 'cli-table3';
+import readline from 'readline';
 
 // 创建历史记录服务实例
 const historyService = new HistoryService();
@@ -133,7 +134,6 @@ function clearAllHistory() {
     }
     
     // 确认操作
-    const readline = require('readline');
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
@@ -236,7 +236,7 @@ function getDatabaseLabel(db) {
   return labels[db] || db;
 }
 
-module.exports = {
+export {
   listHistory,
   showHistoryDetail,
   deleteHistory,

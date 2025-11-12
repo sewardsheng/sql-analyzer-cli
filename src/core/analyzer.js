@@ -1,12 +1,12 @@
-const { ChatOpenAI } = require("@langchain/openai");
-const { HumanMessage } = require("@langchain/core/messages");
-const { createAgent, tool } = require("langchain");
-const { z } = require("zod");
-const fs = require('fs').promises;
-const chalk = require('chalk');
-const { handleError, logInfo, logError, createError } = require('../utils/logger');
-const { retrieveDocuments, isVectorStoreInitialized, loadVectorStoreFromDisk } = require('./graph/vectorStore');
-const { readConfig } = require('../utils/config');
+import { ChatOpenAI } from "@langchain/openai";
+import { HumanMessage } from "@langchain/core/messages";
+import { createAgent, tool } from "langchain";
+import { z } from "zod";
+import fs from 'fs/promises';
+import chalk from 'chalk';
+import { handleError, logInfo, logError, createError } from '../utils/logger.js';
+import { retrieveDocuments, isVectorStoreInitialized, loadVectorStoreFromDisk } from './graph/vectorStore.js';
+import { readConfig } from '../utils/config.js';
 
 /**
  * 系统提示词
@@ -250,7 +250,7 @@ async function readSqlFromFile(filePath) {
   }
 }
 
-module.exports = {
+export {
   analyzeSqlWithAgent,
   readSqlFromFile,
   createSqlAnalyzerAgent,

@@ -330,7 +330,7 @@ async function cleanLogs() {
 }
 
 // 导出函数
-module.exports = {
+export {
   logInfo,
   logWarning,
   logError,

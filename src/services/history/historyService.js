@@ -3,9 +3,9 @@
  * 负责管理SQL分析历史记录的存储和检索
  */
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 class HistoryService {
   constructor() {
@@ -204,4 +204,4 @@ class HistoryService {
   }
 }
 
-module.exports = HistoryService;
+export default HistoryService;

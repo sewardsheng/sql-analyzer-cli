@@ -9,15 +9,14 @@ import { createRequire } from 'module';
 config();
 
 // 设置全局错误处理
-const require = createRequire(import.meta.url);
-const { setupGlobalErrorHandlers, logInfo } = require('../src/utils/logger.js');
+import { setupGlobalErrorHandlers, logInfo } from '../src/utils/logger.js';
 setupGlobalErrorHandlers();
 
 // 记录CLI启动
 logInfo(`SQL分析器CLI启动，命令: ${process.argv.join(' ')}`);
 
 // 导入CLI模块
-const { analyzeSql } = require('../src/index.js');
+import { analyzeSql } from '../src/index.js';
 
 // 配置CLI程序
 program

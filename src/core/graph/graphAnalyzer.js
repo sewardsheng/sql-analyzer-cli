@@ -1,12 +1,12 @@
-const { StateGraph } = require('@langchain/langgraph');
-const { ChatOpenAI } = require('@langchain/openai');
-const { createInitialState, updateState, completeAnalysis, setError } = require('./states');
-const { initializeAndValidate, retrieveRelevantDocuments, analyzeSql, postProcessResults } = require('./nodes');
-const { shouldRetrieveDocuments, shouldAnalyze, shouldPostProcess, isAnalysisComplete, decideErrorHandling, decideNextAnalysisStep } = require('./edges');
-const { getCachedAnalysis, cacheAnalysis } = require('../performance/performance');
-const { readConfig } = require('../../utils/config');
-const fs = require('fs').promises;
-const path = require('path');
+import { StateGraph } from '@langchain/langgraph';
+import { ChatOpenAI } from '@langchain/openai';
+import { createInitialState, updateState, completeAnalysis, setError } from './states.js';
+import { initializeAndValidate, retrieveRelevantDocuments, analyzeSql, postProcessResults } from './nodes.js';
+import { shouldRetrieveDocuments, shouldAnalyze, shouldPostProcess, isAnalysisComplete, decideErrorHandling, decideNextAnalysisStep } from './edges.js';
+import { getCachedAnalysis, cacheAnalysis } from '../performance/performance.js';
+import { readConfig } from '../../utils/config.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 /**
  * 创建SQL分析器的LangGraph状态图
@@ -221,7 +221,7 @@ async function analyzeSqlFileWithGraph(filePath, config = {}) {
   }
 }
 
-module.exports = {
+export {
   createSqlAnalyzerGraph,
   analyzeSqlWithGraph,
   analyzeSqlWithGraphStream,

@@ -1,7 +1,7 @@
-const fs = require('fs').promises;
-const path = require('path');
-// 在 CommonJS 中使用 chalk 的正确方式
-const chalk = require('chalk').default;
+import fs from 'fs/promises';
+import path from 'path';
+// 在 ES 模块中使用 chalk 的正确方式
+import chalk from 'chalk';
 
 /**
  * 检查.env文件是否存在，如果不存在则创建
@@ -111,7 +111,7 @@ async function initEnvironment() {
   return await validateEnv();
 }
 
-module.exports = {
+export {
   ensureEnvFile,
   validateEnv,
   initEnvironment

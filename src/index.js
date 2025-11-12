@@ -1,11 +1,12 @@
-const fs = require('fs').promises;
-const path = require('path');
-const chalk = require('chalk').default; // CommonJS环境中使用.default访问ES模块的默认导出
-const ora = require('ora').default; // CommonJS环境中使用.default访问ES模块的默认导出
-const { analyzeSqlWithGraph, analyzeSqlFileWithGraph } = require('./core/graph/graphAnalyzer');
-const { readConfig } = require('./utils/config');
-const { displayResult } = require('./services/ui/interactive');
-const { initializePerformance, stopPerformance } = require('./core/performance/initPerformance');
+import fs from 'fs/promises';
+import path from 'path';
+import chalk from 'chalk';
+import ora from 'ora';
+import { analyzeSqlWithGraph, analyzeSqlFileWithGraph } from './core/graph/graphAnalyzer.js';
+import { readConfig } from './utils/config.js';
+import { displayResult } from './services/ui/interactive.js';
+import { initializePerformance, stopPerformance } from './core/performance/initPerformance.js';
+import HistoryService from './services/history/historyService.js';
 
 // 初始化性能优化功能
 initializePerformance();
@@ -40,6 +41,7 @@ async function analyzeSql(options) {
     };
     
     let result;
+    let sqlQuery = '';
     
     // 分析SQL
     const spinner = ora('正在分析SQL语句...').start();
@@ -48,10 +50,12 @@ async function analyzeSql(options) {
       if (options.file) {
         // 从文件分析
         result = await analyzeSqlFileWithGraph(options.file, graphConfig);
+        sqlQuery = await fs.readFile(path.resolve(options.file), 'utf8');
         spinner.succeed('文件分析完成');
       } else if (options.sql) {
         // 直接分析SQL语句
         result = await analyzeSqlWithGraph(options.sql, null, graphConfig);
+        sqlQuery = options.sql;
         spinner.succeed('分析完成');
       } else {
         spinner.fail('参数错误');
@@ -62,6 +66,15 @@ async function analyzeSql(options) {
       
       // 显示结果
       displayResult(result);
+      
+      // 保存到历史记录
+      const historyService = new HistoryService();
+      historyService.saveAnalysis({
+        sql: sqlQuery,
+        databaseType: databaseType,
+        result: result,
+        type: options.file ? 'file' : 'single'
+      });
       
     } catch (error) {
       spinner.fail('分析失败');
@@ -74,6 +87,6 @@ async function analyzeSql(options) {
   }
 }
 
-module.exports = {
+export {
   analyzeSql
 };

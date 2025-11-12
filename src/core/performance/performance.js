@@ -1,5 +1,5 @@
-const crypto = require('crypto');
-const { isVectorStoreInitialized } = require('../graph/vectorStore');
+import crypto from 'crypto';
+import { isVectorStoreInitialized } from '../graph/vectorStore.js';
 
 /**
  * 简单的内存缓存实现
@@ -188,7 +188,7 @@ async function parallelAnalysis(tasks, concurrency = 3) {
         
         // 这里应该调用实际的分析函数
         // 由于循环依赖，我们使用动态导入
-        const { analyzeSqlWithGraph } = require('../graph/graphAnalyzer');
+        const { analyzeSqlWithGraph } = await import('../graph/graphAnalyzer.js');
         const result = await analyzeSqlWithGraph(task.sql, null, task.config);
         
         // 缓存结果
@@ -235,7 +235,7 @@ async function optimizedDocumentRetrieval(query, k = 4) {
   
   try {
       // 动态导入以避免循环依赖
-      const { similaritySearch } = require('../graph/vectorStore');
+      const { similaritySearch } = await import('../graph/vectorStore.js');
       const documents = await similaritySearch(query, k);
     
     // 缓存结果
@@ -267,7 +267,15 @@ function startCacheCleanup(interval = 10 * 60 * 1000) { // 默认10分钟
 // 全局定时器引用，用于跟踪活动的定时器
 let activeCleanupTimer = null;
 
-module.exports = {
+// 停止缓存清理定时器
+function stopCacheCleanup() {
+  if (activeCleanupTimer) {
+    activeCleanupTimer.stop();
+    activeCleanupTimer = null;
+  }
+}
+
+export {
   MemoryCache,
   analysisCache,
   documentCache,
@@ -280,10 +288,5 @@ module.exports = {
   parallelAnalysis,
   optimizedDocumentRetrieval,
   startCacheCleanup,
-  stopCacheCleanup: () => {
-    if (activeCleanupTimer) {
-      activeCleanupTimer.stop();
-      activeCleanupTimer = null;
-    }
-  }
+  stopCacheCleanup
 };
