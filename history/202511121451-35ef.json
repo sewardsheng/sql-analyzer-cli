@@ -1,0 +1,86 @@
+{
+  "id": "202511121451-35ef",
+  "timestamp": "2025-11-12T06:51:29.368Z",
+  "sql": "select * from db",
+  "databaseType": "mysql",
+  "type": "single",
+  "result": {
+    "sqlQuery": "select * from db",
+    "sqlFilePath": null,
+    "retrievedDocuments": [
+      {
+        "pageContent": "## 3. 注释规范\n\n### 3.1 单行注释\n```sql\n-- 获取活跃用户的最新文章\nSELECT u.id, u.name, p.title\nFROM users u\nJOIN posts p ON u.id = p.user_id\nWHERE u.status = 'active';\n```\n\n### 3.2 多行注释\n```sql\n/*\n * 计算用户平均订单金额\n * 只考虑已完成订单\n * 排除异常值（金额大于10000）\n */\nSELECT AVG(order_amount) as avg_amount\nFROM orders\nWHERE status = 'completed'\n  AND order_amount < 10000;\n```",
+        "metadata": {
+          "source": "C:\\Users\\sewardsheng\\Documents\\trae_projects\\sql-analyzer-cli\\rules\\sql_coding_standards.md",
+          "loc": {
+            "lines": {
+              "from": 93,
+              "to": 115
+            }
+          }
+        }
+      },
+      {
+        "pageContent": "# SQL安全规则\n\n## 1. SQL注入防护\n\n### 1.1 使用参数化查询\n```sql\n-- 不推荐（容易受到SQL注入攻击）\nString sql = \"SELECT * FROM users WHERE name = '\" + userName + \"'\";\n\n-- 推荐（使用参数化查询）\nString sql = \"SELECT * FROM users WHERE name = ?\";\nPreparedStatement stmt = connection.prepareStatement(sql);\nstmt.setString(1, userName);\n```\n\n### 1.2 输入验证\n- 验证所有用户输入\n- 使用白名单而非黑名单\n- 限制输入长度\n\n### 1.3 最小权限原则\n- 应用程序只应具有必要的数据库权限\n- 避免使用SA或root账户\n- 为不同功能创建不同的数据库用户\n\n## 2. 敏感数据处理\n\n### 2.1 敏感数据加密\n```sql\n-- 加密存储敏感信息\nINSERT INTO users (name, email, phone_encrypted) \nVALUES ('张三', 'zhangsan@example.com', AES_ENCRYPT('13800138000', 'secret_key'));\n```\n\n### 2.2 日志安全\n- 避免在日志中记录敏感信息\n- 对日志文件进行访问控制\n- 定期清理旧日志\n\n## 3. 数据库连接安全\n\n### 3.1 连接字符串安全\n- 不要在代码中硬编码连接字符串\n- 使用配置文件或环境变量存储连接信息\n- 对配置文件进行加密\n\n### 3.2 连接池配置\n- 设置合理的连接超时时间\n- 限制最大连接数\n- 监控连接池使用情况",
+        "metadata": {
+          "source": "C:\\Users\\sewardsheng\\Documents\\trae_projects\\sql-analyzer-cli\\rules\\sql_security.md",
+          "loc": {
+            "lines": {
+              "from": 1,
+              "to": 50
+            }
+          }
+        }
+      },
+      {
+        "pageContent": "# SQL编码规范\n\n## 1. 命名规范\n\n### 1.1 表名命名\n- 使用小写字母\n- 使用下划线分隔单词\n- 使用复数形式\n- 使用有意义的名称\n\n```sql\n-- 推荐\nuser_profiles\norder_items\nproduct_categories\n\n-- 不推荐\nUserProfiles\nuserprofiles\ntbl_user\nusers123\n```\n\n### 1.2 列名命名\n- 使用小写字母\n- 使用下划线分隔单词\n- 使用单数形式\n- 避免使用缩写\n\n```sql\n-- 推荐\nfirst_name\ncreated_at\nis_active\n\n-- 不推荐\nFirstName\ncreationDate\nflag\nusr_nm\n```\n\n### 1.3 索引命名\n- 使用idx_前缀\n- 包含表名和列名\n- 使用下划线分隔\n\n```sql\n-- 推荐\nidx_users_email\nidx_orders_created_at\n\n-- 不推荐\nemail_index\nindex1\nidx1\n```\n\n## 2. 格式规范\n\n### 2.1 关键字大写\n```sql\n-- 推荐\nSELECT id, name, email \nFROM users \nWHERE status = 'active' \nORDER BY created_at DESC;\n\n-- 不推荐\nselect id, name, email \nfrom users \nwhere status = 'active' \norder by created_at desc;\n```\n\n### 2.2 缩进和对齐\n- 使用2或4个空格缩进\n- 对齐关键字\n- 每个主要子句单独一行\n\n```sql\n-- 推荐\nSELECT u.id, \n       u.name, \n       p.title\nFROM users u\nJOIN posts p ON u.id = p.user_id\nWHERE u.status = 'active'\n  AND p.created_at >= '2023-01-01'\nORDER BY p.created_at DESC;\n```\n\n## 3. 注释规范",
+        "metadata": {
+          "source": "C:\\Users\\sewardsheng\\Documents\\trae_projects\\sql-analyzer-cli\\rules\\sql_coding_standards.md",
+          "loc": {
+            "lines": {
+              "from": 1,
+              "to": 93
+            }
+          }
+        }
+      }
+    ],
+    "analysisResult": {
+      "summary": "```json\n{\n  \"summary\": \"这是一个极其简单的SQL查询，但存在多个严重问题。查询使用了SELECT *且没有WHERE条件，可能导致性能问题和安全风险。\",\n  \"issues\": [\n    {\n      \"type\": \"性能问题\",\n      \"severity\": \"高\",\n      \"description\": \"使用SELECT *会返回所有列，包括不需要的列，增加网络传输和内存消耗\",\n      \"location\": \"SELECT *\",\n      \"recommendation\": \"明确指定需要的列名，避免使用通配符\"\n    },\n    {\n      \"type\": \"性能问题\",\n      \"severity\": \"高\",\n      \"description\": \"缺少WHERE条件，会扫描整张表，对于大表性能极差\",\n      \"location\": \"整个查询\",\n      \"recommendation\": \"添加适当的WHERE条件限制返回的数据量\"\n    },\n    {\n      \"type\": \"安全性问题\",\n      \"severity\": \"中\",\n      \"description\": \"可能暴露敏感数据，如果表包含敏感信息会被全部返回\",\n      \"location\": \"SELECT *\",\n      \"recommendation\": \"只选择必要的列，避免返回敏感数据\"\n    },\n    {\n      \"type\": \"规范性\",\n      \"severity\": \"低\",\n      \"description\": \"SQL关键字未使用大写，不符合编码规范\",\n      \"location\": \"select\",\n      \"recommendation\": \"将SQL关键字改为大写：SELECT\"\n    },\n    {\n      \"type\": \"规范性\",\n      \"severity\": \"低\",\n      \"description\": \"缺少必要的注释说明查询目的\",\n      \"location\": \"整个查询\",\n      \"recommendation\": \"添加注释说明查询的用途\"\n    }\n  ],\n  \"suggestions\": [\n    {\n      \"category\": \"性能优化\",\n      \"description\": \"明确指定需要的列名，避免不必要的列传输\",\n      \"example\": \"SELECT id, name, email FROM db WHERE condition\"\n    },\n    {\n      \"category\": \"性能优化\",\n      \"description\": \"添加WHERE条件限制数据范围\",\n      \"example\": \"SELECT column1, column2 FROM db WHERE status = 'active'\"\n    },\n    {\n      \"category\": \"规范性\",\n      \"description\": \"遵循SQL关键字大写规范\",\n      \"example\": \"SELECT column1, column2 FROM table_name\"\n    },\n    {\n      \"category\": \"规范性\",\n      \"description\": \"添加查询注释说明\",\n      \"example\": \"-- 获取用户基本信息\\\\nSELECT id, name, email FROM users\"\n    },\n    {\n      \"category\": \"安全性\",\n      \"description\": \"考虑添加LIMIT子句限制返回行数\",\n      \"example\": \"SELECT column1, column2 FROM db LIMIT 100\"\n    }\n  ],\n  \"metrics\": {\n    \"complexity\": \"低\",\n    \"estimatedExecutionTime\": \"取决于表大小，大表可能很慢\",\n    \"resourceUsage\": \"高（全表扫描，返回所有列）\"\n  }\n}\n```",
+      "issues": [],
+      "suggestions": [],
+      "metrics": {
+        "complexity": "中",
+        "estimatedExecutionTime": "未知",
+        "resourceUsage": "中等"
+      },
+      "analyzedAt": "2025-11-12T06:51:29.365Z",
+      "sqlQuery": "select * from db",
+      "analysisDimensions": [
+        "performance",
+        "security",
+        "standards"
+      ]
+    },
+    "error": null,
+    "completed": true,
+    "step": 4,
+    "metadata": {
+      "startTime": "2025-11-12T06:50:54.493Z",
+      "endTime": null,
+      "duration": 34873,
+      "analysisType": "LangGraph分析"
+    },
+    "config": {
+      "model": "deepseek-ai/DeepSeek-V3.1-Terminus",
+      "temperature": 0.1,
+      "maxTokens": 2000,
+      "analysisDimensions": [
+        "performance",
+        "security",
+        "standards"
+      ]
+    }
+  },
+  "parentId": null
+}

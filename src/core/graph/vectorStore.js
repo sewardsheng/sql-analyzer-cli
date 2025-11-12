@@ -12,7 +12,7 @@ const { PDFLoader } = require("@langchain/community/document_loaders/fs/pdf");
 const { MemoryVectorStore } = require("@langchain/classic/vectorstores/memory");
 const { OpenAIEmbeddings } = require("@langchain/openai");
 const { RecursiveCharacterTextSplitter } = require("@langchain/textsplitters");
-const { readConfig } = require('../utils/config');
+const { readConfig } = require('../../utils/config');
 const path = require("path");
 const fs = require("fs");
 
@@ -37,9 +37,9 @@ async function initializeVectorStore() {
   }
 
   const embeddings = new OpenAIEmbeddings({
-    openAIApiKey: config.apiKey,
     modelName: config.embeddingModel,
     configuration: {
+      apiKey: config.apiKey,
       baseURL: config.baseURL || 'https://api.openai.com/v1',
     }
   });
@@ -286,6 +286,30 @@ async function retrieveDocuments(query, k = 2) {
 }
 
 /**
+ * 直接进行相似性搜索（供 performance.js 使用）
+ * @param {string} query - 查询字符串
+ * @param {number} k - 返回文档数量，默认为4
+ * @returns {Promise<any[]>} 检索到的文档数组
+ */
+async function similaritySearch(query, k = 4) {
+  try {
+    // 如果向量存储未初始化，尝试从磁盘加载
+    if (!vectorStore && isVectorStorePersisted()) {
+      await loadVectorStoreFromDisk();
+    }
+    
+    if (!vectorStore) {
+      throw new Error("向量存储未初始化，请先运行 'learn' 命令加载文档");
+    }
+
+    return await vectorStore.similaritySearch(query, k);
+  } catch (error) {
+    console.error("相似性搜索时出错:", error);
+    throw error;
+  }
+}
+
+/**
  * 重置向量存储
  */
 function resetVectorStore() {
@@ -342,5 +366,6 @@ module.exports = {
   isVectorStoreInitialized,
   loadVectorStoreFromDisk,
   saveVectorStore,
-  isVectorStorePersisted
+  isVectorStorePersisted,
+  similaritySearch
 };

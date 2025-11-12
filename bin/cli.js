@@ -1,24 +1,49 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-const { program } = require('commander');
-const path = require('path');
-require('dotenv').config();
+import { program } from 'commander';
+import path from 'path';
+import { config } from 'dotenv';
+import { createRequire } from 'module';
+
+// 加载环境变量
+config();
 
 // 设置全局错误处理
-const { setupGlobalErrorHandlers, logInfo } = require('../src/utils/logger');
+const require = createRequire(import.meta.url);
+const { setupGlobalErrorHandlers, logInfo } = require('../src/utils/logger.js');
 setupGlobalErrorHandlers();
 
 // 记录CLI启动
 logInfo(`SQL分析器CLI启动，命令: ${process.argv.join(' ')}`);
 
 // 导入CLI模块
-const { analyzeSql } = require('../src/index');
+const { analyzeSql } = require('../src/index.js');
 
 // 配置CLI程序
 program
   .name('sql-analyzer')
   .description('SQL语句智能分析与扫描工具')
   .version('1.0.0');
+
+// 默认行为：显示帮助信息
+program.action(() => {
+  console.log('错误：未知的命令或参数。');
+  program.help();
+});
+
+// UI命令：启动Terminal UI模式
+program
+  .command('ui')
+  .description('启动Terminal UI模式，提供交互式菜单界面')
+  .action(async () => {
+    try {
+      const { terminalUIMode } = await import('../src/services/ui/terminalUI.js');
+      await terminalUIMode();
+    } catch (error) {
+      console.error('Terminal UI模式中发生错误:', error.message);
+      process.exit(1);
+    }
+  });
 
 // 分析SQL命令
 program
@@ -39,30 +64,13 @@ program
     }
   });
 
-// 交互式分析命令
-program
-  .command('interactive')
-  .description('进入交互式SQL分析模式')
-  .option('--api-key <key>', 'OpenAI API密钥')
-  .option('--base-url <url>', 'API基础URL')
-  .option('--model <model>', '使用的模型名称')
-  .action(async (options) => {
-    try {
-      const { interactiveMode } = require('../src/services/interactive');
-      await interactiveMode(options);
-    } catch (error) {
-      console.error('交互模式中发生错误:', error.message);
-      process.exit(1);
-    }
-  });
-
 // 初始化命令
 program
   .command('init')
   .description('初始化环境配置文件')
   .action(async () => {
     try {
-      const { initEnvironment } = require('../src/utils/env');
+      const { initEnvironment } = await import('../src/utils/env.js');
       await initEnvironment();
     } catch (error) {
       console.error('初始化过程中发生错误:', error.message);
@@ -76,7 +84,7 @@ program
   .description('配置API密钥和模型设置')
   .action(async () => {
     try {
-      const { configureSettings } = require('../src/utils/config');
+      const { configureSettings } = await import('../src/utils/config.js');
       await configureSettings();
     } catch (error) {
       console.error('配置过程中发生错误:', error.message);
@@ -96,7 +104,7 @@ program
   .option('--embedding-model <model>', '使用的嵌入模型名称')
   .action(async (options) => {
     try {
-      const { learnDocuments } = require('../src/services/learn');
+      const { learnDocuments } = await import('../src/services/knowledge/learn.js');
       await learnDocuments(options);
     } catch (error) {
       console.error('学习过程中发生错误:', error.message);
@@ -110,12 +118,80 @@ program
   .description('显示知识库状态')
   .action(async () => {
     try {
-      const { showKnowledgeStatus } = require('../src/services/learn');
+      const { showKnowledgeStatus } = await import('../src/services/knowledge/learn.js');
       await showKnowledgeStatus();
     } catch (error) {
       console.error('检查状态过程中发生错误:', error.message);
       process.exit(1);
     }
+  });
+
+// API服务器命令
+program
+  .command('api')
+  .description('启动SQL分析API服务器')
+  .option('-p, --port <port>', 'API服务器端口', '3000')
+  .option('-h, --host <host>', 'API服务器主机', '0.0.0.0')
+  .option('--no-cors', '禁用CORS')
+  .option('--cors-origin <origin>', 'CORS允许的源', '*')
+  .action(async (options) => {
+    try {
+      const { createApiServer } = await import('../src/services/api/apiServer.js');
+      createApiServer(options);
+    } catch (error) {
+      console.error('启动API服务器时发生错误:', error.message);
+      process.exit(1);
+    }
+  });
+
+// 历史记录命令
+const historyCommand = program
+  .command('history')
+  .description('管理SQL分析历史记录，支持查看、删除和清空历史记录');
+
+// 历史记录子命令：list
+historyCommand
+  .command('list')
+  .description('显示所有历史记录列表')
+  .action(async () => {
+    const { listHistory } = await import('../src/services/history/history.js');
+    listHistory();
+  });
+
+// 历史记录子命令：detail
+historyCommand
+  .command('detail <id>')
+  .description('显示指定ID的历史记录详情')
+  .action(async (id) => {
+    const { showHistoryDetail } = await import('../src/services/history/history.js');
+    showHistoryDetail(id);
+  });
+
+// 历史记录子命令：delete
+historyCommand
+  .command('delete <id>')
+  .description('删除指定ID的历史记录')
+  .action(async (id) => {
+    const { deleteHistory } = await import('../src/services/history/history.js');
+    deleteHistory(id);
+  });
+
+// 历史记录子命令：clear
+historyCommand
+  .command('clear')
+  .description('清空所有历史记录')
+  .action(async () => {
+    const { clearAllHistory } = await import('../src/services/history/history.js');
+    clearAllHistory();
+  });
+
+// 历史记录子命令：stats
+historyCommand
+  .command('stats')
+  .description('显示历史记录统计信息')
+  .action(async () => {
+    const { showHistoryStats } = await import('../src/services/history/history.js');
+    showHistoryStats();
   });
 
 // 解析命令行参数

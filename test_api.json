@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT * FROM users WHERE id = 1",
+  "databaseType": "mysql",
+  "analysisDimensions": ["performance", "security"]
+}

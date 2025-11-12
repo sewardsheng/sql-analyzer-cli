@@ -1,9 +1,19 @@
 const fs = require('fs').promises;
 const path = require('path');
-// 在 CommonJS 中使用 inquirer 的正确方式
-const inquirer = require('inquirer').default || require('inquirer');
-// 在 CommonJS 中使用 chalk 的正确方式
-const chalk = require('chalk').default;
+
+// 在测试环境中不导入 inquirer
+let inquirer;
+if (process.env.NODE_ENV !== 'test') {
+  // 在 CommonJS 中使用 inquirer 的正确方式
+  inquirer = require('inquirer').default || require('inquirer');
+}
+
+// 在测试环境中不导入 chalk
+let chalk;
+if (process.env.NODE_ENV !== 'test') {
+  // 在 CommonJS 中使用 chalk 的正确方式
+  chalk = require('chalk').default;
+}
 
 // .env文件路径
 const ENV_FILE = path.join(process.cwd(), '.env');
@@ -16,7 +26,12 @@ const DEFAULT_CONFIG = {
   apiKey: process.env.CUSTOM_API_KEY || '',
   model: process.env.CUSTOM_MODEL || 'zai-org/GLM-4.6',
   defaultDatabaseType: process.env.DEFAULT_DATABASE_TYPE || 'mysql',
-  embeddingModel: process.env.CUSTOM_EMBEDDING_MODEL || 'BAAI/bge-m3'
+  embeddingModel: process.env.CUSTOM_EMBEDDING_MODEL || 'BAAI/bge-m3',
+  // API服务器配置
+  apiPort: process.env.API_PORT || 3000,
+  apiHost: process.env.API_HOST || '0.0.0.0',
+  apiCorsEnabled: process.env.API_CORS_ENABLED !== 'false',
+  apiCorsOrigin: process.env.API_CORS_ORIGIN || '*'
 };
 
 /**
@@ -59,7 +74,11 @@ async function writeEnvFile(env) {
     'CUSTOM_API_KEY',
     'CUSTOM_MODEL',
     'CUSTOM_EMBEDDING_MODEL',
-    'DEFAULT_DATABASE_TYPE'
+    'DEFAULT_DATABASE_TYPE',
+    'API_PORT',
+    'API_HOST',
+    'API_CORS_ENABLED',
+    'API_CORS_ORIGIN'
   ];
   
   envOrder.forEach(key => {
@@ -80,6 +99,18 @@ async function writeEnvFile(env) {
           break;
         case 'DEFAULT_DATABASE_TYPE':
           content += '# 默认数据库类型\n';
+          break;
+        case 'API_PORT':
+          content += '# API服务器端口\n';
+          break;
+        case 'API_HOST':
+          content += '# API服务器主机\n';
+          break;
+        case 'API_CORS_ENABLED':
+          content += '# 是否启用CORS\n';
+          break;
+        case 'API_CORS_ORIGIN':
+          content += '# CORS允许的源\n';
           break;
       }
       content += `${key}=${env[key]}\n\n`;
@@ -102,7 +133,12 @@ async function readConfig() {
       apiKey: env.CUSTOM_API_KEY || process.env.CUSTOM_API_KEY || DEFAULT_CONFIG.apiKey,
       model: env.CUSTOM_MODEL || process.env.CUSTOM_MODEL || DEFAULT_CONFIG.model,
       embeddingModel: env.CUSTOM_EMBEDDING_MODEL || process.env.CUSTOM_EMBEDDING_MODEL || DEFAULT_CONFIG.embeddingModel,
-      defaultDatabaseType: env.DEFAULT_DATABASE_TYPE || process.env.DEFAULT_DATABASE_TYPE || DEFAULT_CONFIG.defaultDatabaseType
+      defaultDatabaseType: env.DEFAULT_DATABASE_TYPE || process.env.DEFAULT_DATABASE_TYPE || DEFAULT_CONFIG.defaultDatabaseType,
+      // API服务器配置
+      apiPort: env.API_PORT || process.env.API_PORT || DEFAULT_CONFIG.apiPort,
+      apiHost: env.API_HOST || process.env.API_HOST || DEFAULT_CONFIG.apiHost,
+      apiCorsEnabled: env.API_CORS_ENABLED !== undefined ? env.API_CORS_ENABLED === 'true' : DEFAULT_CONFIG.apiCorsEnabled,
+      apiCorsOrigin: env.API_CORS_ORIGIN || process.env.API_CORS_ORIGIN || DEFAULT_CONFIG.apiCorsOrigin
     };
     
     return config;
@@ -116,6 +152,11 @@ async function readConfig() {
  * 交互式配置设置
  */
 async function configureSettings() {
+  // 在测试环境中直接返回，不执行交互式配置
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  
   console.log(chalk.blue('🔧 SQL分析器配置设置'));
   
   const currentConfig = await readConfig();
@@ -170,7 +211,11 @@ async function configureSettings() {
   // 写入.env文件
   await writeEnvFile(env);
   
-  console.log(chalk.green('✅ 配置已保存到: ' + ENV_FILE));
+  if (chalk) {
+    console.log(chalk.green('✅ 配置已保存到: ' + ENV_FILE));
+  } else {
+    console.log('✅ 配置已保存到: ' + ENV_FILE);
+  }
 }
 
 /**
@@ -193,7 +238,12 @@ async function setConfig(key, value) {
     'baseURL': 'CUSTOM_BASE_URL',
     'model': 'CUSTOM_MODEL',
     'defaultDatabaseType': 'DEFAULT_DATABASE_TYPE',
-    'embeddingModel': 'CUSTOM_EMBEDDING_MODEL'
+    'embeddingModel': 'CUSTOM_EMBEDDING_MODEL',
+    // API服务器配置
+    'apiPort': 'API_PORT',
+    'apiHost': 'API_HOST',
+    'apiCorsEnabled': 'API_CORS_ENABLED',
+    'apiCorsOrigin': 'API_CORS_ORIGIN'
   };
   
   const envKey = envKeyMap[key];

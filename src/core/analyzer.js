@@ -5,7 +5,8 @@ const { z } = require("zod");
 const fs = require('fs').promises;
 const chalk = require('chalk');
 const { handleError, logInfo, logError, createError } = require('../utils/logger');
-const { retrieveDocuments, isVectorStoreInitialized, loadVectorStoreFromDisk } = require('./vectorStore');
+const { retrieveDocuments, isVectorStoreInitialized, loadVectorStoreFromDisk } = require('./graph/vectorStore');
+const { readConfig } = require('../utils/config');
 
 /**
  * 系统提示词
@@ -103,12 +104,15 @@ function createRetrieveTool() {
  * 创建SQL分析Agent
  */
 async function createSqlAnalyzerAgent(options = {}) {
-  // LLM模型配置
+  // 读取配置
+  const config = await readConfig();
+  
+  // LLM模型配置，使用环境配置作为默认值
   const model = new ChatOpenAI({
-    modelName: options.model || process.env.CUSTOM_MODEL || 'gpt-3.5-turbo',
+    modelName: options.model || config.model || 'gpt-3.5-turbo',
     configuration: {
-      apiKey: options.apiKey || process.env.CUSTOM_API_KEY,
-      baseURL: options.baseURL || process.env.CUSTOM_BASE_URL || 'https://api.openai.com/v1',
+      apiKey: options.apiKey || config.apiKey,
+      baseURL: options.baseURL || config.baseURL || 'https://api.openai.com/v1',
     }
   });
 
