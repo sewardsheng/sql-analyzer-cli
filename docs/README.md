@@ -6,16 +6,16 @@
 
 ### 🚀 快速开始
 
-- [安装指南](./installation.md) - 如何安装和配置 SQL Analyzer CLI
+- [安装指南](./installation.md) - 如何安装和配置 SQL Analyzer CLI，包含系统要求、安装方式、初始配置、验证安装、常见问题、升级指南和卸载说明
 
 ### 📖 用户指南
 
-- [命令使用指南](./usage.md) - 所有命令和选项的详细说明
-- [配置指南](./configuration.md) - 如何自定义和优化配置
+- [命令使用指南](./usage.md) - 所有命令和选项的详细说明，包含快速开始、命令概览、详细命令说明、高级用法和最佳实践
+- [规则配置指南](./rules-configuration.md) - 如何自定义和配置SQL分析规则，包含规则系统概述、默认规则结构、自定义规则创建和规则管理
 
 ### 🔧 开发者文档
 
-- [API 文档](./api.md) - REST API 和 WebSocket 接口文档
+- [API 文档](./api.md) - REST API 和 WebSocket 接口文档，包含API端点、请求参数、响应格式和使用示例
 
 
 ## 快速导航
@@ -25,7 +25,7 @@
 如果你是第一次使用 SQL Analyzer CLI，建议按以下顺序阅读文档：
 
 1. [安装指南](./installation.md) - 安装和配置工具
-2. [配置指南](./configuration.md) - 自定义和优化配置
+2. [规则配置指南](./rules-configuration.md) - 了解如何配置自定义规则
 3. [命令使用指南](./usage.md) - 了解常用命令
 
 ### 开发者
@@ -33,6 +33,7 @@
 如果你是开发者，可能对以下文档更感兴趣：
 
 1. [API 文档](./api.md) - 了解如何集成 API
+2. [规则配置指南](./rules-configuration.md) - 了解如何扩展分析规则
 
 ## 文档反馈
 

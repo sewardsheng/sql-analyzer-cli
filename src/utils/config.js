@@ -255,10 +255,143 @@ async function setConfig(key, value) {
   }
 }
 
+/**
+ * 显示所有配置项
+ */
+async function listConfig() {
+  const config = await readConfig();
+  
+  console.log(chalk.blue('📋 当前配置:'));
+  console.log('');
+  
+  // 显示配置项
+  console.log(chalk.yellow('API配置:'));
+  console.log(`  API基础URL: ${config.baseURL}`);
+  console.log(`  API密钥: ${config.apiKey ? '已设置' : '未设置'}`);
+  console.log(`  模型: ${config.model}`);
+  console.log(`  嵌入模型: ${config.embeddingModel}`);
+  console.log('');
+  
+  console.log(chalk.yellow('数据库配置:'));
+  console.log(`  默认数据库类型: ${config.defaultDatabaseType}`);
+  console.log('');
+  
+  console.log(chalk.yellow('API服务器配置:'));
+  console.log(`  端口: ${config.apiPort}`);
+  console.log(`  主机: ${config.apiHost}`);
+  console.log(`  CORS启用: ${config.apiCorsEnabled ? '是' : '否'}`);
+  console.log(`  CORS源: ${config.apiCorsOrigin}`);
+  console.log('');
+  
+  console.log(chalk.gray(`配置文件位置: ${ENV_FILE}`));
+}
+
+/**
+ * 获取特定配置项
+ */
+async function getConfigValue(key) {
+  const config = await readConfig();
+  
+  // 验证key是否有效
+  if (!config.hasOwnProperty(key)) {
+    console.log(chalk.red(`❌ 无效的配置项: ${key}`));
+    console.log(chalk.yellow('可用的配置项:'));
+    console.log(Object.keys(config).join(', '));
+    return;
+  }
+  
+  const value = config[key];
+  
+  // 对于敏感信息，只显示是否已设置
+  if (key === 'apiKey') {
+    console.log(`${key}: ${value ? '已设置' : '未设置'}`);
+  } else {
+    console.log(`${key}: ${value}`);
+  }
+}
+
+/**
+ * 设置配置项
+ */
+async function setConfigValue(key, value) {
+  // 验证key是否有效
+  const validKeys = [
+    'apiKey', 'baseURL', 'model', 'defaultDatabaseType', 
+    'embeddingModel', 'apiPort', 'apiHost', 'apiCorsEnabled', 'apiCorsOrigin'
+  ];
+  
+  if (!validKeys.includes(key)) {
+    console.log(chalk.red(`❌ 无效的配置项: ${key}`));
+    console.log(chalk.yellow('可用的配置项:'));
+    console.log(validKeys.join(', '));
+    return;
+  }
+  
+  // 转换值类型
+  let processedValue = value;
+  if (key === 'apiPort') {
+    processedValue = parseInt(value, 10);
+    if (isNaN(processedValue)) {
+      console.log(chalk.red(`❌ 端口必须是数字`));
+      return;
+    }
+  } else if (key === 'apiCorsEnabled') {
+    processedValue = value === 'true' || value === '1';
+  }
+  
+  await setConfig(key, processedValue);
+  console.log(chalk.green(`✅ 已设置 ${key} = ${processedValue}`));
+}
+
+/**
+ * 重置所有配置为默认值
+ */
+async function resetConfig() {
+  // 确认操作
+  if (process.env.NODE_ENV !== 'test') {
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: '确定要重置所有配置为默认值吗？此操作不可撤销。',
+        default: false
+      }
+    ]);
+    
+    if (!confirm) {
+      console.log(chalk.yellow('操作已取消'));
+      return;
+    }
+  }
+  
+  // 读取现有的.env文件
+  const env = await readEnvFile();
+  
+  // 删除所有相关环境变量
+  const envKeys = [
+    'CUSTOM_API_KEY', 'CUSTOM_BASE_URL', 'CUSTOM_MODEL', 
+    'CUSTOM_EMBEDDING_MODEL', 'DEFAULT_DATABASE_TYPE',
+    'API_PORT', 'API_HOST', 'API_CORS_ENABLED', 'API_CORS_ORIGIN'
+  ];
+  
+  envKeys.forEach(key => {
+    delete env[key];
+  });
+  
+  // 写入.env文件
+  await writeEnvFile(env);
+  
+  console.log(chalk.green('✅ 所有配置已重置为默认值'));
+}
+
 export {
   readConfig,
   configureSettings,
   getConfig,
   setConfig,
+  listConfig,
+  getConfigValue,
+  setConfigValue,
+  resetConfig,
   ENV_FILE
 };

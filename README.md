@@ -1,169 +1,154 @@
-<div align="center">
-
 # SQL Analyzer CLI
 
-一个基于 AI 的 SQL 语句智能分析与扫描命令行工具
-支持性能优化、安全检查和编码规范验证。
+一个强大的SQL代码分析工具，提供本地和CI/CD集成，帮助您在开发过程中确保SQL代码质量。
 
-[功能特点](#功能特点) • [安装](#安装) • [快速开始](#快速开始) • [文档](#文档) 
+## 🚀 功能特性
 
-</div>
+- **本地SQL分析**：分析单个SQL文件或整个目录
+- **Pre-commit集成**：提交前自动检查SQL代码质量
+- **GitHub Actions集成**：在PR和Push时自动分析SQL文件
+- **多模型支持**：支持OpenAI GPT和其他AI模型
+- **自定义规则**：可配置的分析规则和检查项
+- **详细报告**：生成Markdown格式的分析报告
 
-## 功能特点
+## 📦 安装
 
-- 🤖 **AI 驱动分析**：基于 OpenAI GPT 模型进行智能 SQL 分析
-- 🔍 **多维度检查**：性能、安全、编码规范全方位分析
-- 📊 **详细报告**：提供清晰的问题描述和优化建议
-- 📚 **知识库支持**：内置 SQL 最佳实践知识库
-- 🌐 **API 服务**：提供 REST API  接口
-- 📝 **历史记录**：保存分析历史，便于追踪和比较
-- ⚙️ **灵活配置**：支持多种数据库和自定义规则
-
-## 安装
-
-### 使用 Bun 安装
+### 全局安装
 
 ```bash
+# 使用npm
+npm install -g sql-analyzer-cli
+
+# 使用Bun
 bun install -g sql-analyzer-cli
 ```
 
-### 本地安装
+### 从源码安装
 
 ```bash
-git clone https://github.com/yourusername/sql-analyzer-cli.git
+git clone https://github.com/your-username/sql-analyzer-cli.git
 cd sql-analyzer-cli
 bun install
-bun link
+bun run build
+npm link
 ```
 
-## 快速开始
+## 🔧 快速开始
 
-### 1. 配置 API 密钥
+### 1. 配置API密钥
+
+创建`.env`文件：
 
 ```bash
-编辑.env文件
-## 或者
-sql-analyzer config
+CUSTOM_API_KEY=your_openai_api_key
+CUSTOM_BASE_URL=https://api.openai.com/v1
+CUSTOM_MODEL=gpt-4
 ```
 
-### 2. 分析 SQL 语句
+### 2. 分析SQL文件
 
 ```bash
-sql-analyzer analyze -s "SELECT * FROM users WHERE id = 1"
+# 分析单个文件
+sql-analyzer analyze -f queries/select_users.sql
+
+# 分析目录
+sql-analyzer analyze -d ./sql-queries
+
+# 分析并保存报告
+sql-analyzer analyze -f queries/select_users.sql -o reports/
 ```
 
-### 3. 分析 SQL 文件
+### 3. 集成到项目中
+
+#### Pre-commit集成
 
 ```bash
-sql-analyzer analyze -f ./examples/mysql_examples.sql
+# 安装pre-commit钩子
+curl -s https://raw.githubusercontent.com/your-username/sql-analyzer-cli/main/scripts/install-precommit.sh | bash
 ```
 
-## 文档
+#### GitHub Actions集成
 
-我们提供了详细的文档来帮助你快速上手和深入了解项目：
+将`.github/workflows/sql-analysis.yml`文件复制到您的项目中，并在仓库设置中添加`OPENAI_API_KEY`密钥。
 
-- 📖 [完整文档](./docs/README.md) - 查看所有文档
-- 🚀 [安装指南](./docs/installation.md) - 详细的安装和配置说明
-- 📋 [使用指南](./docs/usage.md) - 所有命令和选项的详细说明
-- ⚙️ [配置指南](./docs/configuration.md) - 如何自定义和优化配置
-- 🔌 [API 文档](./docs/api.md) - REST API 和 WebSocket 接口文档
+## 📖 详细文档
 
+- [Pre-commit集成指南](docs/pre-commit-integration.md)
+- [GitHub Actions工作流配置](docs/github-workflow-analysis.md)
+- [API参考文档](docs/api-reference.md)
+- [自定义规则配置](docs/custom-rules.md)
 
-## 项目结构
+## 🛠️ 开发
+
+### 本地开发
+
+```bash
+# 克隆仓库
+git clone https://github.com/your-username/sql-analyzer-cli.git
+cd sql-analyzer-cli
+
+# 安装依赖
+bun install
+
+# 运行开发模式
+bun run dev
+
+# 构建项目
+bun run build
+
+# 运行测试
+bun test
+```
+
+### 项目结构
 
 ```
 sql-analyzer-cli/
-├── bin/                # 可执行文件
-├── src/                # 源代码
-│   ├── core/           # 核心功能
-│   ├── services/       # 服务层
-│   └── utils/          # 工具函数
-├── docs/               # 文档
-├── examples/           # 示例文件
-├── rules/              # 分析规则
-└── config/             # 配置文件
+├── bin/                    # CLI入口点
+│   └── cli.js
+├── src/                    # 源代码
+│   ├── core/              # 核心功能
+│   ├── services/          # 服务层
+│   └── utils/             # 工具函数
+├── scripts/               # 脚本文件
+│   ├── pre-commit.js      # Pre-commit钩子
+│   └── install-precommit.sh
+├── .github/workflows/     # GitHub Actions工作流
+├── docs/                  # 文档
+├── examples/              # 示例文件
+└── tests/                 # 测试文件
 ```
 
-## 项目架构
+## 🤝 贡献
 
-```mermaid
-graph TB
-    %% 用户接口层
-    CLI[CLI 命令行接口] --> API[REST API 服务]
-    
-    %% 核心分析层
-    API --> Core[核心分析引擎]
-    CLI --> Core
-    
-    %% 核心组件
-    Core --> Analyzer[SQL 分析器]
-    Core --> Performance[性能分析模块]
-    Core --> Graph[依赖关系图]
-    
-    %% 服务层
-    Analyzer --> Knowledge[知识库服务]
-    Analyzer --> History[历史记录服务]
-    Performance --> Knowledge
-    Graph --> Knowledge
-    
-    %% 外部依赖
-    Knowledge --> Rules[分析规则库]
-    Analyzer --> AI[OpenAI GPT API]
-    
-    %% 工具层
-    subgraph Utils[工具层]
-        Config[配置管理]
-        Logger[日志系统]
-        Env[环境变量]
-    end
-    
-    Core --> Config
-    Core --> Logger
-    API --> Env
-    
-    %% 数据存储
-    History --> DB[(分析历史)]
-    Config --> ConfigFiles[配置文件]
-    
-    %% 样式
-    classDef userInterface fill:#e1f5fe
-    classDef core fill:#f3e5f5
-    classDef service fill:#e8f5e9
-    classDef external fill:#fff3e0
-    classDef storage fill:#fce4ec
-    
-    class CLI,API userInterface
-    class Core,Analyzer,Performance,Graph core
-    class Knowledge,History,Config,Logger,Env service
-    class AI,Rules external
-    class DB,ConfigFiles storage
-```
+欢迎贡献代码！请遵循以下步骤：
 
-### 架构说明
+1. Fork仓库
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建Pull Request
 
-- **用户接口层**：提供CLI命令行和REST API两种交互方式
-- **核心分析引擎**：负责协调各分析模块，处理SQL分析请求
-- **分析模块**：
-  - SQL分析器：执行基本的SQL语法和结构分析
-  - 性能分析模块：专门处理性能相关问题
-  - 依赖关系图：分析表之间的依赖关系
-- **服务层**：提供知识库查询、历史记录等辅助服务
-- **工具层**：提供配置管理、日志记录等基础功能
-- **外部依赖**：OpenAI API和规则库提供分析能力支持
+## 📄 许可证
 
+本项目采用MIT许可证。详见[LICENSE](LICENSE)文件。
 
-## 联系我们
+## 🙏 致谢
 
-- 📧 邮箱：sewardsheng@gmail.com
-- 🐛 问题反馈：[GitHub Issues](https://github.com/sewardsheng/sql-analyzer-cli/issues)
-- 💬 讨论：[GitHub Discussions](https://github.com/sewardsheng/sql-analyzer-cli/discussions)
+感谢所有贡献者和以下开源项目：
+
+- [Commander.js](https://github.com/tj/commander.js) - CLI框架
+- [LangChain](https://github.com/langchain-ai/langchainjs) - AI集成
+- [OpenAI](https://openai.com/) - AI模型支持
+
+## 📞 支持
+
+如果您遇到问题或有建议，请：
+
+1. 查看[文档](docs/)
+2. 搜索[已知问题](https://github.com/your-username/sql-analyzer-cli/issues)
+3. 创建[新问题](https://github.com/your-username/sql-analyzer-cli/issues/new)
 
 ---
 
-<div align="center">
-
-**[⬆ 回到顶部](#sql-analyzer-cli)**
-
-Made with ❤️ by SQL Analyzer CLI Team
-
-</div>
+⭐ 如果这个项目对您有帮助，请给我们一个星标！

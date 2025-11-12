@@ -1,0 +1,49 @@
+{
+  "id": "202511122256-9c7b",
+  "timestamp": "2025-11-12T14:56:24.095Z",
+  "sql": "-- 测试SQL文件\nSELECT * FROM users WHERE id = 1;",
+  "databaseType": "mysql",
+  "type": "file",
+  "result": {
+    "sqlQuery": "-- 测试SQL文件\nSELECT * FROM users WHERE id = 1;",
+    "sqlFilePath": "C:\\Users\\sewardsheng\\Documents\\trae_projects\\sql-analyzer-cli\\test.sql",
+    "retrievedDocuments": [],
+    "analysisResult": {
+      "summary": "\n```json\n{\n  \"summary\": \"该SQL查询非常简单，用于根据ID从`users`表中检索单条记录。查询本身在性能、安全性和规范性方面没有明显问题，但存在一些可以改进的最佳实践，尤其是在生产环境中。\",\n  \"issues\": [],\n  \"suggestions\": [\n    {\n      \"category\": \"性能优化\",\n      \"description\": \"避免使用 `SELECT *`，明确指定所需的列名。这可以减少数据传输量，提高查询性能，并使代码更具可读性和可维护性。\",\n      \"example\": \"SELECT id, username, email, created_at FROM users WHERE id = 1;\"\n    },\n    {\n      \"category\": \"性能优化\",\n      \"description\": \"确保 `id` 列上存在主键或唯一索引。对于 `WHERE id = ?` 这样的精确匹配查询，索引是至关重要的，可以避免全表扫描。\",\n      \"example\": \"-- 在建表时或通过ALTER语句添加索引\\nCREATE TABLE users (\\n  id INT PRIMARY KEY,\\n  -- 其他列...\\n);\\n-- 或者\\nALTER TABLE users ADD PRIMARY KEY (id);\"\n    },\n    {\n      \"category\": \"安全性\",\n      \"description\": \"虽然此查询是静态的，没有直接的SQL注入风险。但在实际应用中，如果ID值来自用户输入，应始终使用参数化查询或预编译语句来防止SQL注入。\",\n      \"example\": \"-- 伪代码示例 (以Python为例)\\ncursor.execute(\\\"SELECT id, username, email FROM users WHERE id = %s\\\", (user_id,))\"\n    },\n    {\n      \"category\": \"规范性\",\n      \"description\": \"为SQL查询添加有意义的注释，特别是在复杂的业务逻辑中，有助于团队协作和后期维护。\",\n      \"example\": \"-- 根据用户ID获取用户基本信息\\nSELECT id, username, email FROM users WHERE id = 1;\"\n    }\n  ],\n  \"metrics\": {\n    \"complexity\": \"低\",\n    \"estimatedExecutionTime\": \"极短（毫秒级，取决于表大小和索引）\",\n    \"resourceUsage\": \"极低\"\n  }\n}\n```",
+      "issues": [],
+      "suggestions": [],
+      "metrics": {
+        "complexity": "中",
+        "estimatedExecutionTime": "未知",
+        "resourceUsage": "中等"
+      },
+      "analyzedAt": "2025-11-12T14:56:24.092Z",
+      "sqlQuery": "-- 测试SQL文件\nSELECT * FROM users WHERE id = 1;",
+      "analysisDimensions": [
+        "performance",
+        "security",
+        "standards"
+      ]
+    },
+    "error": null,
+    "completed": true,
+    "step": 4,
+    "metadata": {
+      "startTime": "2025-11-12T14:56:03.108Z",
+      "endTime": null,
+      "duration": 20987,
+      "analysisType": "LangGraph分析"
+    },
+    "config": {
+      "model": "zai-org/GLM-4.6",
+      "temperature": 0.1,
+      "maxTokens": 2000,
+      "analysisDimensions": [
+        "performance",
+        "security",
+        "standards"
+      ]
+    }
+  },
+  "parentId": null
+}

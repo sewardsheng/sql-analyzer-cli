@@ -1,0 +1,162 @@
+name: SQL Analysis
+
+on:
+  push:
+    paths:
+      - '**/*.sql'
+  pull_request:
+    paths:
+      - '**/*.sql'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史记录，以便比较提交
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install SQL Analyzer
+        run: |
+          # 克隆SQL Analyzer仓库
+          git clone https://github.com/sewardsheng/sql-analyzer-cli.git temp-analyzer
+          cd temp-analyzer
+          bun install
+          bun run build
+          # 设置可执行权限
+          chmod +x bin/cli.js
+          cd ..
+          # 创建环境变量，指向SQL Analyzer的路径
+          echo "SQL_ANALYZER_PATH=$(pwd)/temp-analyzer/bin/cli.js" >> $GITHUB_ENV
+        
+      - name: Get changed SQL files
+        id: changed-files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR事件：获取PR中的变更文件
+            files=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E '\.sql$' || true)
+          else
+            # Push事件：获取最新提交中的变更文件
+            files=$(git diff --name-only HEAD~1 HEAD | grep -E '\.sql$' || true)
+          fi
+          
+          if [ -z "$files" ]; then
+            echo "has_sql_files=false" >> $GITHUB_OUTPUT
+            echo "没有检测到SQL文件变更"
+          else
+            echo "has_sql_files=true" >> $GITHUB_OUTPUT
+            echo "sql_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$files" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "检测到以下SQL文件变更:"
+            echo "$files" | sed 's/^/  - /'
+          fi
+          
+      - name: Configure API Key
+        if: steps.changed-files.outputs.has_sql_files == 'true'
+        run: |
+          echo "CUSTOM_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+          echo "CUSTOM_BASE_URL=https://api.openai.com/v1" >> .env
+          echo "CUSTOM_MODEL=gpt-4" >> .env
+          
+      - name: Create reports directory
+        if: steps.changed-files.outputs.has_sql_files == 'true'
+        run: mkdir -p reports
+        
+      - name: Analyze SQL files
+        if: steps.changed-files.outputs.has_sql_files == 'true'
+        run: |
+          set -e  # Exit on any error
+          total_files=0
+          passed_files=0
+          failed_files=0
+          
+          # Create summary report
+          echo "# SQL Analysis Report" > reports/summary.md
+          echo "Generated on: $(date)" >> reports/summary.md
+          echo "Event: ${{ github.event_name }}" >> reports/summary.md
+          echo "Repository: ${{ github.repository }}" >> reports/summary.md
+          echo "Commit: ${{ github.sha }}" >> reports/summary.md
+          echo "" >> reports/summary.md
+          
+          # Process each SQL file
+          for file in ${{ steps.changed-files.outputs.sql_files }}; do
+            if [ -f "$file" ]; then
+              total_files=$((total_files + 1))
+              filename=$(basename "$file")
+              echo "Analyzing $filename..."
+              
+              # Create individual report file
+              report_file="reports/${filename%.sql}_report.md"
+              echo "# Analysis Report for $filename" > "$report_file"
+              echo "" >> "$report_file"
+              
+              # Run analysis and capture output
+              if bun "${{ env.SQL_ANALYZER_PATH }}" analyze -f "$file" >> "$report_file" 2>&1; then
+                echo "✅ $filename - Analysis completed successfully" >> reports/summary.md
+                passed_files=$((passed_files + 1))
+              else
+                echo "❌ $filename - Analysis failed" >> reports/summary.md
+                failed_files=$((failed_files + 1))
+              fi
+              echo "" >> reports/summary.md
+            fi
+          done
+          
+          # Add summary section
+          echo "## Summary" >> reports/summary.md
+          echo "- Total files analyzed: $total_files" >> reports/summary.md
+          echo "- Passed: $passed_files" >> reports/summary.md
+          echo "- Failed: $failed_files" >> reports/summary.md
+          echo "" >> reports/summary.md
+          
+          # Set exit code based on results
+          if [ $failed_files -gt 0 ]; then
+            echo "::error::Some SQL files failed analysis. Check the reports for details."
+            exit 1
+          fi
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          # 清理临时目录和文件
+          rm -rf temp-analyzer || true
+          rm -f .env || true
+          echo "Cleanup completed successfully"
+      - name: Upload analysis reports
+        if: steps.changed-files.outputs.has_sql_files == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-analysis-reports
+          path: reports/
+          retention-days: 30
+          
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && steps.changed-files.outputs.has_sql_files == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read summary report
+            const summaryPath = path.join(process.env.GITHUB_WORKSPACE, 'reports/summary.md');
+            const summary = fs.readFileSync(summaryPath, 'utf8');
+            
+            // Create PR comment
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 SQL Analysis Results\n\n${summary}`
+            });
