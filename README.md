@@ -73,8 +73,7 @@ curl -s https://raw.githubusercontent.com/your-username/sql-analyzer-cli/main/sc
 
 ## 📖 详细文档
 
-- [Pre-commit集成指南](docs/pre-commit-integration.md)
-- [GitHub Actions工作流配置](docs/github-workflow-analysis.md)
+- [GitHub Actions工作流配置](docs/github-workflow.md)
 - [API参考文档](docs/api-reference.md)
 - [自定义规则配置](docs/custom-rules.md)
 
