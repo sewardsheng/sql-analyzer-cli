@@ -27,6 +27,12 @@ const { analyzeSqlWithGraph, analyzeSqlFileWithGraph } = await import('../../cor
 const { initializePerformance, stopPerformance } = await import('../../core/performance/initPerformance.js');
 const { logInfo, logError } = await import('../../utils/logger.js');
 const { readConfig } = await import('../../utils/config.js');
+// 导入历史记录API路由
+const { historyRouter } = await import('./routes/history.js');
+// 导入知识库API路由
+const { knowledgeRouter } = await import('./routes/knowledge.js');
+// 导入配置管理API路由
+const { configRouter } = await import('./routes/config.js');
 
 // 初始化性能优化功能
 initializePerformance();
@@ -55,7 +61,7 @@ async function createApiServer(options = {}) {
   if (enableCors) {
     app.use('/*', cors({
       origin: corsOrigin,
-      allowMethods: ['GET', 'POST'],
+      allowMethods: ['GET', 'POST', 'DELETE'],
       allowHeaders: ['Content-Type', 'Authorization']
     }));
   }
@@ -99,6 +105,40 @@ async function createApiServer(options = {}) {
           method: 'GET',
           path: '/api/health',
           description: '健康检查'
+        },
+        history: {
+          method: 'GET/DELETE',
+          path: '/api/history',
+          description: '历史记录管理',
+          subEndpoints: {
+            list: 'GET /api/history - 获取历史记录列表',
+            detail: 'GET /api/history/:id - 获取单条历史记录详情',
+            delete: 'DELETE /api/history/:id - 删除单条历史记录',
+            clear: 'DELETE /api/history - 清空历史记录',
+            stats: 'GET /api/history/stats - 获取历史记录统计信息'
+          }
+        },
+        knowledge: {
+          method: 'GET/POST/DELETE',
+          path: '/api/knowledge',
+          description: '知识库管理',
+          subEndpoints: {
+            status: 'GET /api/knowledge/status - 查看知识库状态',
+            load: 'POST /api/knowledge/load - 加载文档到知识库',
+            reset: 'DELETE /api/knowledge/reset - 重置知识库'
+          }
+        },
+        config: {
+          method: 'GET/PUT/POST',
+          path: '/api/config',
+          description: '配置管理',
+          subEndpoints: {
+            get: 'GET /api/config - 获取当前配置',
+            update: 'PUT /api/config - 更新配置',
+            getItem: 'GET /api/config/:key - 获取单个配置项',
+            updateItem: 'PUT /api/config/:key - 更新单个配置项',
+            reset: 'POST /api/config/reset - 重置配置为默认值'
+          }
         }
       }
     });
@@ -178,6 +218,15 @@ async function createApiServer(options = {}) {
     }
   });
   
+  // 注册历史记录API路由
+  app.route('/api/history', historyRouter);
+  
+  // 注册知识库API路由
+  app.route('/api/knowledge', knowledgeRouter);
+  
+  // 注册配置管理API路由
+  app.route('/api/config', configRouter);
+  
   // 启动服务器
   const server = serve({
     fetch: app.fetch,
@@ -188,7 +237,6 @@ async function createApiServer(options = {}) {
   // 显示启动信息
   console.log(chalk.green(`✅ SQL Analyzer API服务器已启动`));
   console.log(chalk.blue(`🌐 服务地址: http://${host}:${port}`));
-  console.log(chalk.gray(`📖 API文档: http://${host}:${port}/`));
   
   // 显示可用接口信息
   console.log(chalk.cyan('\n📋 可用接口列表:'));
@@ -199,11 +247,42 @@ async function createApiServer(options = {}) {
   console.log(chalk.white('  POST /api/analyze'));
   console.log(chalk.gray('    - SQL分析接口'));
   console.log(chalk.gray('      参数: sql (必需), databaseType (可选), analysisDimensions (可选)'));
+  console.log(chalk.white('  GET  /api/history'));
+  console.log(chalk.gray('    - 获取历史记录列表'));
+  console.log(chalk.white('  GET  /api/history/:id'));
+  console.log(chalk.gray('    - 获取单条历史记录详情'));
+  console.log(chalk.white('  DELETE /api/history/:id'));
+  console.log(chalk.gray('    - 删除单条历史记录'));
+  console.log(chalk.white('  DELETE /api/history'));
+  console.log(chalk.gray('    - 清空历史记录'));
+  console.log(chalk.white('  GET  /api/history/stats'));
+  console.log(chalk.gray('    - 获取历史记录统计信息'));
+  console.log(chalk.white('  GET  /api/knowledge/status'));
+  console.log(chalk.gray('    - 查看知识库状态'));
+  console.log(chalk.white('  POST /api/knowledge/load'));
+  console.log(chalk.gray('    - 加载文档到知识库'));
+  console.log(chalk.gray('      参数: rulesDir (可选), reset (可选), apiKey (可选)'));
+  console.log(chalk.white('  DELETE /api/knowledge/reset'));
+  console.log(chalk.gray('    - 重置知识库'));
+  console.log(chalk.white('  GET  /api/config'));
+  console.log(chalk.gray('    - 获取当前配置'));
+  console.log(chalk.white('  PUT  /api/config'));
+  console.log(chalk.gray('    - 更新配置'));
+  console.log(chalk.white('  GET  /api/config/:key'));
+  console.log(chalk.gray('    - 获取单个配置项'));
+  console.log(chalk.white('  PUT  /api/config/:key'));
+  console.log(chalk.gray('    - 更新单个配置项'));
+  console.log(chalk.white('  POST /api/config/reset'));
+  console.log(chalk.gray('    - 重置配置为默认值'));
   
   console.log(chalk.cyan('\n🔧 使用示例:'));
   console.log(chalk.gray(`  curl -X GET http://${host}:${port}/`));
   console.log(chalk.gray(`  curl -X GET http://${host}:${port}/api/health`));
   console.log(chalk.gray(`  curl -X POST http://${host}:${port}/api/analyze -H "Content-Type: application/json" -d '{"sql":"SELECT * FROM users"}'`));
+  console.log(chalk.gray(`  curl -X GET http://${host}:${port}/api/knowledge/status`));
+  console.log(chalk.gray(`  curl -X POST http://${host}:${port}/api/knowledge/load -H "Content-Type: application/json" -d '{"rulesDir":"./rules"}'`));
+  console.log(chalk.gray(`  curl -X GET http://${host}:${port}/api/config`));
+  console.log(chalk.gray(`  curl -X PUT http://${host}:${port}/api/config -H "Content-Type: application/json" -d '{"model":"gpt-4"}'`));
   
   console.log(chalk.yellow(`\n⚠️  按 Ctrl+C 停止服务器`));
   

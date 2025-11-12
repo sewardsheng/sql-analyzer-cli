@@ -10,7 +10,8 @@
   "scripts": {
     "start": "bun run bin/cli.js",
     "dev": "bun run bin/cli.js",
-    "build": "bun build ./src/index.js --outdir ./dist --target node",
+    "prod": "bun run dist/bin/cli.js",
+    "build": "bun build ./src/index.js --outdir ./dist --target node && bun build ./bin/cli.js --outdir ./dist/bin --target node",
     "api": "bun run src/services/api/apiServer.js"
   },
   "keywords": [

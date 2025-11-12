@@ -115,10 +115,17 @@ program
 program
   .command('status')
   .description('显示知识库状态')
-  .action(async () => {
+  .option('--interactive', '以交互模式显示状态，支持返回主菜单')
+  .action(async (options) => {
     try {
       const { showKnowledgeStatus } = await import('../src/services/knowledge/learn.js');
-      await showKnowledgeStatus();
+      const returnToMenu = await showKnowledgeStatus(options.interactive);
+      
+      // 如果是交互模式且用户选择返回主菜单，则启动Terminal UI模式
+      if (options.interactive && returnToMenu) {
+        const { terminalUIMode } = await import('../src/services/ui/terminalUI.js');
+        await terminalUIMode();
+      }
     } catch (error) {
       console.error('检查状态过程中发生错误:', error.message);
       process.exit(1);

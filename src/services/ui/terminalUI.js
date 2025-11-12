@@ -153,14 +153,26 @@ async function handleLearn(graphConfig) {
  */
 async function handleStatus() {
   try {
-    // 使用ES模块导入方式调用showKnowledgeStatus函数
+    // 使用ES模块导入方式调用showKnowledgeStatus函数，传入true表示显示返回主菜单选项
     const { showKnowledgeStatus } = await import('../knowledge/learn.js');
-    await showKnowledgeStatus();
-    return true;
+    const returnToMenu = await showKnowledgeStatus(true);
+    return returnToMenu; // 返回用户是否选择返回主菜单
     
   } catch (error) {
     console.error(chalk.red('检查状态过程中发生错误:'), error.message);
-    return true;
+    
+    // 即使出错也提供返回主菜单的选项
+    const inquirer = await import('inquirer');
+    const { returnToMenu } = await inquirer.default.prompt([
+      {
+        type: 'confirm',
+        name: 'returnToMenu',
+        message: '是否返回主菜单?',
+        default: true
+      }
+    ]);
+    
+    return returnToMenu;
   }
 }
 
