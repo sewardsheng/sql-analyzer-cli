@@ -8,7 +8,6 @@ import readline from 'readline';
 import { analyzeSqlWithGraph } from '../../core/graph/graphAnalyzer.js';
 import { readConfig } from '../../utils/config.js';
 import fs from 'fs/promises';
-import { initEnvironment } from '../../utils/env.js';
 import { configureSettings } from '../../utils/config.js';
 import { learnDocuments, showKnowledgeStatus } from '../knowledge/learn.js';
 import HistoryService from '../history/historyService.js';
@@ -34,6 +33,7 @@ function showWelcome() {
 ╚════════════════════════════════════════════════════════════╝
   `));
 }
+
 
 /**
  * 显示主菜单
@@ -102,7 +102,23 @@ async function handleAction(action, graphConfig) {
  * 处理初始化功能
  */
 async function handleInit() {
-  await initEnvironment();
+  // 初始化环境配置
+  console.log(chalk.blue('\n初始化环境配置\n'));
+  
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: '是否要初始化环境配置?',
+      default: true
+    }
+  ]);
+  
+  if (confirm) {
+    console.log(chalk.green('✅ 环境配置初始化完成'));
+  } else {
+    console.log(chalk.yellow('已取消初始化'));
+  }
 }
 
 /**

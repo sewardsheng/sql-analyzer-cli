@@ -47,7 +47,7 @@ check_sql_analyzer() {
             print_info "检测到当前是sql-analyzer项目，使用本地版本"
             ANALYZER_PATH="$(pwd)/bin/cli.js"
         else
-            print_error "请先安装sql-analyzer: npm install -g sql-analyzer"
+            print_error "请先安装sql-analyzer: bun install -g ."
             exit 1
         fi
     else
@@ -129,6 +129,7 @@ if [ "\$has_errors" = true ]; then
     echo "提示:"
     echo "  1. 修复上述问题后再次尝试提交"
     echo "  2. 或者在提交消息中包含 [skip-sql-check] 跳过检查"
+    echo "  3. 或者使用 bun install -g . 进行全局安装以提高性能"
     exit 1
 else
     echo "✅ 所有SQL文件检查通过，可以提交"

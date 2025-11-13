@@ -3,7 +3,7 @@ import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { readConfig } from '../../utils/config.js';
-import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted } from '../../core/graph/vectorStore.js';
+import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted, loadVectorStoreFromDisk } from '../../core/graph/vectorStore.js';
 import { stopPerformance } from '../../core/performance/initPerformance.js';
 
 /**
@@ -37,8 +37,25 @@ async function learnDocuments(options = {}) {
     // 如果指定了reset选项，重置向量存储
     if (options.reset) {
       const spinner = ora('正在重置知识库...').start();
-      resetVectorStore();
+      await resetVectorStore();
       spinner.succeed('知识库已重置');
+    }
+    
+    // 检查是否已经存在向量存储，如果存在则尝试加载
+    if (!options.reset && isVectorStorePersisted()) {
+      const spinner = ora('正在检查现有知识库...').start();
+      try {
+        const loaded = await loadVectorStoreFromDisk();
+        if (loaded) {
+          spinner.succeed('已从磁盘加载现有知识库');
+          console.log(chalk.green('知识库加载完成！现在可以使用 "sql-analyzer analyze" 命令进行SQL分析，LangGraph将能够访问知识库内容。'));
+          return;
+        } else {
+          spinner.warn('现有知识库不完整，将重新生成');
+        }
+      } catch (error) {
+        spinner.warn('加载现有知识库失败，将重新生成');
+      }
     }
     
     // 检查rules目录是否存在

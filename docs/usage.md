@@ -61,6 +61,7 @@ SQL Analyzer CLI 提供以下主要命令：
 | `history` | 查看分析历史 | `sql-analyzer history list` |
 | `api` | 启动 API 服务器 | `sql-analyzer api --port 3000` |
 | `ui` | 启动Terminal UI模式 | `sql-analyzer ui` |
+| `init` | 初始化环境配置文件 | `sql-analyzer init` |
 
 ## 详细命令说明
 
@@ -80,13 +81,10 @@ sql-analyzer analyze [选项]
 |------|------|------|--------|
 | `--sql` | `-s` | 要分析的 SQL 语句 | 无 |
 | `--file` | `-f` | 要分析的 SQL 文件路径 | 无 |
-| `--directory` | `-d` | 包含 SQL 文件的目录路径 | 无 |
-| `--output` | `-o` | 输出格式 (json, table, markdown) | table |
-| `--save` | 无 | 保存分析结果到历史记录 | false |
-| `--model` | `-m` | 使用的语言模型 | 配置中的默认模型 |
-| `--max-tokens` | 无 | 最大令牌数 | 2000 |
-| `--temperature` | `-t` | 温度参数 (0-1) | 0.1 |
-| `--verbose` | `-v` | 详细输出 | false |
+| `--database` | `-d` | 指定数据库类型 | mysql |
+| `--api-key` | 无 | OpenAI API 密钥 | 配置中的默认密钥 |
+| `--base-url` | 无 | API 基础 URL | 配置中的默认 URL |
+| `--model` | 无 | 使用的模型名称 | 配置中的默认模型 |
 
 #### 使用示例
 
@@ -102,29 +100,27 @@ sql-analyzer analyze -s "SELECT * FROM users WHERE age > 18"
 sql-analyzer analyze -f ./queries/report.sql
 ```
 
-3. **分析目录中的所有 SQL 文件**
+3. **指定数据库类型进行分析**
 
 ```bash
-sql-analyzer analyze -d ./sql-queries --output json --save
+sql-analyzer analyze -s "SELECT * FROM users" -d postgresql
 ```
 
-4. **使用特定模型和参数**
+4. **使用特定 API 配置**
 
 ```bash
-sql-analyzer analyze -s "SELECT * FROM orders" -m gpt-4 --temperature 0.2 --max-tokens 1500
+sql-analyzer analyze -f ./complex-query.sql --api-key your_api_key --base-url https://api.example.com/v1
 ```
 
-5. **保存分析结果并输出为 Markdown**
+5. **使用特定模型**
 
 ```bash
-sql-analyzer analyze -f ./complex-query.sql --output markdown --save
+sql-analyzer analyze -s "SELECT * FROM orders" --model gpt-4
 ```
 
 #### 输出格式
 
-- **table**: 表格格式，便于在终端阅读
-- **json**: JSON 格式，便于程序处理
-- **markdown**: Markdown 格式，便于文档生成
+分析结果将以表格形式输出到终端，便于阅读。如需其他格式，请使用 API 模式。
 
 ### learn 命令
 
@@ -140,10 +136,12 @@ sql-analyzer learn [选项]
 
 | 选项 | 简写 | 描述 | 默认值 |
 |------|------|------|--------|
-| `--rules-dir` | 无 | 自定义规则目录路径 | ./rules |
-| `--force` | 无 | 强制重新加载，覆盖现有知识库 | false |
-| `--model` | `-m` | 用于嵌入的模型 | 配置中的默认嵌入模型 |
-| `--batch-size` | 无 | 批处理大小 | 10 |
+| `--rules-dir` | `-r` | 指定rules目录路径 | ./rules |
+| `--reset` | 无 | 重置知识库 | false |
+| `--api-key` | 无 | OpenAI API 密钥 | 配置中的默认密钥 |
+| `--base-url` | 无 | API 基础 URL | 配置中的默认 URL |
+| `--model` | 无 | 使用的模型名称 | 配置中的默认模型 |
+| `--embedding-model` | 无 | 使用的嵌入模型名称 | 配置中的默认嵌入模型 |
 
 #### 使用示例
 
@@ -159,10 +157,22 @@ sql-analyzer learn
 sql-analyzer learn --rules-dir ./my-sql-rules
 ```
 
-3. **强制重新加载**
+3. **重置知识库并重新加载**
 
 ```bash
 sql-analyzer learn --reset
+```
+
+4. **使用特定 API 配置加载规则**
+
+```bash
+sql-analyzer learn --api-key your_api_key --base-url https://api.example.com/v1
+```
+
+5. **使用特定模型加载规则**
+
+```bash
+sql-analyzer learn --model gpt-4 --embedding-model text-embedding-ada-002
 ```
 
 #### 规则文件格式
@@ -322,7 +332,7 @@ sql-analyzer history [子命令] [选项]
 | 子命令 | 描述 |
 |--------|------|
 | `list` | 列出历史记录 |
-| `show <id>` | 显示特定历史记录详情 |
+| `detail <id>` | 显示特定历史记录详情 |
 | `delete <id>` | 删除特定历史记录 |
 | `clear` | 清空所有历史记录 |
 | `stats` | 显示历史记录统计信息 |
@@ -357,6 +367,28 @@ sql-analyzer history stats
 ```bash
 sql-analyzer history clear
 ```
+
+### init
+
+初始化环境配置文件。
+
+#### 选项
+
+| 选项 | 简写 | 描述 | 默认值 |
+|------|------|------|--------|
+| `-h, --help` | 无 | 显示帮助信息 | 无 |
+
+#### 使用示例
+
+1. **初始化配置文件**
+
+```bash
+sql-analyzer init
+```
+
+执行后会在当前目录创建配置文件，包含默认的API配置、数据库设置和规则目录等。
+
+---
 
 ### api 命令
 
@@ -510,7 +542,7 @@ jobs:
           cd temp-analyzer
           bun install
           bun run build
-          npm link
+          bun install -g .
           cd ..
           rm -rf temp-analyzer
       - name: Configure API Key

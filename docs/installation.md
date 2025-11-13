@@ -34,9 +34,9 @@ bun install -g sql-analyzer-cli
 
 安装完成后，您可以在任何位置使用 `sql-analyzer` 命令。
 
-### 方式二：本地安装
+### 方式二：从源码安装
 
-如果您只想在当前项目中使用：
+如果您想从源码安装或进行开发：
 
 ```bash
 # 克隆仓库
@@ -46,9 +46,19 @@ cd sql-analyzer-cli
 # 安装依赖
 bun install
 
-# 创建链接（可选，使命令全局可用）
+# 构建项目
+bun run build
+
+# 全局安装（推荐）
+bun install -g .
+
+# 或者使用 bun link（用于开发）
 bun link
+# 然后在需要使用该工具的项目中执行：
+# bun link sql-analyzer-cli
 ```
+
+**注意**：使用 `bun link` 后，您需要在每个使用该工具的项目目录中执行 `bun link sql-analyzer-cli` 才能使用该命令。如果您希望全局使用，推荐使用 `bun install -g .` 进行全局安装。
 
 ## 初始配置
 
@@ -121,7 +131,7 @@ sql-analyzer status
 - 确认您已使用 `-g` 参数进行全局安装
 - 检查您的 PATH 环境变量是否包含 npm/bun 的全局安装路径
 - 尝试使用 `npx sql-analyzer` 或 `bunx sql-analyzer` 作为临时解决方案
-- 如使用源码安装，只可在本目录运行 `sql-analyzer` 命令
+- 如使用源码安装，请确保已执行 `bun install -g .` 进行全局安装，或在项目目录中执行 `bun link sql-analyzer-cli`
 
 ### 问题 2: API 密钥错误
 

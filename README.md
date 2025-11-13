@@ -16,21 +16,27 @@
 ### 全局安装
 
 ```bash
-# 使用npm
-npm install -g sql-analyzer-cli
 
 # 使用Bun
+## 目前尚未发布到npm，仅支持从源码安装
 bun install -g sql-analyzer-cli
 ```
 
 ### 从源码安装
 
 ```bash
-git clone https://github.com/your-username/sql-analyzer-cli.git
+git clone https://github.com/sewardsheng/sql-analyzer-cli.git
 cd sql-analyzer-cli
 bun install
 bun run build
-npm link
+
+# 全局安装  以便调用sql-analyzer命令
+bun install -g .
+
+# 或者使用 bun link（用于开发）
+bun link
+# 然后在需要使用该工具的项目中执行：
+# bun link sql-analyzer-cli
 ```
 
 ## 🔧 快速开始
@@ -104,19 +110,46 @@ bun test
 ```
 sql-analyzer-cli/
 ├── bin/                    # CLI入口点
-│   └── cli.js
+│   ├── cli.js             # 主CLI文件
 ├── src/                    # 源代码
+│   ├── cli/               # CLI命令模块
+│   │   ├── commandRegistry.js  # 命令注册器
+│   │   └── commands/      # 命令模块目录
+│   │       ├── analyze.js    # analyze命令
+│   │       ├── api.js        # api命令
+│   │       ├── config.js     # config命令及其子命令
+│   │       ├── history.js    # history命令及其子命令
+│   │       ├── init.js       # init命令
+│   │       ├── learn.js      # learn命令
+│   │       ├── status.js     # status命令
+│   │       └── ui.js         # ui命令
 │   ├── core/              # 核心功能
-│   ├── services/          # 服务层
+│   │   ├── analyzer.js
+│   │   ├── graph/
+│   │   └── performance/
+│   ├── services/           # 服务层
+│   │   ├── api/            # API服务
+│   │   ├── history/
+│   │   ├── knowledge/
+│   │   └── ui/
 │   └── utils/             # 工具函数
+│       ├── config.js
+│       └── logger.js
 ├── scripts/               # 脚本文件
 │   ├── pre-commit.js      # Pre-commit钩子
 │   └── install-precommit.sh
 ├── .github/workflows/     # GitHub Actions工作流
 ├── docs/                  # 文档
 ├── examples/              # 示例文件
-└── tests/                 # 测试文件
 ```
+
+### CLI架构说明
+
+为了提高代码的可维护性和可扩展性，CLI已从单一文件拆分为模块化结构：
+- 每个命令都有独立的模块文件，便于维护和扩展
+- 使用命令注册器统一管理所有命令
+- 保持了与原始版本完全相同的功能和接口
+- 详细的CLI架构说明请参考 [src/cli/README.md](src/cli/README.md)
 
 ## 🤝 贡献
 

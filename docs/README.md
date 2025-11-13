@@ -12,7 +12,7 @@
 
 - [命令使用指南](./usage.md) - 所有命令和选项的详细说明，包含快速开始、命令概览、详细命令说明、高级用法和最佳实践
 - [规则配置指南](./rules-configuration.md) - 如何自定义和配置SQL分析规则，包含规则系统概述、默认规则结构、自定义规则创建和规则管理
-- [集成指南](./integration.md) - 如何将 SQL Analyzer CLI 集成到您的项目中，包含 Pre-commit 钩子、GitHub Actions 工作流和其他集成选项
+- [集成指南](./github-workflow.md) - 如何将 SQL Analyzer CLI 集成到您的项目中，包含 Pre-commit 钩子、GitHub Actions 工作流和其他集成选项
 
 ### 🔧 开发者文档
 

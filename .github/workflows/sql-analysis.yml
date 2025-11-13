@@ -33,11 +33,9 @@ jobs:
           cd temp-analyzer
           bun install
           bun run build
-          # 设置可执行权限
-          chmod +x bin/cli.js
+          # 全局安装SQL Analyzer
+          bun install -g .
           cd ..
-          # 创建环境变量，指向SQL Analyzer的路径
-          echo "SQL_ANALYZER_PATH=$(pwd)/temp-analyzer/bin/cli.js" >> $GITHUB_ENV
         
       - name: Get changed SQL files
         id: changed-files
@@ -102,7 +100,7 @@ jobs:
               echo "" >> "$report_file"
               
               # Run analysis and capture output
-              if bun "${{ env.SQL_ANALYZER_PATH }}" analyze -f "$file" >> "$report_file" 2>&1; then
+              if sql-analyzer analyze -f "$file" >> "$report_file" 2>&1; then
                 echo "✅ $filename - Analysis completed successfully" >> reports/summary.md
                 passed_files=$((passed_files + 1))
               else

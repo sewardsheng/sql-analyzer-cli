@@ -21,8 +21,10 @@ const config = {
   allowSkip: true,
   // 是否在控制台显示详细输出
   verbose: true,
-  // sql-analyzer命令路径（使用项目本地的CLI）
-  analyzerPath: 'bun bin/cli.js',
+  // sql-analyzer命令路径（优先使用全局安装，如果不存在则使用项目本地的CLI）
+  analyzerPath: 'sql-analyzer',
+  // 本地备用命令路径（当全局命令不可用时）
+  localAnalyzerPath: 'bun bin/cli.js',
   // 数据库类型
   databaseType: 'mysql',
   // 分析维度
@@ -73,17 +75,30 @@ function analyzeSqlFile(filePath) {
       console.log(chalk.blue(`正在分析文件: ${filePath}`));
     }
     
+    // 尝试使用全局安装的sql-analyzer命令，如果失败则回退到本地命令
+    let command = `${config.analyzerPath} analyze -f "${filePath}" -d ${config.databaseType}`;
+    let useLocalCommand = false;
+    
+    try {
+      // 首先尝试检查全局命令是否可用
+      execSync('which sql-analyzer', { stdio: 'ignore' });
+    } catch (error) {
+      // 全局命令不可用，使用本地命令
+      command = `${config.localAnalyzerPath} analyze -f "${filePath}" -d ${config.databaseType}`;
+      useLocalCommand = true;
+      if (config.verbose) {
+        console.log(chalk.yellow(`全局sql-analyzer命令不可用，使用本地命令`));
+      }
+    }
+    
     // 执行SQL分析
-    const output = execSync(
-      `${config.analyzerPath} analyze -f "${filePath}" -d ${config.databaseType}`,
-      { encoding: 'utf8', stdio: 'pipe' }
-    );
+    const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
     
     if (config.verbose) {
       console.log(output);
     }
     
-    return { success: true, output };
+    return { success: true, output, useLocalCommand };
   } catch (error) {
     // 分析失败
     return { 
@@ -122,9 +137,18 @@ function main() {
   const results = [];
   
   // 逐个分析文件
+  const globalCommandUsed = [];
+  const localCommandUsed = [];
+  
   for (const file of sqlFiles) {
     const result = analyzeSqlFile(file);
     results.push({ file, ...result });
+    
+    if (result.useLocalCommand) {
+      localCommandUsed.push(file);
+    } else {
+      globalCommandUsed.push(file);
+    }
     
     if (!result.success) {
       hasErrors = true;
@@ -134,6 +158,18 @@ function main() {
       }
     } else {
       console.log(chalk.green(`✅ ${file}: 分析通过`));
+    }
+  }
+  
+  // 输出命令使用情况
+  if (config.verbose && (globalCommandUsed.length > 0 || localCommandUsed.length > 0)) {
+    console.log('\n' + chalk.blue('=== 命令使用情况 ==='));
+    if (globalCommandUsed.length > 0) {
+      console.log(`使用全局命令: ${globalCommandUsed.length} 个文件`);
+    }
+    if (localCommandUsed.length > 0) {
+      console.log(`使用本地命令: ${localCommandUsed.length} 个文件`);
+      console.log(chalk.yellow('提示: 使用 "bun install -g ." 进行全局安装可以提高性能'));
     }
   }
   

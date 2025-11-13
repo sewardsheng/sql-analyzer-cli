@@ -24,16 +24,16 @@ const ENV_FILE = path.join(process.cwd(), '.env');
  * 默认配置
  */
 const DEFAULT_CONFIG = {
-  baseURL: process.env.CUSTOM_BASE_URL || 'https://api.siliconflow.cn/v1',
-  apiKey: process.env.CUSTOM_API_KEY || '',
-  model: process.env.CUSTOM_MODEL || 'zai-org/GLM-4.6',
-  defaultDatabaseType: process.env.DEFAULT_DATABASE_TYPE || 'mysql',
-  embeddingModel: process.env.CUSTOM_EMBEDDING_MODEL || 'BAAI/bge-m3',
+  baseURL: 'https://api.siliconflow.cn/v1',
+  apiKey: '',
+  model: 'zai-org/GLM-4.6',
+  defaultDatabaseType: 'mysql',
+  embeddingModel: 'BAAI/bge-m3',
   // API服务器配置
-  apiPort: process.env.API_PORT || 3000,
-  apiHost: process.env.API_HOST || '0.0.0.0',
-  apiCorsEnabled: process.env.API_CORS_ENABLED !== 'false',
-  apiCorsOrigin: process.env.API_CORS_ORIGIN || '*'
+  apiPort: 3000,
+  apiHost: '0.0.0.0',
+  apiCorsEnabled: true,
+  apiCorsOrigin: '*'
 };
 
 /**
@@ -364,24 +364,190 @@ async function resetConfig() {
     }
   }
   
-  // 读取现有的.env文件
-  const env = await readEnvFile();
-  
-  // 删除所有相关环境变量
-  const envKeys = [
-    'CUSTOM_API_KEY', 'CUSTOM_BASE_URL', 'CUSTOM_MODEL', 
-    'CUSTOM_EMBEDDING_MODEL', 'DEFAULT_DATABASE_TYPE',
-    'API_PORT', 'API_HOST', 'API_CORS_ENABLED', 'API_CORS_ORIGIN'
-  ];
-  
-  envKeys.forEach(key => {
-    delete env[key];
-  });
-  
-  // 写入.env文件
-  await writeEnvFile(env);
-  
-  console.log(chalk.green('✅ 所有配置已重置为默认值'));
+  try {
+    // 读取现有的.env文件，获取当前已有的字段
+    const currentEnv = await readEnvFile();
+    const currentKeys = Object.keys(currentEnv);
+    
+    // 如果当前.env文件为空，则使用所有可能的键
+    const keysToReset = currentKeys.length > 0 ? currentKeys : [
+      'CUSTOM_BASE_URL',
+      'CUSTOM_API_KEY',
+      'CUSTOM_MODEL',
+      'CUSTOM_EMBEDDING_MODEL',
+      'DEFAULT_DATABASE_TYPE',
+      'API_PORT',
+      'API_HOST',
+      'API_CORS_ENABLED',
+      'API_CORS_ORIGIN'
+    ];
+    
+    // 尝试读取.env.example文件
+    const envExamplePath = path.join(process.cwd(), '.env.example');
+    const envExampleContent = await fs.readFile(envExamplePath, 'utf8');
+    
+    // 解析.env.example文件内容
+    const exampleEnv = {};
+    envExampleContent.split('\n').forEach(line => {
+      // 跳过注释和空行
+      if (line.trim() === '' || line.trim().startsWith('#')) {
+        return;
+      }
+      
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        exampleEnv[match[1]] = match[2];
+      }
+    });
+    
+    // 只保留当前.env文件中已有的字段，但使用.env.example中的默认值
+    const newEnv = {};
+    keysToReset.forEach(key => {
+      if (exampleEnv[key] !== undefined) {
+        newEnv[key] = exampleEnv[key];
+      }
+    });
+    
+    // 直接写入.env文件，不使用writeEnvFile函数，因为它会跳过空值
+    let content = '';
+    
+    // 按照特定顺序写入环境变量
+    const envOrder = [
+      'CUSTOM_BASE_URL',
+      'CUSTOM_API_KEY',
+      'CUSTOM_MODEL',
+      'CUSTOM_EMBEDDING_MODEL',
+      'DEFAULT_DATABASE_TYPE',
+      'API_PORT',
+      'API_HOST',
+      'API_CORS_ENABLED',
+      'API_CORS_ORIGIN'
+    ];
+    
+    envOrder.forEach(key => {
+      if (newEnv.hasOwnProperty(key)) {
+        // 添加注释
+        switch (key) {
+          case 'CUSTOM_API_KEY':
+            content += '# API密钥\n';
+            break;
+          case 'CUSTOM_BASE_URL':
+            content += '# 自定义API基础URL\n';
+            break;
+          case 'CUSTOM_MODEL':
+            content += '# 模型名称\n';
+            break;
+          case 'CUSTOM_EMBEDDING_MODEL':
+            content += '# 嵌入模型名称\n';
+            break;
+          case 'DEFAULT_DATABASE_TYPE':
+            content += '# 默认数据库类型\n';
+            break;
+          case 'API_PORT':
+            content += '# API服务器端口\n';
+            break;
+          case 'API_HOST':
+            content += '# API服务器主机\n';
+            break;
+          case 'API_CORS_ENABLED':
+            content += '# 是否启用CORS\n';
+            break;
+          case 'API_CORS_ORIGIN':
+            content += '# CORS允许的源\n';
+            break;
+        }
+        content += `${key}=${newEnv[key]}\n\n`;
+      }
+    });
+    
+    await fs.writeFile(ENV_FILE, content);
+    
+    console.log(chalk.green('✅ 所有配置已重置为.env.example中的默认值'));
+  } catch (error) {
+    // 如果.env.example不存在，则使用硬编码的默认值
+    const defaultEnv = {
+      'CUSTOM_BASE_URL': 'https://api.openai.com/v1',
+      'CUSTOM_API_KEY': 'your_api_key_here',
+      'CUSTOM_MODEL': 'deepseek-ai/DeepSeek-V3.1',
+      'CUSTOM_EMBEDDING_MODEL': 'BAAI/bge-m3',
+      'DEFAULT_DATABASE_TYPE': 'mysql',
+      'API_PORT': '3000',
+      'API_HOST': '0.0.0.0',
+      'API_CORS_ENABLED': 'true',
+      'API_CORS_ORIGIN': '*'
+    };
+    
+    // 读取现有的.env文件，获取当前已有的字段
+    const currentEnv = await readEnvFile();
+    const currentKeys = Object.keys(currentEnv);
+    
+    // 如果当前.env文件为空，则使用所有可能的键
+    const keysToReset = currentKeys.length > 0 ? currentKeys : Object.keys(defaultEnv);
+    
+    const newEnv = {};
+    keysToReset.forEach(key => {
+      if (defaultEnv[key] !== undefined) {
+        newEnv[key] = defaultEnv[key];
+      }
+    });
+    
+    // 直接写入.env文件，不使用writeEnvFile函数
+    let content = '';
+    
+    // 按照特定顺序写入环境变量
+    const envOrder = [
+      'CUSTOM_BASE_URL',
+      'CUSTOM_API_KEY',
+      'CUSTOM_MODEL',
+      'CUSTOM_EMBEDDING_MODEL',
+      'DEFAULT_DATABASE_TYPE',
+      'API_PORT',
+      'API_HOST',
+      'API_CORS_ENABLED',
+      'API_CORS_ORIGIN'
+    ];
+    
+    envOrder.forEach(key => {
+      if (newEnv.hasOwnProperty(key)) {
+        // 添加注释
+        switch (key) {
+          case 'CUSTOM_API_KEY':
+            content += '# API密钥\n';
+            break;
+          case 'CUSTOM_BASE_URL':
+            content += '# 自定义API基础URL\n';
+            break;
+          case 'CUSTOM_MODEL':
+            content += '# 模型名称\n';
+            break;
+          case 'CUSTOM_EMBEDDING_MODEL':
+            content += '# 嵌入模型名称\n';
+            break;
+          case 'DEFAULT_DATABASE_TYPE':
+            content += '# 默认数据库类型\n';
+            break;
+          case 'API_PORT':
+            content += '# API服务器端口\n';
+            break;
+          case 'API_HOST':
+            content += '# API服务器主机\n';
+            break;
+          case 'API_CORS_ENABLED':
+            content += '# 是否启用CORS\n';
+            break;
+          case 'API_CORS_ORIGIN':
+            content += '# CORS允许的源\n';
+            break;
+        }
+        content += `${key}=${newEnv[key]}\n\n`;
+      }
+    });
+    
+    await fs.writeFile(ENV_FILE, content);
+    
+    console.log(chalk.green('✅ 所有配置已重置为默认值'));
+    console.log(chalk.yellow('⚠️  .env.example文件不存在，使用了内置默认值'));
+  }
 }
 
 export {
