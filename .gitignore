@@ -65,3 +65,6 @@ jspm_packages/
 
 # Vector store
 .vector-store/
+
+# History files
+history/
