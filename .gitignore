@@ -68,3 +68,6 @@ jspm_packages/
 
 # History files
 history/
+
+# Learning rules
+rules/learning-rules/
