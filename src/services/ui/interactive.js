@@ -100,6 +100,141 @@ async function interactiveMode(options = {}) {
 }
 
 /**
+ * 显示子代理模式的分析结果
+ * @param {Object} result - 子代理分析结果
+ */
+function displaySubagentsResult(result) {
+  const { subagentsData, analysisResult, performanceAnalysis, securityAudit, standardsCheck, optimizationSuggestions, metadata } = result;
+  
+  // 显示分析摘要
+  if (analysisResult && analysisResult.summary) {
+    console.log(chalk.green('📝 分析摘要:'));
+    console.log(analysisResult.summary);
+    console.log();
+  }
+  
+  // 显示性能分析详情
+  if (performanceAnalysis && performanceAnalysis.success && performanceAnalysis.data) {
+    console.log(chalk.blue('🔍 性能分析详情:'));
+    const perf = performanceAnalysis.data;
+    console.log(`- 性能评分: ${perf.performanceScore || '未知'}`);
+    console.log(`- 复杂度级别: ${perf.complexityLevel || '未知'}`);
+    
+    if (perf.bottlenecks && perf.bottlenecks.length > 0) {
+      console.log('- 性能瓶颈:');
+      perf.bottlenecks.forEach((bottleneck, index) => {
+        console.log(`  ${index + 1}. ${bottleneck.description}`);
+        if (bottleneck.severity) {
+          console.log(`     严重程度: ${bottleneck.severity}`);
+        }
+        if (bottleneck.recommendation) {
+          console.log(`     建议: ${bottleneck.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显性能瓶颈');
+    }
+    console.log();
+  }
+  
+  // 显示安全审计详情
+  if (securityAudit && securityAudit.success && securityAudit.data) {
+    console.log(chalk.yellow('🛡️  安全审计详情:'));
+    const sec = securityAudit.data;
+    console.log(`- 安全评分: ${sec.securityScore || '未知'}`);
+    console.log(`- 风险等级: ${sec.riskLevel || '未知'}`);
+    
+    if (sec.vulnerabilities && sec.vulnerabilities.length > 0) {
+      console.log('- 安全漏洞:');
+      sec.vulnerabilities.forEach((vuln, index) => {
+        console.log(`  ${index + 1}. ${vuln.description}`);
+        if (vuln.severity) {
+          console.log(`     严重程度: ${vuln.severity}`);
+        }
+        if (vuln.recommendation) {
+          console.log(`     建议: ${vuln.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显安全漏洞');
+    }
+    console.log();
+  }
+  
+  // 显示编码规范检查详情
+  if (standardsCheck && standardsCheck.success && standardsCheck.data) {
+    console.log(chalk.cyan('📝 编码规范检查详情:'));
+    const std = standardsCheck.data;
+    console.log(`- 规范评分: ${std.standardsScore || '未知'}`);
+    console.log(`- 合规等级: ${std.complianceLevel || '未知'}`);
+    
+    if (std.violations && std.violations.length > 0) {
+      console.log('- 规范违规:');
+      std.violations.forEach((violation, index) => {
+        console.log(`  ${index + 1}. ${violation.description}`);
+        if (violation.severity) {
+          console.log(`     严重程度: ${violation.severity}`);
+        }
+        if (violation.recommendation) {
+          console.log(`     建议: ${violation.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显规范违规');
+    }
+    console.log();
+  }
+  
+  // 显示优化建议详情
+  if (optimizationSuggestions && optimizationSuggestions.success && optimizationSuggestions.data) {
+    console.log(chalk.magenta('💡 优化建议详情:'));
+    const opt = optimizationSuggestions.data;
+    console.log(`- 整体评分: ${opt.overallScore || '未知'}`);
+    console.log(`- 优化等级: ${opt.optimizationLevel || '未知'}`);
+    console.log(`- 优化潜力: ${opt.optimizationPotential || '未知'}`);
+    
+    if (opt.optimizationSuggestions && opt.optimizationSuggestions.length > 0) {
+      console.log('- 具体建议:');
+      opt.optimizationSuggestions.forEach((suggestion, index) => {
+        console.log(`  ${index + 1}. ${suggestion.description}`);
+        if (suggestion.type) {
+          console.log(`     类型: ${suggestion.type}`);
+        }
+        if (suggestion.expectedBenefit) {
+          console.log(`     预期收益: ${suggestion.expectedBenefit}`);
+        }
+        if (suggestion.implementationComplexity) {
+          console.log(`     实现复杂度: ${suggestion.implementationComplexity}`);
+        }
+      });
+    } else {
+      console.log('- 暂无优化建议');
+    }
+    console.log();
+  }
+  
+  // 显示性能指标
+  if (performanceAnalysis && performanceAnalysis.success && performanceAnalysis.data) {
+    console.log(chalk.magenta('📈 性能指标:'));
+    const perf = performanceAnalysis.data;
+    console.log(`- 复杂度: ${perf.complexityLevel || '未知'}`);
+    console.log(`- 预估执行时间: ${perf.estimatedExecutionTime || '未知'}`);
+    console.log(`- 资源使用: ${perf.resourceUsage || '未知'}`);
+    console.log();
+  }
+  
+  // 显示执行信息
+  if (metadata) {
+    console.log(chalk.gray('ℹ️  执行信息:'));
+    console.log(`- 分析类型: ${metadata.analysisType || '综合分析'}`);
+    if (metadata.duration) {
+      console.log(`- 执行时间: ${(metadata.duration / 1000).toFixed(2)}秒`);
+    }
+    console.log();
+  }
+}
+
+/**
  * 显示分析结果
  */
 function displayResult(result) {
@@ -108,6 +243,14 @@ function displayResult(result) {
   // 检查是否有错误
   if (result.error) {
     console.log(chalk.red(`❌ 分析失败: ${result.error}`));
+    return;
+  }
+  
+  // 处理子代理模式的结果
+  if (result.processedResult && result.processedResult.success) {
+    // 添加options到processedResult中，以便displaySubagentsResult能够访问
+    result.processedResult.options = result.options;
+    displaySubagentsResult(result.processedResult);
     return;
   }
   

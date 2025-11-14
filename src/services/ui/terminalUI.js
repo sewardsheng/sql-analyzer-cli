@@ -348,7 +348,7 @@ async function handleAnalyze(graphConfig, analysisHistory, historyService) {
   const spinner = ora('正在分析SQL语句...').start();
   
   try {
-    const result = await analyzeSqlWithGraph(sql, null, { ...graphConfig, databaseType: dbTypeSelected });
+    const result = await analyzeSqlWithGraph(sql, null, graphConfig);
     spinner.succeed('分析完成');
     
     // 显示结果
@@ -357,7 +357,6 @@ async function handleAnalyze(graphConfig, analysisHistory, historyService) {
     // 保存到持久化历史记录
     const recordId = historyService.saveAnalysis({
       sql: sql,
-      databaseType: dbTypeSelected,
       result,
       type: 'single'
     });
@@ -366,7 +365,6 @@ async function handleAnalyze(graphConfig, analysisHistory, historyService) {
     const analysisRecord = {
       id: recordId,
       sql: sql,
-      databaseType: dbTypeSelected,
       result,
       timestamp: new Date().toISOString(),
       type: 'single'
@@ -404,16 +402,6 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
     }
   ]);
   
-  const databaseType = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'databaseType',
-      message: '选择数据库类型:',
-      choices: ['mysql', 'postgresql', 'oracle', 'sqlserver'],
-      default: 'mysql'
-    }
-  ]);
-  
   // 读取文件内容
   const spinner = ora('正在读取文件...').start();
   
@@ -423,7 +411,7 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
     
     // 分析SQL
     spinner.start('正在分析SQL语句...');
-    const result = await analyzeSqlWithGraph(sql, filePath.filePath, { ...graphConfig, databaseType: databaseType.databaseType });
+    const result = await analyzeSqlWithGraph(sql, filePath.filePath, graphConfig);
     spinner.succeed('分析完成');
     
     // 显示结果
@@ -432,7 +420,6 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
     // 保存到持久化历史记录
     const recordId = historyService.saveAnalysis({
       sql,
-      databaseType: databaseType.databaseType,
       result,
       type: 'file',
       filePath: filePath.filePath
@@ -442,7 +429,6 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
     const analysisRecord = {
       id: recordId,
       sql,
-      databaseType: databaseType.databaseType,
       filePath: filePath.filePath,
       result,
       timestamp: new Date().toISOString(),
@@ -465,18 +451,6 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
 async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) {
   console.log(chalk.blue('\n连续分析模式'));
   console.log(chalk.gray('您可以连续输入多个SQL语句进行分析，输入"完成"结束分析\n'));
-  
-  const databaseType = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'databaseType',
-      message: '选择数据库类型:',
-      choices: ['mysql', 'postgresql', 'oracle', 'sqlserver'],
-      default: 'mysql'
-    }
-  ]);
-  
-  const dbTypeSelected = databaseType.databaseType;
   
   let continueAnalysis = true;
   let sqlCount = 0;
@@ -505,7 +479,7 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
     const spinner = ora(`正在分析第 ${sqlCount + 1} 个SQL语句...`).start();
     
     try {
-      const result = await analyzeSqlWithGraph(sql, null, { ...graphConfig, databaseType: dbTypeSelected });
+      const result = await analyzeSqlWithGraph(sql, null, graphConfig);
       spinner.succeed(`第 ${sqlCount + 1} 个SQL分析完成`);
       
       // 显示结果
@@ -515,7 +489,6 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
       // 保存到持久化历史记录
       const recordId = historyService.saveAnalysis({
         sql: sql,
-        databaseType: dbTypeSelected,
         result,
         type: 'batch',
         batchId: new Date().getTime()
@@ -525,7 +498,6 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
       analysisHistory.push({
         id: recordId,
         sql: sql,
-        databaseType: dbTypeSelected,
         result,
         timestamp: new Date().toISOString(),
         type: 'batch',
@@ -578,7 +550,6 @@ async function processFollowUp(question, originalAnalysis, config) {
 4. 保持回答简洁明了，重点突出
 
 原始SQL: ${originalAnalysis.sql}
-数据库类型: ${originalAnalysis.databaseType}
 原始分析结果: ${JSON.stringify(originalAnalysis.result.analysisResult, null, 2)}
   `;
   
@@ -668,25 +639,25 @@ async function handleHistoryList(historyService) {
         chalk.cyan('ID'),
         chalk.cyan('日期'),
         chalk.cyan('时间'),
-        chalk.cyan('数据库'),
         chalk.cyan('类型'),
+        chalk.cyan('数据库'),
         chalk.cyan('SQL预览')
       ],
-      colWidths: [20, 12, 10, 12, 10, 40],
+      colWidths: [20, 12, 10, 10, 12, 35],
       wordWrap: true
     });
     
     // 添加数据行
     historyList.forEach(record => {
       const typeLabel = getTypeLabel(record.type);
-      const dbLabel = getDatabaseLabel(record.databaseType);
+      const dbLabel = record.databaseType ? getDatabaseLabel(record.databaseType) : '未知';
       
       table.push([
         record.id,
         record.date,
         record.time,
-        chalk.blue(dbLabel),
         chalk.magenta(typeLabel),
+        chalk.blue(dbLabel),
         record.sqlPreview
       ]);
     });
@@ -738,8 +709,12 @@ async function handleHistoryDetail(historyService) {
     console.log(chalk.cyan('────────────────────────────────────'));
     console.log(`${chalk.blue('ID:')} ${record.id}`);
     console.log(`${chalk.blue('时间:')} ${new Date(record.timestamp).toLocaleString('zh-CN')}`);
-    console.log(`${chalk.blue('数据库类型:')} ${getDatabaseLabel(record.databaseType)}`);
     console.log(`${chalk.blue('分析类型:')} ${getTypeLabel(record.type)}`);
+    
+    // 显示数据库类型（如果有）
+    if (record.databaseType) {
+      console.log(`${chalk.blue('数据库类型:')} ${getDatabaseLabel(record.databaseType)}`);
+    }
     
     if (record.parentId) {
       console.log(`${chalk.blue('父记录ID:')} ${record.parentId}`);

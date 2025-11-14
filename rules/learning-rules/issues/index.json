@@ -1,0 +1,27 @@
+[
+  {
+    "databaseType": "mysql",
+    "mdPath": "2025\\11\\rules-2025-11-14T02-07-09-831Z.md",
+    "createdAt": "2025-11-14T02:07:09.833Z"
+  },
+  {
+    "databaseType": "mysql",
+    "mdPath": "2025\\11\\rules-2025-11-14T02-10-21-892Z.md",
+    "createdAt": "2025-11-14T02:10:21.903Z"
+  },
+  {
+    "databaseType": "mysql",
+    "mdPath": "2025\\11\\rules-2025-11-14T02-20-40-952Z.md",
+    "createdAt": "2025-11-14T02:20:40.963Z"
+  },
+  {
+    "databaseType": "通用SQL",
+    "mdPath": "2025\\11\\rules-2025-11-14T02-44-20-043Z.md",
+    "createdAt": "2025-11-14T02:44:20.045Z"
+  },
+  {
+    "databaseType": "MySQL",
+    "mdPath": "2025\\11\\rules-2025-11-14T02-48-05-214Z.md",
+    "createdAt": "2025-11-14T02:48:05.216Z"
+  }
+]

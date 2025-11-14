@@ -15,10 +15,12 @@ function register(program) {
     .description('分析SQL语句的性能、安全性和规范性')
     .option('-s, --sql <sql>', '要分析的SQL语句')
     .option('-f, --file <file>', '包含SQL语句的文件路径')
-    .option('-d, --database <type>', '数据库类型 (mysql, postgresql, oracle, sqlserver)', 'mysql')
-    .option('--api-key <key>', 'OpenAI API密钥')
-    .option('--base-url <url>', 'API基础URL')
-    .option('--model <model>', '使用的模型名称')
+    .option('--use-subagents', '使用子代理模式进行分析')
+    .option('--simplified-output', '简化输出格式')
+    .option('--no-learn', '禁用学习功能')
+    .option('--no-performance', '禁用性能分析')
+    .option('--no-security', '禁用安全审计')
+    .option('--no-standards', '禁用编码规范检查')
     .action(async (options) => {
       try {
         await analyzeSql(options);

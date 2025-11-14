@@ -2,6 +2,7 @@ import { StateGraph } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import { createInitialState, updateState, completeAnalysis, setError } from './states.js';
 import { initializeAndValidate, retrieveRelevantDocuments, analyzeSql, postProcessResults } from './nodes.js';
+import { subagentsAnalysisNode, traditionalAnalysisNode, subagentsPostProcessNode, shouldUseSubagents } from './nodes/subagentsNode.js';
 import { shouldRetrieveDocuments, shouldAnalyze, shouldPostProcess, isAnalysisComplete, decideErrorHandling, decideNextAnalysisStep } from './edges.js';
 import { getCachedAnalysis, cacheAnalysis } from '../performance/performance.js';
 import { readConfig } from '../../utils/config.js';
@@ -61,6 +62,18 @@ async function createSqlAnalyzerGraph() {
           analysisType: 'comprehensive'
         })
       },
+      options: {
+        value: (x, y) => ({ ...x, ...y }),
+        default: () => ({})
+      },
+      subagentsData: {
+        value: (x, y) => ({ ...x, ...y }),
+        default: () => ({})
+      },
+      processedResult: {
+        value: (x, y) => ({ ...x, ...y }),
+        default: () => ({})
+      },
       config: {
         value: (x, y) => ({ ...x, ...y }),
         default: () => ({
@@ -79,17 +92,22 @@ async function createSqlAnalyzerGraph() {
   workflow.addNode("analyze", analyzeSql);
   workflow.addNode("postProcess", postProcessResults);
   
+  // 添加子代理节点
+  workflow.addNode("subagentsAnalysis", subagentsAnalysisNode);
+  workflow.addNode("traditionalAnalysis", traditionalAnalysisNode);
+  workflow.addNode("subagentsPostProcess", subagentsPostProcessNode);
+  
   // 设置入口点
   workflow.setEntryPoint("initialize");
   
   // 添加条件边
   workflow.addConditionalEdges(
     "initialize",
-    shouldRetrieveDocuments,
+    shouldUseSubagents,
     {
-      "retrieve": "retrieve",
-      "analyze": "analyze",
-      "end": "__end__"
+      "subagentsAnalysis": "subagentsAnalysis",
+      "traditionalAnalysis": "traditionalAnalysis",
+      "retrieve": "retrieve"
     }
   );
   
@@ -111,6 +129,11 @@ async function createSqlAnalyzerGraph() {
     }
   );
   
+  // 子代理分析后处理
+  workflow.addEdge("subagentsAnalysis", "subagentsPostProcess");
+  workflow.addEdge("traditionalAnalysis", "__end__");
+  workflow.addEdge("subagentsPostProcess", "__end__");
+  
   // 添加结束边
   workflow.addEdge("postProcess", "__end__");
   
@@ -121,17 +144,16 @@ async function createSqlAnalyzerGraph() {
 /**
  * 使用LangGraph分析SQL
  * @param {string} sqlQuery - SQL查询语句
- * @param {string} [sqlFilePath] - SQL文件路径
- * @param {Object} [config={}] - 配置参数
+ * @param {Object} [options={}] - 分析选项
  * @returns {Promise<Object>} 分析结果
  */
-async function analyzeSqlWithGraph(sqlQuery, sqlFilePath = null, config = {}) {
+async function analyzeSqlWithGraph(sqlQuery, options = {}) {
   const startTime = Date.now();
   
   try {
     // 检查缓存
-    const cachedResult = getCachedAnalysis(sqlQuery, config);
-    if (cachedResult) {
+    const cachedResult = getCachedAnalysis(sqlQuery, options);
+    if (cachedResult && !options.useSubagents) {
       return {
         ...cachedResult,
         fromCache: true,
@@ -144,7 +166,9 @@ async function analyzeSqlWithGraph(sqlQuery, sqlFilePath = null, config = {}) {
     }
     
     // 创建初始状态
-    const initialState = createInitialState(sqlQuery, sqlFilePath, config);
+    const initialState = createInitialState(sqlQuery, null, options);
+    // databaseType 将在分析过程中自动检测
+    initialState.options = options;
     
     // 创建并运行图
     const graph = await createSqlAnalyzerGraph();
@@ -160,30 +184,33 @@ async function analyzeSqlWithGraph(sqlQuery, sqlFilePath = null, config = {}) {
     finalResult.metadata = {
       ...finalResult.metadata,
       duration: Date.now() - startTime,
-      analysisType: 'LangGraph分析'
+      analysisType: options.useSubagents ? 'Subagents分析' : 'LangGraph分析'
     };
     
-    // 缓存结果
-    cacheAnalysis(sqlQuery, config, finalResult);
+    // 缓存结果（仅缓存非子代理分析结果）
+    if (!options.useSubagents) {
+      cacheAnalysis(sqlQuery, options, finalResult);
+    }
     
     return finalResult;
   } catch (error) {
     console.error("使用LangGraph分析SQL时出错:", error);
-    return setError(createInitialState(sqlQuery, sqlFilePath, config), error.message);
+    return setError(createInitialState(sqlQuery, null, options), error.message);
   }
 }
 
 /**
  * 使用LangGraph流式分析SQL
  * @param {string} sqlQuery - SQL查询语句
- * @param {string} [sqlFilePath] - SQL文件路径
- * @param {Object} [config={}] - 配置参数
+ * @param {Object} [options={}] - 分析选项
  * @returns {AsyncGenerator} 流式结果生成器
  */
-async function* analyzeSqlWithGraphStream(sqlQuery, sqlFilePath = null, config = {}) {
+async function* analyzeSqlWithGraphStream(sqlQuery, options = {}) {
   try {
     // 创建初始状态
-    const initialState = createInitialState(sqlQuery, sqlFilePath, config);
+    const initialState = createInitialState(sqlQuery, null, options);
+    // databaseType 将在分析过程中自动检测
+    initialState.options = options;
     
     // 创建图
     const graph = await createSqlAnalyzerGraph();
@@ -214,7 +241,7 @@ async function analyzeSqlFileWithGraph(filePath, config = {}) {
     const sqlQuery = await fs.readFile(absolutePath, 'utf8');
     
     // 使用LangGraph分析
-    return await analyzeSqlWithGraph(sqlQuery, absolutePath, config);
+    return await analyzeSqlWithGraph(sqlQuery, config);
   } catch (error) {
     console.error(`读取SQL文件 ${filePath} 时出错:`, error);
     return setError(createInitialState('', filePath, config), `读取文件失败: ${error.message}`);

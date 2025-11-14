@@ -45,7 +45,6 @@ class HistoryService {
    * 保存分析结果到历史记录
    * @param {Object} analysisData - 分析数据
    * @param {string} analysisData.sql - SQL语句
-   * @param {string} analysisData.databaseType - 数据库类型
    * @param {Object} analysisData.result - 分析结果
    * @param {string} [analysisData.type='single'] - 分析类型 (single, file, batch, followup)
    * @param {string} [analysisData.parentId] - 父记录ID (用于追问)
@@ -56,15 +55,32 @@ class HistoryService {
     const filePath = path.join(this.historyDir, fileName);
     const recordId = path.basename(fileName, '.json');
     
+    // 从分析结果中提取数据库类型（由agent自动分析得出）
+    let databaseType = null;
+    const result = analysisData.result;
+    
+    // 优先从子代理分析结果中提取
+    if (result && result.subagentsData && result.subagentsData.data && result.subagentsData.data.databaseType) {
+      databaseType = result.subagentsData.data.databaseType;
+    }
+    // 其次从传统分析结果中提取
+    else if (result && result.databaseType) {
+      databaseType = result.databaseType;
+    }
+    // 最后从结果的其他可能位置提取
+    else if (result && result.metadata && result.metadata.databaseType) {
+      databaseType = result.metadata.databaseType;
+    }
+    
     // 创建历史记录对象
     const historyRecord = {
       id: recordId,
       timestamp: new Date().toISOString(),
       sql: analysisData.sql,
-      databaseType: analysisData.databaseType,
       type: analysisData.type || 'single',
       result: analysisData.result,
-      parentId: analysisData.parentId || null
+      parentId: analysisData.parentId || null,
+      databaseType: databaseType // 使用agent分析得出的数据库类型
     };
     
     // 写入文件
@@ -97,10 +113,10 @@ class HistoryService {
           timestamp: record.timestamp,
           date: new Date(record.timestamp).toLocaleDateString('zh-CN'),
           time: new Date(record.timestamp).toLocaleTimeString('zh-CN'),
-          databaseType: record.databaseType,
           type: record.type,
           sqlPreview: record.sql ? record.sql.substring(0, 50) + (record.sql.length > 50 ? '...' : '') : '',
-          parentId: record.parentId
+          parentId: record.parentId,
+          databaseType: record.databaseType // 添加agent分析得出的数据库类型
         };
       });
     } catch (error) {
@@ -181,7 +197,7 @@ class HistoryService {
       const stats = {
         total: files.length,
         byType: {},
-        byDatabase: {}
+        byDatabase: {} // 添加按数据库类型统计
       };
       
       files.forEach(file => {
@@ -192,8 +208,10 @@ class HistoryService {
         // 按类型统计
         stats.byType[record.type] = (stats.byType[record.type] || 0) + 1;
         
-        // 按数据库类型统计
-        stats.byDatabase[record.databaseType] = (stats.byDatabase[record.databaseType] || 0) + 1;
+        // 按数据库类型统计（仅统计有databaseType的记录）
+        if (record.databaseType) {
+          stats.byDatabase[record.databaseType] = (stats.byDatabase[record.databaseType] || 0) + 1;
+        }
       });
       
       return stats;

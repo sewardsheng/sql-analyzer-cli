@@ -19,11 +19,13 @@ async function analyzeSql(options) {
     // 读取配置
     const config = await readConfig();
     
-    // 合并命令行选项和配置文件
-    const apiKey = options.apiKey || config.apiKey;
-    const baseURL = options.baseURL || config.baseURL;
-    const model = options.model || config.model;
-    const databaseType = options.database || config.defaultDatabaseType;
+    // 从配置文件获取API相关设置
+    const apiKey = config.apiKey;
+    const baseURL = config.baseURL;
+    const model = config.model;
+    
+    // 检查是否启用子代理模式
+    const useSubagents = options.useSubagents || config.useSubagents || true;
     
     // 检查API密钥
     if (!apiKey) {
@@ -31,30 +33,36 @@ async function analyzeSql(options) {
       process.exit(1);
     }
     
-    // 准备LangGraph配置
-    const graphConfig = {
+    // 准备分析配置
+    const analysisOptions = {
       apiKey,
       baseURL,
       model,
-      databaseType,
-      analysisDimensions: ['performance', 'security', 'standards']
+      useSubagents,
+      analysisDimensions: ['performance', 'security', 'standards'],
+      // 其他选项
+      simplifiedOutput: options.simplifiedOutput || false,
+      learn: options.learn !== false, // 默认启用学习
+      performance: options.performance !== false, // 默认启用性能分析
+      security: options.security !== false, // 默认启用安全审计
+      standards: options.standards !== false // 默认启用规范检查
     };
     
     let result;
     let sqlQuery = '';
     
     // 分析SQL
-    const spinner = ora('正在分析SQL语句...').start();
+    const spinner = ora(`正在分析SQL语句${useSubagents ? ' (使用子代理模式)' : ''}...`).start();
     
     try {
       if (options.file) {
         // 从文件分析
-        result = await analyzeSqlFileWithGraph(options.file, graphConfig);
+        result = await analyzeSqlFileWithGraph(options.file, analysisOptions);
         sqlQuery = await fs.readFile(path.resolve(options.file), 'utf8');
         spinner.succeed('文件分析完成');
       } else if (options.sql) {
         // 直接分析SQL语句
-        result = await analyzeSqlWithGraph(options.sql, null, graphConfig);
+        result = await analyzeSqlWithGraph(options.sql, analysisOptions);
         sqlQuery = options.sql;
         spinner.succeed('分析完成');
       } else {
@@ -71,7 +79,6 @@ async function analyzeSql(options) {
       const historyService = new HistoryService();
       historyService.saveAnalysis({
         sql: sqlQuery,
-        databaseType: databaseType,
         result: result,
         type: options.file ? 'file' : 'single'
       });
