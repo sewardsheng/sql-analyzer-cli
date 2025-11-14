@@ -80,7 +80,7 @@ const documentCache = new MemoryCache(100);
 function generateCacheKey(sql, config) {
   const keyData = {
     sql: sql.trim().toLowerCase(),
-    databaseType: config.databaseType || 'unknown',
+    databaseType: config.databaseType || 'mysql', // 默认使用mysql而不是unknown
     analysisDimensions: config.analysisDimensions || ['performance', 'security', 'standards']
   };
   return crypto.createHash('md5').update(JSON.stringify(keyData)).digest('hex');

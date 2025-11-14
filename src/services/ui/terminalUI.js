@@ -13,24 +13,27 @@ import { learnDocuments, showKnowledgeStatus } from '../knowledge/learn.js';
 import HistoryService from '../history/historyService.js';
 
 /**
+ * 统一的返回主菜单处理函数
+ */
+async function handleReturnToMenu() {
+  console.log(chalk.white('\n按任意键返回主菜单...'));
+  await inquirer.prompt([{ type: 'input', name: 'continue', message: '' }]);
+}
+
+/**
  * 显示欢迎信息
  */
 function showWelcome() {
   console.log(chalk.cyan(`
 ╔═════════════════════════════════════════════════════════════╗
 ║                                                              ║
+║                    SQL 分析器智能终端                        ║
 ║                                                              ║
-║     ▄▄▄▄▄     ▄▄▄▄▄▄▄▄     ▄▄▄▄   ▄▄▄▄▄▄▄▄                   ║
-║     ██▀▀▀██   ██▀▀▀▀▀▀   ██▀▀▀▀█  ▀▀▀██▀▀▀                   ║
-║     ██    ██  ██        ██▀          ██                      ║
-║     ██    ██  ███████   ██           ██                      ║
-║     ██    ██  ██        ██▄          ██                      ║
-║     ██▄▄▄██   ██         ██▄▄▄▄█     ██                      ║
-║     ▀▀▀▀▀     ▀▀           ▀▀▀▀      ▀▀                      ║
+║  🚀 使用AI技术深度分析SQL语句，提供优化建议                  ║
+║  🔍 支持多种数据库：MySQL、PostgreSQL、Oracle等             ║
+║  📊 全面的性能、安全性和规范性分析                           ║
 ║                                                              ║
-║       SQL语句智能分析扫描工具                                ║
-║                                                              ║
-╚════════════════════════════════════════════════════════════╝
+╚═════════════════════════════════════════════════════════════╝
   `));
 }
 
@@ -47,12 +50,11 @@ async function showMainMenu(graphConfig) {
       name: 'action',
       message: '请选择功能:',
       choices: [
-        { name: '1. 分析SQL语句', value: 'analyze' },
-        { name: '2. 初始化环境配置', value: 'init' },
-        { name: '3. 配置API密钥和模型设置', value: 'config' },
-        { name: '4. 加载规则文档到知识库', value: 'learn' },
-        { name: '5. 显示知识库状态', value: 'status' },
-        { name: '6. 退出程序', value: 'exit' }
+        { name: '📝 分析SQL语句', value: 'analyze' },
+        { name: '📋 查看历史记录', value: 'history' },
+        { name: '📚 知识库管理', value: 'knowledge' },
+        { name: '⚙️ 设置与帮助', value: 'settings' },
+        { name: '🚪 退出程序', value: 'exit' }
       ],
       pageSize: 10
     }
@@ -64,23 +66,20 @@ async function showMainMenu(graphConfig) {
 /**
  * 处理用户选择
  */
-async function handleAction(action, graphConfig) {
+async function handleAction(action, graphConfig, analysisHistory, historyService) {
   try {
     switch (action) {
         case 'analyze':
-          await handleAnalyze(graphConfig);
+          await handleAnalyzeMenu(graphConfig, analysisHistory, historyService);
           break;
-        case 'init':
-          await handleInit();
+        case 'history':
+          await handleHistory(historyService);
           break;
-        case 'config':
-          await handleConfig();
+        case 'knowledge':
+          await handleKnowledge();
           break;
-        case 'learn':
-          await handleLearn();
-          break;
-        case 'status':
-          await handleStatus();
+        case 'settings':
+          await handleSettings();
           break;
         case 'exit':
           // 清屏
@@ -96,6 +95,138 @@ async function handleAction(action, graphConfig) {
   }
   
   return true; // 返回true表示继续循环
+}
+
+/**
+ * 处理分析菜单
+ */
+async function handleAnalyzeMenu(graphConfig, analysisHistory, historyService) {
+  const { analyzeType } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'analyzeType',
+      message: '请选择分析类型:',
+      choices: [
+        { name: '🔍 分析单个SQL语句', value: 'single' },
+        { name: '📁 从文件分析SQL', value: 'file' },
+        { name: '🔄 连续分析多个SQL', value: 'batch' },
+        { name: '⬅️ 返回主菜单', value: 'back' }
+      ]
+    }
+  ]);
+  
+  switch (analyzeType) {
+    case 'single':
+      await handleAnalyze(graphConfig, analysisHistory, historyService);
+      break;
+    case 'file':
+      await handleAnalyzeFile(graphConfig, analysisHistory, historyService);
+      break;
+    case 'batch':
+      await handleBatchAnalyze(graphConfig, analysisHistory, historyService);
+      break;
+    case 'back':
+      // 返回主菜单，不做任何操作
+      break;
+  }
+}
+
+/**
+ * 处理知识库管理
+ */
+async function handleKnowledge() {
+  const { knowledgeAction } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'knowledgeAction',
+      message: '请选择知识库操作:',
+      choices: [
+        { name: '📚 加载规则文档到知识库', value: 'learn' },
+        { name: '📊 显示知识库状态', value: 'status' },
+        { name: '⬅️ 返回主菜单', value: 'back' }
+      ]
+    }
+  ]);
+  
+  switch (knowledgeAction) {
+    case 'learn':
+      await handleLearn();
+      break;
+    case 'status':
+      await handleStatus();
+      break;
+    case 'back':
+      // 返回主菜单，不做任何操作
+      break;
+  }
+}
+
+/**
+ * 处理设置与帮助
+ */
+async function handleSettings() {
+  const { settingsAction } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'settingsAction',
+      message: '请选择设置选项:',
+      choices: [
+        { name: '🔑 配置API密钥', value: 'config' },
+        { name: '🚀 初始化配置', value: 'init' },
+        { name: '❓ 使用帮助', value: 'help' },
+        { name: '⬅️ 返回主菜单', value: 'back' }
+      ]
+    }
+  ]);
+  
+  switch (settingsAction) {
+    case 'config':
+      await handleConfig();
+      break;
+    case 'init':
+      await handleInit();
+      break;
+    case 'help':
+      await handleHelp();
+      break;
+    case 'back':
+      // 返回主菜单，不做任何操作
+      break;
+  }
+}
+
+/**
+ * 处理帮助信息
+ */
+async function handleHelp() {
+  console.clear();
+  console.log(chalk.cyan('\n📖 SQL分析器使用帮助\n'));
+  console.log(chalk.white('🔍 分析功能:'));
+  console.log(chalk.gray('  • 单个SQL分析: 分析单个SQL语句的性能、安全性和规范性'));
+  console.log(chalk.gray('  • 文件分析: 从SQL文件中提取并分析语句'));
+  console.log(chalk.gray('  • 批量分析: 连续分析多个SQL语句'));
+  
+  console.log(chalk.white('\n📚 历史记录:'));
+  console.log(chalk.gray('  • 查看分析历史: 浏览之前的分析结果'));
+  console.log(chalk.gray('  • 查看详细结果: 查看特定分析的完整报告'));
+  console.log(chalk.gray('  • 管理历史记录: 删除或清空历史记录'));
+  
+  console.log(chalk.white('\n⚙️ 知识库管理:'));
+  console.log(chalk.gray('  • 加载规则文档: 将SQL规则文档加载到知识库'));
+  console.log(chalk.gray('  • 查看知识库状态: 显示已加载的规则和文档数量'));
+  console.log(chalk.gray('  • 重置知识库: 清空当前知识库内容'));
+  
+  console.log(chalk.white('\n⚙️ 设置与帮助:'));
+  console.log(chalk.gray('  • 配置API密钥: 设置OpenAI API密钥'));
+  console.log(chalk.gray('  • 初始化配置: 重置配置文件'));
+  console.log(chalk.gray('  • 使用帮助: 显示此帮助信息'));
+  
+  console.log(chalk.white('\n💡 提示:'));
+  console.log(chalk.gray('  • 分析结果会自动保存到历史记录'));
+  console.log(chalk.gray('  • 支持多种数据库类型: MySQL, PostgreSQL, SQL Server, Oracle等'));
+  console.log(chalk.gray('  • 使用方向键导航菜单，按回车确认选择'));
+  
+  await handleReturnToMenu();
 }
 
 /**
@@ -196,7 +327,7 @@ async function handleStatus() {
  * Terminal UI模式
  */
 async function terminalUIMode(options = {}) {
-  // 显示欢迎信息和SZFZ宣传栏
+  // 显示欢迎信息
   showWelcome();
   
   console.log(chalk.gray('使用方向键选择菜单，按回车确认\n'));
@@ -220,7 +351,8 @@ async function terminalUIMode(options = {}) {
     apiKey,
     baseURL,
     model,
-    analysisDimensions: ['performance', 'security', 'standards']
+    useSubagents: false, // 默认不使用子代理，与analyzer命令一致
+    analysisDimensions: ['performance', 'security', 'standards'] // 明确设置分析维度
   };
   
   // 初始化历史记录服务
@@ -232,78 +364,15 @@ async function terminalUIMode(options = {}) {
   // 主循环
   while (true) {
     try {
-      // 使用标准的inquirer提示
-      const { action } = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'action',
-          message: '请选择操作:',
-          choices: [
-            { name: '1. 分析SQL语句', value: 'analyze' },
-            { name: '2. 从文件分析SQL', value: 'analyzeFile' },
-            { name: '3. 连续分析多个SQL', value: 'batchAnalyze' },
-            { name: '4. 管理历史记录', value: 'history' },
-            { name: '5. 加载规则文档到知识库', value: 'learn' },
-            { name: '6. 显示知识库状态', value: 'status' },
-            { name: '7. 退出', value: 'exit' }
-          ]
-        }
-      ]);
+      // 显示主菜单并获取用户选择
+      const action = await showMainMenu(graphConfig);
       
-       switch (action) {
-        case 'analyze':
-          await handleAnalyze(graphConfig, analysisHistory, historyService);
-          break;
-        case 'analyzeFile':
-          await handleAnalyzeFile(graphConfig, analysisHistory, historyService);
-          break;
-        case 'batchAnalyze':
-          await handleBatchAnalyze(graphConfig, analysisHistory, historyService);
-          break;
-        case 'history':
-          const shouldContinueHistory = await handleHistory(historyService);
-          if (!shouldContinueHistory) {
-            // 清屏
-            console.clear();
-            // 显示感谢信息
-            console.log(chalk.blue('感谢使用SQL分析器，再见！'));
-            // 退出程序
-            process.exit(0);
-            return;
-          }
-          break;
-        case 'learn':
-          const shouldContinueLearn = await handleLearn(graphConfig);
-          if (!shouldContinueLearn) {
-            // 清屏
-            console.clear();
-            // 显示感谢信息
-            console.log(chalk.blue('感谢使用SQL分析器，再见！'));
-            // 退出程序
-            process.exit(0);
-            return;
-          }
-          break;
-        case 'status':
-          const shouldContinueStatus = await handleStatus();
-          if (!shouldContinueStatus) {
-            // 清屏
-            console.clear();
-            // 显示感谢信息
-            console.log(chalk.blue('感谢使用SQL分析器，再见！'));
-            // 退出程序
-            process.exit(0);
-            return;
-          }
-          break;
-        case 'exit':
-          // 清屏
-          console.clear();
-          // 显示感谢信息
-          console.log(chalk.blue('感谢使用SQL分析器，再见！'));
-          // 退出程序
-          process.exit(0);
-          return;
+      // 处理用户选择
+      const shouldContinue = await handleAction(action, graphConfig, analysisHistory, historyService);
+      
+      // 如果用户选择退出，则退出循环
+      if (!shouldContinue) {
+        break;
       }
       
       console.log(); // 添加空行分隔
@@ -332,23 +401,23 @@ async function handleAnalyze(graphConfig, analysisHistory, historyService) {
     }
   ]);
   
-  const dbTypeResponse = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'dbType',
-      message: '选择数据库类型:',
-      choices: ['mysql', 'postgresql', 'oracle', 'sqlserver'],
-      default: 'mysql'
-    }
-  ]);
-  
-  const dbTypeSelected = dbTypeResponse.dbType;
+  // 构建与analyzer命令一致的分析选项
+  const analysisOptions = {
+    ...graphConfig,
+    useSubagents: graphConfig.useSubagents || true, // 默认使用子代理，启用多agent解决方案
+    analysisDimensions: ['performance', 'security', 'standards'], // 明确设置分析维度
+    simplifiedOutput: false,
+    learn: true, // 默认启用学习
+    performance: true, // 默认启用性能分析
+    security: true, // 默认启用安全审计
+    standards: true // 默认启用规范检查
+  };
   
   // 分析SQL
   const spinner = ora('正在分析SQL语句...').start();
   
   try {
-    const result = await analyzeSqlWithGraph(sql, null, graphConfig);
+    const result = await analyzeSqlWithGraph(sql, analysisOptions);
     spinner.succeed('分析完成');
     
     // 显示结果
@@ -409,9 +478,21 @@ async function handleAnalyzeFile(graphConfig, analysisHistory, historyService) {
     const sql = await fs.readFile(filePath.filePath, 'utf8');
     spinner.succeed('文件读取完成');
     
+    // 构建与analyzer命令一致的分析选项
+    const analysisOptions = {
+      ...graphConfig,
+      useSubagents: graphConfig.useSubagents || true, // 默认使用子代理，启用多agent解决方案
+      analysisDimensions: ['performance', 'security', 'standards'], // 明确设置分析维度
+      simplifiedOutput: false,
+      learn: true, // 默认启用学习
+      performance: true, // 默认启用性能分析
+      security: true, // 默认启用安全审计
+      standards: true // 默认启用规范检查
+    };
+    
     // 分析SQL
     spinner.start('正在分析SQL语句...');
-    const result = await analyzeSqlWithGraph(sql, filePath.filePath, graphConfig);
+    const result = await analyzeSqlWithGraph(sql, analysisOptions);
     spinner.succeed('分析完成');
     
     // 显示结果
@@ -452,6 +533,18 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
   console.log(chalk.blue('\n连续分析模式'));
   console.log(chalk.gray('您可以连续输入多个SQL语句进行分析，输入"完成"结束分析\n'));
   
+  // 构建与analyzer命令一致的分析选项
+  const analysisOptions = {
+    ...graphConfig,
+    useSubagents: graphConfig.useSubagents || true, // 默认使用子代理，启用多agent解决方案
+    analysisDimensions: ['performance', 'security', 'standards'], // 明确设置分析维度
+    simplifiedOutput: false,
+    learn: true, // 默认启用学习
+    performance: true, // 默认启用性能分析
+    security: true, // 默认启用安全审计
+    standards: true // 默认启用规范检查
+  };
+  
   let continueAnalysis = true;
   let sqlCount = 0;
   
@@ -479,7 +572,7 @@ async function handleBatchAnalyze(graphConfig, analysisHistory, historyService) 
     const spinner = ora(`正在分析第 ${sqlCount + 1} 个SQL语句...`).start();
     
     try {
-      const result = await analyzeSqlWithGraph(sql, null, graphConfig);
+      const result = await analyzeSqlWithGraph(sql, analysisOptions);
       spinner.succeed(`第 ${sqlCount + 1} 个SQL分析完成`);
       
       // 显示结果
@@ -591,7 +684,7 @@ async function handleHistory(historyService) {
           { name: '3. 删除历史记录', value: 'delete' },
           { name: '4. 清空所有历史记录', value: 'clear' },
           { name: '5. 查看历史记录统计', value: 'stats' },
-          { name: '6. 返回主菜单', value: 'back' }
+          { name: '⬅️ 返回主菜单', value: 'back' }
         ]
       }
     ]);
@@ -613,7 +706,7 @@ async function handleHistory(historyService) {
         await handleHistoryStats(historyService);
         break;
       case 'back':
-        return true; // 返回主菜单
+        return; // 返回主菜单
     }
   }
 }
@@ -650,14 +743,13 @@ async function handleHistoryList(historyService) {
     // 添加数据行
     historyList.forEach(record => {
       const typeLabel = getTypeLabel(record.type);
-      const dbLabel = record.databaseType ? getDatabaseLabel(record.databaseType) : '未知';
       
       table.push([
         record.id,
         record.date,
         record.time,
         chalk.magenta(typeLabel),
-        chalk.blue(dbLabel),
+        record.databaseType ? getDatabaseLabel(record.databaseType) : chalk.gray('未知'),
         record.sqlPreview
       ]);
     });
@@ -915,6 +1007,13 @@ function displayResult(result) {
     return;
   }
   
+  // 如果是子代理模式的结果，显示详细分析
+  if (result.subagentsData || 
+      (result.performanceAnalysis && result.securityAudit && result.standardsCheck)) {
+    displaySubagentsResult(result);
+    return;
+  }
+  
   // 显示分析摘要
   if (result.analysisResult && result.analysisResult.summary) {
     console.log(chalk.green('分析摘要:'));
@@ -973,6 +1072,130 @@ function displayResult(result) {
 }
 
 /**
+ * 显示子代理模式的分析结果
+ * @param {Object} result - 子代理分析结果
+ */
+function displaySubagentsResult(result) {
+  const { subagentsData, analysisResult, performanceAnalysis, securityAudit, standardsCheck, optimizationSuggestions, metadata } = result;
+  
+  // 显示分析摘要
+  if (analysisResult && analysisResult.summary) {
+    console.log(chalk.green('📝 分析摘要:'));
+    console.log(analysisResult.summary);
+    console.log();
+  }
+  
+  // 显示性能分析详情
+  if (performanceAnalysis && performanceAnalysis.success && performanceAnalysis.data) {
+    console.log(chalk.blue('🔍 性能分析详情:'));
+    const perf = performanceAnalysis.data;
+    console.log(`- 性能评分: ${perf.performanceScore || '未知'}`);
+    console.log(`- 复杂度级别: ${perf.complexityLevel || '未知'}`);
+    
+    if (perf.bottlenecks && perf.bottlenecks.length > 0) {
+      console.log('- 性能瓶颈:');
+      perf.bottlenecks.forEach((bottleneck, index) => {
+        console.log(`  ${index + 1}. ${bottleneck.description}`);
+        if (bottleneck.severity) {
+          console.log(`     严重程度: ${bottleneck.severity}`);
+        }
+        if (bottleneck.recommendation) {
+          console.log(`     建议: ${bottleneck.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显性能瓶颈');
+    }
+    console.log();
+  }
+  
+  // 显示安全审计详情
+  if (securityAudit && securityAudit.success && securityAudit.data) {
+    console.log(chalk.yellow('🛡️  安全审计详情:'));
+    const sec = securityAudit.data;
+    console.log(`- 安全评分: ${sec.securityScore || '未知'}`);
+    console.log(`- 风险等级: ${sec.riskLevel || '未知'}`);
+    
+    if (sec.vulnerabilities && sec.vulnerabilities.length > 0) {
+      console.log('- 安全漏洞:');
+      sec.vulnerabilities.forEach((vuln, index) => {
+        console.log(`  ${index + 1}. ${vuln.description}`);
+        if (vuln.severity) {
+          console.log(`     严重程度: ${vuln.severity}`);
+        }
+        if (vuln.recommendation) {
+          console.log(`     建议: ${vuln.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显安全漏洞');
+    }
+    console.log();
+  }
+  
+  // 显示编码规范检查详情
+  if (standardsCheck && standardsCheck.success && standardsCheck.data) {
+    console.log(chalk.cyan('📝 编码规范检查详情:'));
+    const std = standardsCheck.data;
+    console.log(`- 规范评分: ${std.standardsScore || '未知'}`);
+    console.log(`- 合规等级: ${std.complianceLevel || '未知'}`);
+    
+    if (std.violations && std.violations.length > 0) {
+      console.log('- 规范违规:');
+      std.violations.forEach((violation, index) => {
+        console.log(`  ${index + 1}. ${violation.description}`);
+        if (violation.severity) {
+          console.log(`     严重程度: ${violation.severity}`);
+        }
+        if (violation.recommendation) {
+          console.log(`     建议: ${violation.recommendation}`);
+        }
+      });
+    } else {
+      console.log('- 未发现明显规范违规');
+    }
+    console.log();
+  }
+  
+  // 显示优化建议详情
+  if (optimizationSuggestions && optimizationSuggestions.success && optimizationSuggestions.data) {
+    console.log(chalk.magenta('💡 优化建议详情:'));
+    const opt = optimizationSuggestions.data;
+    console.log(`- 整体评分: ${opt.overallScore || '未知'}`);
+    console.log(`- 优化等级: ${opt.optimizationLevel || '未知'}`);
+    console.log(`- 优化潜力: ${opt.optimizationPotential || '未知'}`);
+    
+    if (opt.optimizationSuggestions && opt.optimizationSuggestions.length > 0) {
+      console.log('- 具体建议:');
+      opt.optimizationSuggestions.forEach((suggestion, index) => {
+        console.log(`  ${index + 1}. ${suggestion.description}`);
+        if (suggestion.type) {
+          console.log(`     类型: ${suggestion.type}`);
+        }
+        if (suggestion.priority) {
+          console.log(`     优先级: ${suggestion.priority}`);
+        }
+        if (suggestion.impact) {
+          console.log(`     预期影响: ${suggestion.impact}`);
+        }
+      });
+    } else {
+      console.log('- 暂无优化建议');
+    }
+    console.log();
+  }
+  
+  // 显示元数据
+  if (metadata) {
+    console.log(chalk.gray('📊 分析元数据:'));
+    console.log(`- 分析时间: ${new Date(metadata.timestamp).toLocaleString()}`);
+    console.log(`- 分析耗时: ${metadata.duration || '未知'}ms`);
+    console.log(`- 使用的模型: ${metadata.model || '未知'}`);
+    console.log();
+  }
+}
+
+/**
  * 显示追问结果
  */
 function displayFollowUpResult(result) {
@@ -1021,6 +1244,7 @@ async function handleFollowUpAfterAnalysis(graphConfig, analysisHistory, analysi
   ]);
   
   if (!needFollowUp) {
+    await handleReturnToMenu();
     return;
   }
   
@@ -1086,10 +1310,11 @@ async function handleFollowUpAfterAnalysis(graphConfig, analysisHistory, analysi
     });
     
     // 询问是否需要继续追问
-      await handleFollowUpAfterAnalysis(graphConfig, analysisHistory, analysisRecord, historyService);
+    await handleFollowUpAfterAnalysis(graphConfig, analysisHistory, analysisRecord, historyService);
     
   } catch (error) {
     spinner.fail('问题处理失败');
     console.error(chalk.red('错误:'), error.message);
+    await handleReturnToMenu();
   }
 }

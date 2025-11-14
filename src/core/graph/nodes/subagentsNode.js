@@ -82,7 +82,7 @@ export function shouldUseSubagents(state) {
     return "subagentsAnalysis";
   }
   
-  // 默认情况下，使用子代理分析
+  // 默认情况下，使用子代理分析（修改为默认启用）
   return "subagentsAnalysis";
 }
 
