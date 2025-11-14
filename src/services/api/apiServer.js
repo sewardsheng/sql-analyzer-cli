@@ -2,37 +2,20 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import chalk from 'chalk';
 
-// 根据运行环境选择合适的 serve 函数
-let serve;
-try {
-  // 尝试使用 bun 的 serve
-  serve = (await import('bun')).serve;
-} catch (error) {
-  // 如果 bun 不可用，使用 Node.js 的 http 模块
-  try {
-    const { createServer } = await import('http');
-    serve = (options) => {
-      const server = createServer(options.fetch);
-      server.listen(options.port, options.hostname, options.callback);
-      return server;
-    };
-  } catch (nodeError) {
-    console.error('错误: 无法加载服务器模块，请确保安装了 bun 或 Node.js');
-    process.exit(1);
-  }
-}
+// 使用 Bun 的内置 serve 函数
+import { serve } from 'bun';
 
-// 导入使用 CommonJS 模块系统的模块
-const { analyzeSqlWithGraph, analyzeSqlFileWithGraph } = await import('../../core/graph/graphAnalyzer.js');
-const { initializePerformance, stopPerformance } = await import('../../core/performance/initPerformance.js');
-const { logInfo, logError } = await import('../../utils/logger.js');
-const { readConfig } = await import('../../utils/config.js');
+// 导入项目模块
+import { analyzeSqlWithGraph, analyzeSqlFileWithGraph } from '../../core/graph/graphAnalyzer.js';
+import { initializePerformance, stopPerformance } from '../../core/performance/initPerformance.js';
+import { logInfo, logError } from '../../utils/logger.js';
+import { readConfig } from '../../utils/config.js';
 // 导入历史记录API路由
-const { historyRouter } = await import('./routes/history.js');
+import { historyRouter } from './routes/history.js';
 // 导入知识库API路由
-const { knowledgeRouter } = await import('./routes/knowledge.js');
+import { knowledgeRouter } from './routes/knowledge.js';
 // 导入配置管理API路由
-const { configRouter } = await import('./routes/config.js');
+import { configRouter } from './routes/config.js';
 
 // 初始化性能优化功能
 initializePerformance();
@@ -289,20 +272,18 @@ async function createApiServer(options = {}) {
   // 优雅关闭处理
   process.on('SIGTERM', () => {
     console.log(chalk.yellow('收到SIGTERM信号，正在关闭服务器...'));
-    server.close(() => {
-      console.log(chalk.green('服务器已关闭'));
-      stopPerformance();
-      process.exit(0);
-    });
+    server.stop();
+    console.log(chalk.green('服务器已关闭'));
+    stopPerformance();
+    process.exit(0);
   });
   
   process.on('SIGINT', () => {
     console.log(chalk.yellow('收到SIGINT信号，正在关闭服务器...'));
-    server.close(() => {
-      console.log(chalk.green('服务器已关闭'));
-      stopPerformance();
-      process.exit(0);
-    });
+    server.stop();
+    console.log(chalk.green('服务器已关闭'));
+    stopPerformance();
+    process.exit(0);
   });
   
   return app;

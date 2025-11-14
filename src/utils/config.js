@@ -1,21 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-// 在测试环境中不导入 inquirer
-let inquirer;
-if (process.env.NODE_ENV !== 'test') {
-  // 在 ES 模块中使用 inquirer 的正确方式
-  inquirer = await import('inquirer');
-  inquirer = inquirer.default || inquirer;
-}
-
-// 在测试环境中不导入 chalk
-let chalk;
-if (process.env.NODE_ENV !== 'test') {
-  // 在 ES 模块中使用 chalk 的正确方式
-  chalk = await import('chalk');
-  chalk = chalk.default || chalk;
-}
+// 直接导入inquirer和chalk，Bun原生支持ES模块
+import inquirer from 'inquirer';
+import chalk from 'chalk';
 
 // .env文件路径
 const ENV_FILE = path.join(process.cwd(), '.env');
@@ -213,11 +201,7 @@ async function configureSettings() {
   // 写入.env文件
   await writeEnvFile(env);
   
-  if (chalk) {
-    console.log(chalk.green('✅ 配置已保存到: ' + ENV_FILE));
-  } else {
-    console.log('✅ 配置已保存到: ' + ENV_FILE);
-  }
+  console.log(chalk.green('✅ 配置已保存到: ' + ENV_FILE));
 }
 
 /**

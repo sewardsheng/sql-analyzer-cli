@@ -1,12 +1,7 @@
-// 在 ES 模块中使用 inquirer 的正确方式
-import inquirerModule from 'inquirer';
-const inquirer = inquirerModule.default || inquirerModule;
-// 在 ES 模块中使用 chalk 的正确方式
-import chalkModule from 'chalk';
-const chalk = chalkModule.default || chalkModule;
-// 在 ES 模块中使用 ora 的正确方式
-import oraModule from 'ora';
-const ora = oraModule.default || oraModule;
+// 直接导入模块，Bun原生支持ES模块
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import ora from 'ora';
 import { analyzeSqlWithGraph } from '../../core/graph/graphAnalyzer.js';
 import { readConfig } from '../../utils/config.js';
 
@@ -200,11 +195,11 @@ function displaySubagentsResult(result) {
         if (suggestion.type) {
           console.log(`     类型: ${suggestion.type}`);
         }
-        if (suggestion.expectedBenefit) {
-          console.log(`     预期收益: ${suggestion.expectedBenefit}`);
+        if (suggestion.priority) {
+          console.log(`     优先级: ${suggestion.priority}`);
         }
-        if (suggestion.implementationComplexity) {
-          console.log(`     实现复杂度: ${suggestion.implementationComplexity}`);
+        if (suggestion.impact) {
+          console.log(`     预期影响: ${suggestion.impact}`);
         }
       });
     } else {
@@ -213,105 +208,67 @@ function displaySubagentsResult(result) {
     console.log();
   }
   
-  // 显示性能指标
-  if (performanceAnalysis && performanceAnalysis.success && performanceAnalysis.data) {
-    console.log(chalk.magenta('📈 性能指标:'));
-    const perf = performanceAnalysis.data;
-    console.log(`- 复杂度: ${perf.complexityLevel || '未知'}`);
-    console.log(`- 预估执行时间: ${perf.estimatedExecutionTime || '未知'}`);
-    console.log(`- 资源使用: ${perf.resourceUsage || '未知'}`);
-    console.log();
-  }
-  
-  // 显示执行信息
+  // 显示元数据
   if (metadata) {
-    console.log(chalk.gray('ℹ️  执行信息:'));
-    console.log(`- 分析类型: ${metadata.analysisType || '综合分析'}`);
-    if (metadata.duration) {
-      console.log(`- 执行时间: ${(metadata.duration / 1000).toFixed(2)}秒`);
-    }
+    console.log(chalk.gray('📊 分析元数据:'));
+    console.log(`- 分析时间: ${new Date(metadata.timestamp).toLocaleString()}`);
+    console.log(`- 分析耗时: ${metadata.duration || '未知'}ms`);
+    console.log(`- 使用的模型: ${metadata.model || '未知'}`);
     console.log();
   }
 }
 
 /**
  * 显示分析结果
+ * @param {Object} result - 分析结果
  */
 function displayResult(result) {
-  console.log(chalk.blue('\n📊 SQL分析结果\n'));
-  
-  // 检查是否有错误
-  if (result.error) {
-    console.log(chalk.red(`❌ 分析失败: ${result.error}`));
+  if (!result) {
+    console.log(chalk.red('❌ 未获取到分析结果'));
     return;
   }
   
-  // 处理子代理模式的结果
-  if (result.processedResult && result.processedResult.success) {
-    // 添加options到processedResult中，以便displaySubagentsResult能够访问
-    result.processedResult.options = result.options;
-    displaySubagentsResult(result.processedResult);
+  // 如果是子代理模式的结果
+  if (result.subagentsData || 
+      (result.performanceAnalysis && result.securityAudit && result.standardsCheck)) {
+    displaySubagentsResult(result);
     return;
   }
   
-  // 显示分析摘要
-  if (result.analysisResult && result.analysisResult.summary) {
+  // 显示基本分析结果
+  if (result.summary) {
     console.log(chalk.green('📝 分析摘要:'));
-    console.log(result.analysisResult.summary);
+    console.log(result.summary);
     console.log();
   }
   
-  // 显示发现的问题
-  if (result.analysisResult && result.analysisResult.issues && result.analysisResult.issues.length > 0) {
-    console.log(chalk.yellow('⚠️  发现的问题:'));
-    result.analysisResult.issues.forEach((issue, index) => {
-      console.log(`${index + 1}. [${issue.severity}] ${issue.type}`);
-      console.log(`   描述: ${issue.description}`);
-      if (issue.location) {
-        console.log(`   位置: ${issue.location}`);
-      }
-      console.log(`   建议: ${issue.recommendation}`);
-      console.log();
-    });
-  } else {
-    console.log(chalk.green('✅ 未发现明显问题'));
+  // 显示性能分析
+  if (result.performanceAnalysis) {
+    console.log(chalk.blue('🔍 性能分析:'));
+    console.log(result.performanceAnalysis);
     console.log();
   }
   
-  // 显示改进建议
-  if (result.analysisResult && result.analysisResult.suggestions && result.analysisResult.suggestions.length > 0) {
-    console.log(chalk.blue('💡 改进建议:'));
-    result.analysisResult.suggestions.forEach((suggestion, index) => {
-      console.log(`${index + 1}. [${suggestion.category}] ${suggestion.description}`);
-      if (suggestion.example) {
-        console.log(`   示例: ${suggestion.example}`);
-      }
-      console.log();
-    });
-  }
-  
-  // 显示性能指标
-  if (result.analysisResult && result.analysisResult.metrics) {
-    console.log(chalk.magenta('📈 性能指标:'));
-    const metrics = result.analysisResult.metrics;
-    console.log(`- 复杂度: ${metrics.complexity || '未知'}`);
-    console.log(`- 预估执行时间: ${metrics.estimatedExecutionTime || '未知'}`);
-    console.log(`- 资源使用: ${metrics.resourceUsage || '未知'}`);
+  // 显示安全审计
+  if (result.securityAudit) {
+    console.log(chalk.yellow('🛡️  安全审计:'));
+    console.log(result.securityAudit);
     console.log();
   }
   
-  // 显示执行信息
-  if (result.metadata) {
-    console.log(chalk.gray('ℹ️  执行信息:'));
-    console.log(`- 分析类型: ${result.metadata.analysisType || '综合分析'}`);
-    if (result.metadata.duration) {
-      console.log(`- 执行时间: ${(result.metadata.duration / 1000).toFixed(2)}秒`);
-    }
+  // 显示编码规范检查
+  if (result.standardsCheck) {
+    console.log(chalk.cyan('📝 编码规范检查:'));
+    console.log(result.standardsCheck);
+    console.log();
+  }
+  
+  // 显示优化建议
+  if (result.optimizationSuggestions) {
+    console.log(chalk.magenta('💡 优化建议:'));
+    console.log(result.optimizationSuggestions);
     console.log();
   }
 }
 
-export {
-  interactiveMode,
-  displayResult
-};
+export { interactiveMode, displayResult };
