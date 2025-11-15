@@ -329,21 +329,12 @@ async function cleanLogs() {
   console.log(chalk.green('✅ 日志清理完成'));
 }
 
-// 导出函数
+// 导出函数 - 只导出被外部调用的函数
 export {
   logInfo,
-  logWarning,
   logError,
-  logDebug,
   handleError,
   setupGlobalErrorHandlers,
-  handleUncaughtException,
-  handleUnhandledRejection,
-  SqlAnalyzerError,
   createError,
-  ensureLogDir,
-  cleanLogs,
-  getLogFiles,
-  LOG_CONFIG,
-  getCurrentLogFilePath
+  getLogFiles
 };
