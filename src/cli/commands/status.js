@@ -17,14 +17,8 @@ function register(program) {
         const { showKnowledgeStatus } = await import('../../services/knowledge/learn.js');
         const returnToMenu = await showKnowledgeStatus(options.interactive);
         
-        // 如果是交互模式且用户选择返回主菜单，则启动Terminal UI模式
-        if (options.interactive && returnToMenu) {
-          const { terminalUIMode } = await import('../../services/ui/terminalUI.js');
-          await terminalUIMode();
-        } else {
-          // 非交互模式或用户没有选择返回主菜单，则退出
-          process.exit(0);
-        }
+        // 无论是否选择返回主菜单，都直接退出，因为UI模式已移除
+        process.exit(0);
       } catch (error) {
         console.error('检查状态过程中发生错误:', error.message);
         process.exit(1);

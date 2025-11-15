@@ -19,7 +19,7 @@ logInfo(`SQL分析器CLI启动，命令: ${process.argv.join(' ')}`);
 import { commandRegistry } from '../src/cli/commandRegistry.js';
 
 // 导入所有命令模块
-import uiCommand from '../src/cli/commands/ui.js';
+// ui命令已移除
 import analyzeCommand from '../src/cli/commands/analyze.js';
 import initCommand from '../src/cli/commands/init.js';
 import configCommand from '../src/cli/commands/config.js';
@@ -43,7 +43,6 @@ program.action(() => {
 
 // 注册所有命令
 commandRegistry.registerBatch({
-  ui: uiCommand,
   analyze: analyzeCommand,
   init: initCommand,
   config: configCommand,

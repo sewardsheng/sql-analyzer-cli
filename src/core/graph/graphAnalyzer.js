@@ -1,10 +1,8 @@
 import { StateGraph } from '@langchain/langgraph';
-import { ChatOpenAI } from '@langchain/openai';
 import { createInitialState, updateState, completeAnalysis, setError } from './states.js';
 import { initializeAndValidate, retrieveRelevantDocuments, analyzeSql, postProcessResults } from './nodes.js';
 import { subagentsAnalysisNode, traditionalAnalysisNode, subagentsPostProcessNode, shouldUseSubagents } from './nodes/subagentsNode.js';
 import { shouldRetrieveDocuments, shouldAnalyze, shouldPostProcess, isAnalysisComplete, decideErrorHandling, decideNextAnalysisStep } from './edges.js';
-import { getCachedAnalysis, cacheAnalysis } from '../performance/performance.js';
 import { readConfig } from '../../utils/config.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -151,20 +149,6 @@ async function analyzeSqlWithGraph(sqlQuery, options = {}) {
   const startTime = Date.now();
   
   try {
-    // 检查缓存
-    const cachedResult = getCachedAnalysis(sqlQuery, options);
-    if (cachedResult && !options.useSubagents) {
-      return {
-        ...cachedResult,
-        fromCache: true,
-        metadata: {
-          ...cachedResult.metadata,
-          endTime: Date.now(),
-          fromCache: true
-        }
-      };
-    }
-    
     // 创建初始状态
     const initialState = createInitialState(sqlQuery, null, options);
     // databaseType 将在分析过程中自动检测
@@ -186,11 +170,6 @@ async function analyzeSqlWithGraph(sqlQuery, options = {}) {
       duration: Date.now() - startTime,
       analysisType: options.useSubagents ? 'Subagents分析' : 'LangGraph分析'
     };
-    
-    // 缓存结果（仅缓存非子代理分析结果）
-    if (!options.useSubagents) {
-      cacheAnalysis(sqlQuery, options, finalResult);
-    }
     
     return finalResult;
   } catch (error) {

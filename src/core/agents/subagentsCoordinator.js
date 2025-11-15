@@ -102,6 +102,11 @@ class SubagentsCoordinator {
     const parsedSQL = parseResult.data.normalizedSql;
     const dialectInfo = parseResult.data.dialectInfo;
     
+    // 输出步骤1的结果
+    console.log("\n✅ 步骤1完成 - SQL解析和方言标准化结果:");
+    console.log(`- 标准化后的SQL: ${parsedSQL}`);
+    console.log();
+    
     // 步骤2: 并行执行性能分析、安全审计和编码规范检查
     console.log("步骤2: 并行执行性能分析、安全审计和编码规范检查...");
     const analysisPromises = [];
@@ -160,6 +165,37 @@ class SubagentsCoordinator {
       }
     });
     
+    // 输出步骤2的结果
+    console.log("\n✅ 步骤2完成 - 并行分析结果:");
+    
+    // 性能分析结果
+    if (integratedResults.performanceAnalysis && integratedResults.performanceAnalysis.success) {
+      const perf = integratedResults.performanceAnalysis.data;
+      console.log("📊 性能分析:");
+      console.log(`  - 性能评分: ${perf.performanceScore}`);
+      console.log(`  - 复杂度: ${perf.complexityLevel}`);
+      console.log(`  - 主要瓶颈: ${perf.bottlenecks?.slice(0, 2).map(b => b.description).join(', ') || '无'}`);
+    }
+    
+    // 安全审计结果
+    if (integratedResults.securityAudit && integratedResults.securityAudit.success) {
+      const sec = integratedResults.securityAudit.data;
+      console.log("🔒 安全审计:");
+      console.log(`  - 安全评分: ${sec.securityScore}`);
+      console.log(`  - 风险等级: ${sec.riskLevel}`);
+      console.log(`  - 主要漏洞: ${sec.vulnerabilities?.slice(0, 2).map(v => v.description).join(', ') || '无'}`);
+    }
+    
+    // 编码规范检查结果
+    if (integratedResults.standardsCheck && integratedResults.standardsCheck.success) {
+      const std = integratedResults.standardsCheck.data;
+      console.log("📝 编码规范:");
+      console.log(`  - 规范评分: ${std.standardsScore}`);
+      console.log(`  - 合规等级: ${std.complianceLevel}`);
+      console.log(`  - 主要违规: ${std.violations?.slice(0, 2).map(v => v.description).join(', ') || '无'}`);
+    }
+    console.log();
+    
     // 步骤3: 生成优化建议
     console.log("步骤3: 生成优化建议...");
     const optimizationResult = await this.tools.optimizer.func({
@@ -173,14 +209,45 @@ class SubagentsCoordinator {
     
     integratedResults.optimizationSuggestions = optimizationResult;
     
+    // 输出步骤3的结果
+    console.log("\n✅ 步骤3完成 - 优化建议:");
+    if (optimizationResult.success) {
+      const opt = optimizationResult.data;
+      console.log(`- 优化潜力: ${opt.optimizationPotential}`);
+      console.log(`- 优化建议数量: ${opt.optimizationSuggestions?.length || 0}`);
+      if (opt.optimizationSuggestions && opt.optimizationSuggestions.length > 0) {
+        console.log("- 关键优化建议:");
+        opt.optimizationSuggestions.slice(0, 3).forEach((suggestion, index) => {
+          console.log(`  ${index + 1}. ${suggestion.description}`);
+        });
+      }
+    } else {
+      console.log(`- 生成优化建议失败: ${optimizationResult.error}`);
+    }
+    console.log();
+    
     // 步骤4: 从分析结果中学习并生成规则（可选）
     if (options.learn !== false) {
       console.log("步骤4: 从分析结果中学习并生成规则...");
-      await this.tools.ruleLearner.func({
+      const ruleLearnResult = await this.tools.ruleLearner.func({
         sqlQuery: parsedSQL,
         databaseType,
         analysisResults: integratedResults
       });
+      
+      // 输出步骤4的结果
+      console.log("\n✅ 步骤4完成 - 规则学习结果:");
+      if (ruleLearnResult && ruleLearnResult.success) {
+        console.log(`- 学习状态: 成功`);
+        if (ruleLearnResult.data && ruleLearnResult.data.savedPath) {
+          console.log(`- 规则已保存到: ${ruleLearnResult.data.savedPath}`);
+        }
+      } else if (ruleLearnResult && ruleLearnResult.error) {
+        console.log(`- 学习状态: 失败 - ${ruleLearnResult.error}`);
+      } else {
+        console.log(`- 学习状态: 完成`);
+      }
+      console.log();
     }
     
     // 步骤5: 生成综合分析报告
@@ -190,6 +257,14 @@ class SubagentsCoordinator {
       databaseType,
       integratedResults
     });
+    
+    // 输出步骤5的结果
+    console.log("\n✅ 步骤5完成 - 综合分析报告摘要:");
+    console.log(`📝 ${report.summary || '报告生成成功'}`);
+    if (report.overallAssessment) {
+      console.log(`- 总体评分: ${report.overallAssessment.score || '未知'}`);
+    }
+    console.log();
     
     return {
       success: true,
@@ -316,8 +391,8 @@ class SubagentsCoordinator {
       analysisInfo += `
 优化建议：
 - 优化潜力: ${opt.optimizationPotential}
-- 优化建议数量: ${opt.suggestions?.length || 0}
-- 主要建议: ${opt.suggestions?.slice(0, 3).map(s => s.description).join(', ') || '无'}
+- 优化建议数量: ${opt.optimizationSuggestions?.length || 0}
+- 主要建议: ${opt.optimizationSuggestions?.slice(0, 3).map(s => s.description).join(', ') || '无'}
 `;
     }
 

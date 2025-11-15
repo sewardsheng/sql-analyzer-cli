@@ -4,12 +4,8 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { analyzeSqlWithGraph, analyzeSqlFileWithGraph } from './core/graph/graphAnalyzer.js';
 import { readConfig } from './utils/config.js';
-import { displayResult } from './services/ui/interactive.js';
-import { initializePerformance, stopPerformance } from './core/performance/initPerformance.js';
+import { displayResult } from './services/ui/sharedUI.js';
 import HistoryService from './services/history/historyService.js';
-
-// 初始化性能优化功能
-initializePerformance();
 
 /**
  * 分析SQL语句
@@ -89,8 +85,7 @@ async function analyzeSql(options) {
       process.exit(1);
     }
   } finally {
-    // 停止性能优化功能，确保进程可以正常退出
-    stopPerformance();
+    // 确保资源被正确释放
   }
 }
 

@@ -4,7 +4,6 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { readConfig } from '../../utils/config.js';
 import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted, loadVectorStoreFromDisk } from '../../core/graph/vectorStore.js';
-import { stopPerformance } from '../../core/performance/initPerformance.js';
 
 /**
  * 加载rules目录中的文档到知识库
@@ -115,8 +114,7 @@ async function learnDocuments(options = {}) {
     console.error(chalk.red('学习过程中发生错误:'), error.message);
     process.exit(1);
   } finally {
-    // 停止性能优化功能，确保进程可以正常退出
-    stopPerformance();
+    // 确保进程可以正常退出
   }
 }
 
@@ -284,8 +282,7 @@ async function showKnowledgeStatus(showReturnOption = false) {
       process.exit(1);
     }
   } finally {
-    // 停止性能优化功能，确保进程可以正常退出
-    stopPerformance();
+    // 确保进程可以正常退出
   }
 }
 

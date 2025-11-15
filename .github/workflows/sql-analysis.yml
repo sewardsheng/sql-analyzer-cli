@@ -63,7 +63,7 @@ jobs:
       - name: Configure API Key
         if: steps.changed-files.outputs.has_sql_files == 'true'
         run: |
-          echo "CUSTOM_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+          echo "CUSTOM_API_KEY=${{ secrets.CUSTOM_API_KEY }}" > .env
           echo "CUSTOM_BASE_URL=https://api.openai.com/v1" >> .env
           echo "CUSTOM_MODEL=gpt-4" >> .env
           

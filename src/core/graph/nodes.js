@@ -8,7 +8,6 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { updateState, completeStep } from './states.js';
-import { optimizedDocumentRetrieval } from '../performance/performance.js';
 import { readConfig } from '../../utils/config.js';
 
 /**
@@ -110,8 +109,8 @@ async function retrieveRelevantDocuments(state) {
     // 构建检索查询
     const query = `分析以下SQL查询的${state.config.analysisDimensions.join('、')}方面: ${state.sqlQuery}`;
     
-    // 使用优化的文档检索
-    const documents = await optimizedDocumentRetrieval(query, 3);
+    // 使用标准文档检索
+    const documents = await retrieveDocuments(query, 3);
     
     // 更新状态
     const updatedState = updateState(state, {
