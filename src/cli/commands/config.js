@@ -34,8 +34,9 @@ function register(program) {
     .description('获取特定配置项')
     .action(async (key) => {
       try {
-        const { configGet } = await import('../../services/config/index.js');
-        await configGet(key);
+        const { getConfig } = await import('../../services/config/index.js');
+        const value = await getConfig(key);
+        console.log(`${key}: ${value ?? '(未设置)'}`);
         process.exit(0);
       } catch (error) {
         console.error('获取配置项时发生错误:', error.message);
@@ -49,8 +50,13 @@ function register(program) {
     .description('设置配置项')
     .action(async (key, value) => {
       try {
-        const { setConfigValue } = await import('../../services/config/index.js');
-        await setConfigValue(key, value);
+        const { setConfig } = await import('../../services/config/index.js');
+        const success = await setConfig(key, value);
+        if (success) {
+          console.log(`✅ 配置项 ${key} 已设置为 ${value}`);
+        } else {
+          console.error(`❌ 设置配置项 ${key} 失败`);
+        }
         process.exit(0);
       } catch (error) {
         console.error('设置配置项时发生错误:', error.message);
@@ -73,15 +79,15 @@ function register(program) {
       }
     });
 
-  // 默认config命令行为（保持向后兼容）
+  // 默认config命令行为 - 显示配置列表
   configCommand
     .action(async () => {
       try {
-        const { configureSettings } = await import('../../services/config/index.js');
-        await configureSettings();
+        const { listConfig } = await import('../../services/config/index.js');
+        await listConfig();
         process.exit(0);
       } catch (error) {
-        console.error('配置过程中发生错误:', error.message);
+        console.error('显示配置时发生错误:', error.message);
         process.exit(1);
       }
     });

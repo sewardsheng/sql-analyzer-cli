@@ -14,6 +14,7 @@ import { OpenAIEmbeddings } from "@langchain/openai";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import path from "path";
 import fs from "fs";
+import { createWriteStream } from "fs";
 import crypto from "crypto";
 import { readConfig } from '../../services/config/index.js';
 
@@ -143,11 +144,24 @@ async function loadDocumentsFromRulesDirectory(rulesDir = "./rules") {
     await initializeVectorStore();
     
     const BATCH_SIZE = 50;
-    console.log(`开始分批添加文档到向量存储，批次大小: ${BATCH_SIZE}`);
+    const PARALLEL_BATCHES = 3; // 并行处理的批次数量
+    console.log(`开始分批添加文档到向量存储，批次大小: ${BATCH_SIZE}，并行数: ${PARALLEL_BATCHES}`);
+    
+    // 将文档分成批次
+    const batches = [];
     for (let i = 0; i < splitDocs.length; i += BATCH_SIZE) {
-      const batch = splitDocs.slice(i, i + BATCH_SIZE);
-      console.log(`正在处理第 ${Math.floor(i / BATCH_SIZE) + 1} 批，共${batch.length} 个文档块...`);
-      await vectorStore.addDocuments(batch);
+      batches.push(splitDocs.slice(i, i + BATCH_SIZE));
+    }
+    
+    // 并行处理多个批次
+    for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+      const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+      const batchNumbers = parallelBatches.map((_, idx) => i + idx + 1);
+      console.log(`正在并行处理第 ${batchNumbers.join(', ')} 批，共 ${parallelBatches.reduce((sum, b) => sum + b.length, 0)} 个文档块...`);
+      
+      await Promise.all(
+        parallelBatches.map(batch => vectorStore.addDocuments(batch))
+      );
     }
     console.log("所有文档已成功添加到向量存储。");
     
@@ -189,13 +203,44 @@ async function loadDocumentsFromRulesDirectory(rulesDir = "./rules") {
         }
       }
       
-      // 保存向量数据
+      // 使用流式写入保存向量数据(优化大文件写入性能和内存占用)
       const vectorsPath = path.join(VECTOR_STORE_PATH, 'vectors.json');
-      fs.writeFileSync(vectorsPath, JSON.stringify({
-        model: embeddingModel,
-        baseURL: baseURL,
-        vectors: vectors
-      }, null, 2));
+      console.log("正在流式写入向量数据到磁盘...");
+      
+      const writeStream = createWriteStream(vectorsPath);
+      
+      // 写入文件头部
+      writeStream.write('{\n');
+      writeStream.write(`  "model": "${embeddingModel}",\n`);
+      writeStream.write(`  "baseURL": "${baseURL}",\n`);
+      writeStream.write('  "vectors": [\n');
+      
+      // 流式写入向量数据
+      for (let i = 0; i < vectors.length; i++) {
+        const vectorJson = JSON.stringify(vectors[i], null, 4);
+        // 添加缩进
+        const indentedJson = vectorJson.split('\n').map(line => '    ' + line).join('\n');
+        writeStream.write(indentedJson);
+        
+        if (i < vectors.length - 1) {
+          writeStream.write(',\n');
+        } else {
+          writeStream.write('\n');
+        }
+      }
+      
+      // 写入文件尾部
+      writeStream.write('  ]\n');
+      writeStream.write('}\n');
+      
+      // 等待写入完成
+      await new Promise((resolve, reject) => {
+        writeStream.end();
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+      
+      console.log("向量数据已流式写入完成");
       
       // 创建初始化标记
       const markerPath = path.join(VECTOR_STORE_PATH, '.initialized');
@@ -268,11 +313,20 @@ async function loadVectorStoreFromDisk() {
           const serializedDocs = JSON.parse(fs.readFileSync(docsPath, 'utf8'));
           
           const BATCH_SIZE = 50;
+          const PARALLEL_BATCHES = 3;
           console.log(`从磁盘加载文档，共${serializedDocs.length} 个文档块`);
           
+          // 将文档分成批次并并行处理
+          const batches = [];
           for (let i = 0; i < serializedDocs.length; i += BATCH_SIZE) {
-            const batch = serializedDocs.slice(i, i + BATCH_SIZE);
-            await vectorStore.addDocuments(batch);
+            batches.push(serializedDocs.slice(i, i + BATCH_SIZE));
+          }
+          
+          for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+            const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+            await Promise.all(
+              parallelBatches.map(batch => vectorStore.addDocuments(batch))
+            );
           }
         } else {
           // 直接使用预计算的向量数据
@@ -280,15 +334,25 @@ async function loadVectorStoreFromDisk() {
           
           // 将向量数据添加到向量存储
           const BATCH_SIZE = 50;
+          const PARALLEL_BATCHES = 3;
+          
+          // 准备所有批次
+          const batches = [];
           for (let i = 0; i < vectorsData.vectors.length; i += BATCH_SIZE) {
             const batch = vectorsData.vectors.slice(i, i + BATCH_SIZE);
             const docs = batch.map(item => ({
               pageContent: item.content,
               metadata: item.metadata
             }));
-            
-            // 直接添加文档和向量到存储
-            await vectorStore.addDocuments(docs);
+            batches.push(docs);
+          }
+          
+          // 并行处理批次
+          for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+            const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+            await Promise.all(
+              parallelBatches.map(batch => vectorStore.addDocuments(batch))
+            );
           }
         }
         
@@ -304,11 +368,20 @@ async function loadVectorStoreFromDisk() {
     const serializedDocs = JSON.parse(fs.readFileSync(docsPath, 'utf8'));
     
     const BATCH_SIZE = 50;
+    const PARALLEL_BATCHES = 3;
     console.log(`从磁盘加载文档，共${serializedDocs.length} 个文档块`);
     
+    // 将文档分成批次并并行处理
+    const batches = [];
     for (let i = 0; i < serializedDocs.length; i += BATCH_SIZE) {
-      const batch = serializedDocs.slice(i, i + BATCH_SIZE);
-      await vectorStore.addDocuments(batch);
+      batches.push(serializedDocs.slice(i, i + BATCH_SIZE));
+    }
+    
+    for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+      const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+      await Promise.all(
+        parallelBatches.map(batch => vectorStore.addDocuments(batch))
+      );
     }
     
     console.log("向量存储已从磁盘加载");

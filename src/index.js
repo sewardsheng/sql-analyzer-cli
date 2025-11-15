@@ -9,18 +9,13 @@ setupGlobalErrorHandlers();
 // 记录CLI启动
 logInfo(`SQL分析器CLI启动，命令: ${process.argv.join(' ')}`);
 
+// 预加载配置以提升性能
+import { readConfig } from './services/config/index.js';
+await readConfig(); // 预热配置缓存
+logInfo('配置已预加载到缓存');
+
 // 导入命令注册器
 import { commandRegistry } from './cli/commandRegistry.js';
-
-// 导入所有命令模块
-// ui命令已移除
-import analyzeCommand from './cli/commands/analyze.js';
-import initCommand from './cli/commands/init.js';
-import configCommand from './cli/commands/config.js';
-import learnCommand from './cli/commands/learn.js';
-import statusCommand from './cli/commands/status.js';
-import apiCommand from './cli/commands/api.js';
-import historyCommand from './cli/commands/history.js';
 
 // 配置CLI程序
 program
@@ -34,16 +29,22 @@ program.action(() => {
   program.help();
 });
 
-// 注册所有命令
-commandRegistry.registerBatch({
-  analyze: analyzeCommand,
-  init: initCommand,
-  config: configCommand,
-  learn: learnCommand,
-  status: statusCommand,
-  api: apiCommand,
-  history: historyCommand
-});
+// 动态注册所有命令
+const commandFiles = [
+  'analyze',   // SQL分析命令
+  'config',    // 配置管理命令
+  'learn',     // 知识库学习命令
+  'status',    // 状态查询命令
+  'history',   // 历史记录命令
+  'init',      // 初始化命令
+  'api'        // API服务器命令
+];
+
+// 使用动态导入自动注册命令
+for (const cmdName of commandFiles) {
+  const cmd = await import(`./cli/commands/${cmdName}.js`);
+  commandRegistry.register(cmdName, cmd.default);
+}
 
 // 加载所有命令
 await commandRegistry.loadAllCommands();
