@@ -5,6 +5,7 @@
 
 import { createCoordinator } from '../../core/coordinator.js';
 import { readConfig } from '../config/index.js';
+import HistoryService from '../history/historyService.js';
 import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
@@ -90,6 +91,19 @@ async function analyzeSql(options) {
     
     if (!result.success) {
       throw new Error(result.error);
+    }
+    
+    // 保存分析结果到历史记录
+    try {
+      const historyService = new HistoryService();
+      const historyId = historyService.saveAnalysis({
+        sql: sqlQuery,
+        result: result,
+        type: 'single'
+      });
+      console.log(chalk.gray(`\n历史记录已保存: ${historyId}`));
+    } catch (historyError) {
+      console.warn(chalk.yellow(`警告: 保存历史记录失败: ${historyError.message}`));
     }
     
     // 显示结果摘要

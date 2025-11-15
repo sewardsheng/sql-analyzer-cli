@@ -6,6 +6,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
+import { buildPrompt } from '../../utils/promptLoader.js';
 
 /**
  * SQL解析与方言标准化子代理
@@ -15,6 +16,108 @@ class SqlParserAndDialectNormalizer {
     this.config = config;
     this.llm = null;
     this.initialized = false;
+  }
+
+  /**
+   * 预处理SQL，检测可能导致解析失败的模式
+   * @param {string} sqlQuery - SQL查询语句
+   * @returns {Object} 预处理结果
+   */
+  preprocessSql(sqlQuery) {
+    const warnings = [];
+    let safe = true;
+    
+    // 检查特殊控制字符
+    const controlChars = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+    if (controlChars.test(sqlQuery)) {
+      warnings.push('包含特殊控制字符');
+      safe = false;
+    }
+    
+    // 检查连续引号
+    if (/['"]{3,}/.test(sqlQuery)) {
+      warnings.push('包含连续引号模式');
+    }
+    
+    // 检查Unicode转义
+    if (/\\u[0-9a-fA-F]{4}/.test(sqlQuery)) {
+      warnings.push('包含Unicode转义序列');
+    }
+    
+    // 检查嵌套注释
+    if (/\/\*[\s\S]*?\/\*/.test(sqlQuery)) {
+      warnings.push('包含嵌套注释');
+    }
+    
+    // 检查异常的空白字符
+    if (/[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000]/.test(sqlQuery)) {
+      warnings.push('包含非标准空白字符');
+    }
+    
+    return { safe, warnings };
+  }
+
+  /**
+   * 基于规则快速检测数据库方言
+   * @param {string} sqlQuery - SQL查询语句
+   * @returns {Object|null} 检测结果或null（需要使用LLM）
+   */
+  detectDialectByRules(sqlQuery) {
+    const dialectFeatures = {
+      mysql: [
+        /LIMIT\s+\d+/i,
+        /AUTO_INCREMENT/i,
+        /`[^`]+`/,
+        /UNSIGNED/i,
+        /CHARSET\s*=/i,
+        /ENGINE\s*=/i
+      ],
+      postgresql: [
+        /ILIKE/i,
+        /SERIAL/i,
+        /\$\$/,
+        /RETURNING/i,
+        /::/,
+        /ARRAY\[/i
+      ],
+      sqlserver: [
+        /TOP\s+\d+/i,
+        /IDENTITY/i,
+        /\[[^\]]+\]/,
+        /GETDATE\(\)/i,
+        /LEN\(/i,
+        /NVARCHAR/i
+      ],
+      oracle: [
+        /ROWNUM/i,
+        /SEQUENCE/i,
+        /DUAL/i,
+        /SYSDATE/i,
+        /NVL\(/i,
+        /VARCHAR2/i
+      ]
+    };
+    
+    const scores = {};
+    for (const [dialect, patterns] of Object.entries(dialectFeatures)) {
+      scores[dialect] = patterns.filter(pattern => pattern.test(sqlQuery)).length;
+    }
+    
+    const maxScore = Math.max(...Object.values(scores));
+    if (maxScore >= 2) {
+      const detected = Object.entries(scores)
+        .filter(([_, score]) => score === maxScore)
+        .map(([dialect, _]) => dialect);
+      
+      return {
+        detected: detected[0],
+        confidence: maxScore >= 3 ? '高' : '中',
+        alternatives: detected.slice(1),
+        evidence: [`匹配到${maxScore}个方言特征`]
+      };
+    }
+    
+    return null;
   }
 
   /**
@@ -50,20 +153,36 @@ class SqlParserAndDialectNormalizer {
     
     const { sqlQuery, databaseType: providedDatabaseType, detectDialect = false } = input;
     
+    // 预处理SQL，检测可能的问题
+    const preprocessResult = this.preprocessSql(sqlQuery);
+    if (!preprocessResult.safe) {
+      console.warn(`⚠️  检测到潜在的解析问题: ${preprocessResult.warnings.join(', ')}`);
+    }
+    
     // 如果没有提供数据库类型，则自动检测
     let databaseType = providedDatabaseType;
     let dialectInfo = null;
     
     if (!databaseType || detectDialect) {
       console.log("正在自动检测数据库方言...");
-      const detectResult = await this.detectDialect(sqlQuery);
-      if (detectResult.success) {
-        databaseType = detectResult.data.detectedDatabaseType;
-        dialectInfo = detectResult.data;
-        console.log(`检测到数据库类型: ${databaseType} (置信度: ${detectResult.data.confidence})`);
+      
+      // 先尝试基于规则的快速检测
+      const ruleBasedResult = this.detectDialectByRules(sqlQuery);
+      if (ruleBasedResult) {
+        databaseType = ruleBasedResult.detected;
+        dialectInfo = ruleBasedResult;
+        console.log(`🎯 规则检测到数据库类型: ${databaseType} (置信度: ${ruleBasedResult.confidence})`);
       } else {
-        console.warn("无法自动检测数据库类型，将使用通用分析");
-        databaseType = 'generic';
+        // 规则检测失败，使用LLM
+        const detectResult = await this.detectDialect(sqlQuery);
+        if (detectResult.success) {
+          databaseType = detectResult.data.detectedDatabaseType;
+          dialectInfo = detectResult.data;
+          console.log(`🤖 LLM检测到数据库类型: ${databaseType} (置信度: ${detectResult.data.confidence})`);
+        } else {
+          console.warn("无法自动检测数据库类型，将使用通用分析");
+          databaseType = 'generic';
+        }
       }
     }
     
@@ -80,36 +199,19 @@ class SqlParserAndDialectNormalizer {
       };
     }
     
-    const systemPrompt = `你是一个SQL解析和方言标准化专家，擅长处理各种数据库方言的SQL语句。
-
-你的任务是：
-1. 识别SQL语句的数据库方言类型
-2. 解析SQL语句的结构
-3. 将特定方言的语法转换为标准SQL格式
-4. 提取关键信息（表名、字段、操作类型等）
-
-请使用以下JSON格式返回结果：
-{
-  "originalDatabaseType": "原始数据库类型",
-  "normalizedSql": "标准化后的SQL语句",
-  "parsedStructure": {
-    "operationType": "操作类型(SELECT/INSERT/UPDATE/DELETE/DDL)",
-    "tables": ["涉及的表名列表"],
-    "columns": ["涉及的字段列表"],
-    "joins": ["连接信息"],
-    "whereConditions": ["WHERE条件"],
-    "groupBy": ["GROUP BY字段"],
-    "orderBy": ["ORDER BY字段"],
-    "aggregations": ["聚合函数"],
-    "subqueries": ["子查询信息"]
-  },
-  "dialectFeatures": ["方言特性列表"],
-  "conversionNotes": ["转换说明和注意事项"]
-}`;
+    // 使用提示词模板
+    const { systemPrompt } = await buildPrompt(
+      'sql-parser-and-dialect-normalizer.md',
+      {},
+      {
+        category: 'analyzers',
+        section: 'SQL解析'
+      }
+    );
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请解析并标准化以下${databaseType || '未知'}数据库的SQL语句：
+      new HumanMessage(`请解析以下${databaseType || '未知'}数据库的SQL语句（保留原始形态，不要标准化）：
       
 ${sqlQuery}`)
     ];
@@ -126,16 +228,44 @@ ${sqlQuery}`)
         }
       }
       
+      // 尝试修复常见的JSON问题
+      content = content
+        .replace(/,(\s*[}\]])/g, '$1')  // 移除尾随逗号
+        .replace(/\n/g, ' ')             // 移除换行
+        .trim();
+      
       const result = JSON.parse(content);
+      
+      // 将预处理警告添加到结果中
+      if (preprocessResult && preprocessResult.warnings.length > 0) {
+        result.parseWarnings = [
+          ...(result.parseWarnings || []),
+          ...preprocessResult.warnings
+        ];
+      }
       
       return {
         success: true,
         data: result
       };
     } catch (error) {
-      console.error("SQL解析和标准化失败:", error);
+      console.error("❌ SQL解析失败:", error);
+      
+      // 即使解析失败，也返回基本信息
       return {
         success: false,
+        data: {
+          originalDatabaseType: databaseType || 'unknown',
+          parseStatus: 'failed',
+          originalSql: sqlQuery,  // 保留原始SQL
+          error: error.message,
+          parseWarnings: preprocessResult?.warnings || [],
+          parsedStructure: {
+            operationType: 'UNKNOWN',
+            tables: [],
+            columns: []
+          }
+        },
         error: `解析失败: ${error.message}`
       };
     }
@@ -149,24 +279,15 @@ ${sqlQuery}`)
   async detectDialect(sqlQuery) {
     await this.initialize();
     
-    const systemPrompt = `你是一个SQL方言检测专家，能够识别SQL语句所属的数据库类型。
-
-请分析以下SQL语句，识别其最可能属于的数据库类型，并说明判断依据。
-
-常见数据库方言特征：
-- MySQL: 使用LIMIT, AUTO_INCREMENT, 反引号引用标识符
-- PostgreSQL: 使用ILIKE, SERIAL, 双美元符号引用字符串
-- SQL Server: 使用TOP, IDENTITY, 方括号引用标识符
-- Oracle: 使用ROWNUM, SEQUENCE, 双引号引用标识符
-- SQLite: 使用AUTOINCREMENT, 轻量级特性
-
-请使用以下JSON格式返回结果：
-{
-  "detectedDatabaseType": "检测到的数据库类型",
-  "confidence": "置信度(高/中/低)",
-  "evidence": ["判断依据列表"],
-  "alternativeTypes": ["其他可能的数据库类型"]
-}`;
+    // 使用提示词模板
+    const { systemPrompt } = await buildPrompt(
+      'sql-parser-and-dialect-normalizer.md',
+      {},
+      {
+        category: 'analyzers',
+        section: 'SQL方言检测'
+      }
+    );
 
     const messages = [
       new SystemMessage(systemPrompt),
@@ -194,9 +315,17 @@ ${sqlQuery}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL方言检测失败:", error);
+      console.error("❌ SQL方言检测失败:", error);
+      
+      // 检测失败时返回基本信息
       return {
         success: false,
+        data: {
+          detectedDatabaseType: 'unknown',
+          confidence: '低',
+          evidence: ['LLM检测失败'],
+          alternativeTypes: []
+        },
         error: `检测失败: ${error.message}`
       };
     }

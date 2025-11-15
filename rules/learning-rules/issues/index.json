@@ -1,67 +1,7 @@
 [
   {
-    "databaseType": "PostgreSQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-03-49-700Z.md",
-    "createdAt": "2025-11-15T01:03:49.701Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-28-16-412Z.md",
-    "createdAt": "2025-11-15T01:28:16.413Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-35-16-086Z.md",
-    "createdAt": "2025-11-15T01:35:16.087Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-42-26-817Z.md",
-    "createdAt": "2025-11-15T01:42:26.818Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-46-06-714Z.md",
-    "createdAt": "2025-11-15T01:46:06.715Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-50-58-791Z.md",
-    "createdAt": "2025-11-15T01:50:58.792Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T01-56-04-771Z.md",
-    "createdAt": "2025-11-15T01:56:04.772Z"
-  },
-  {
-    "databaseType": "SQL Server",
-    "mdPath": "2025\\11\\rules-2025-11-15T02-43-58-996Z.md",
-    "createdAt": "2025-11-15T02:43:58.998Z"
-  },
-  {
-    "databaseType": "SQL Server",
-    "mdPath": "2025\\11\\rules-2025-11-15T05-20-33-959Z.md",
-    "createdAt": "2025-11-15T05:20:33.960Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T05-23-12-225Z.md",
-    "createdAt": "2025-11-15T05:23:12.228Z"
-  },
-  {
-    "databaseType": "标准SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T05-29-15-492Z.md",
-    "createdAt": "2025-11-15T05:29:15.493Z"
-  },
-  {
-    "databaseType": "SQL Server",
-    "mdPath": "2025\\11\\rules-2025-11-15T09-11-10-118Z.md",
-    "createdAt": "2025-11-15T09:11:10.119Z"
-  },
-  {
-    "databaseType": "通用SQL",
-    "mdPath": "2025\\11\\rules-2025-11-15T09-53-43-886Z.md",
-    "createdAt": "2025-11-15T09:53:43.888Z"
+    "databaseType": "MySQL",
+    "mdPath": "2025\\11\\rules-2025-11-15T12-14-47-085Z.md",
+    "createdAt": "2025-11-15T12:14:47.087Z"
   }
 ]

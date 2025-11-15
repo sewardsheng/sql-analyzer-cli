@@ -6,6 +6,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
+import { buildPrompt } from '../../utils/promptLoader.js';
 
 /**
  * 编码规范检查子代理
@@ -50,57 +51,15 @@ class CodingStandardsChecker {
     
     const { sqlQuery, databaseType, parsedStructure } = input;
     
-    const systemPrompt = `你是一个SQL编码规范检查专家，擅长评估SQL查询的代码质量和最佳实践。
-
-你的任务是检查给定的SQL查询，评估其是否符合编码规范和最佳实践。
-
-请关注以下编码规范方面：
-1. 命名规范
-2. 代码格式和缩进
-3. 注释和文档
-4. 可读性和维护性
-5. 性能最佳实践
-6. 安全最佳实践
-7. 数据库特定规范
-
-请使用以下JSON格式返回结果：
-{
-  "standardsScore": "规范评分(0-100)",
-  "complianceLevel": "合规等级(高/中/低)",
-  "violations": [
-    {
-      "type": "违规类型",
-      "severity": "严重程度(高/中/低)",
-      "description": "违规描述",
-      "location": "位置(行号或代码片段)",
-      "rule": "违反的规则",
-      "suggestion": "修改建议"
-    }
-  ],
-  "recommendations": [
-    {
-      "category": "建议类别",
-      "description": "建议描述",
-      "example": "示例代码",
-      "benefit": "改进后的好处"
-    }
-  ],
-  "formattingIssues": [
-    {
-      "type": "格式问题类型",
-      "description": "问题描述",
-      "fix": "修复方法"
-    }
-  ],
-  "namingConventions": [
-    {
-      "type": "命名类型",
-      "current": "当前命名",
-      "suggested": "建议命名",
-      "reason": "原因"
-    }
-  ]
-}`;
+    // 使用提示词模板
+    const { systemPrompt } = await buildPrompt(
+      'coding-standards-checker.md',
+      {},
+      {
+        category: 'analyzers',
+        section: '编码规范检查'
+      }
+    );
 
     // 构建上下文信息
     let contextInfo = "";
@@ -141,7 +100,51 @@ ${contextInfo}`)
         }
       }
       
-      const result = JSON.parse(content);
+      // 清理内容：移除可能的BOM和额外空白
+      content = content.trim();
+      
+      // 尝试解析JSON
+      let result;
+      try {
+        result = JSON.parse(content);
+      } catch (parseError) {
+        // 如果直接解析失败，尝试修复常见的JSON格式问题
+        console.warn("首次JSON解析失败，尝试修复格式...");
+        
+        // 尝试修复：移除注释、修复换行等
+        let fixedContent = content
+          .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
+          .replace(/\/\/.*/g, '') // 移除单行注释
+          .replace(/,(\s*[}\]])/g, '$1') // 移除尾随逗号
+          .trim();
+        
+        try {
+          result = JSON.parse(fixedContent);
+        } catch (secondError) {
+          // 如果还是失败，返回一个默认结构
+          console.error("JSON解析失败，使用默认结构:", secondError.message);
+          console.error("原始内容:", content.substring(0, 500));
+          
+          return {
+            success: true,
+            data: {
+              standardsScore: 0,
+              complianceLevel: "未知",
+              violations: [{
+                type: "解析错误",
+                severity: "高",
+                description: "LLM返回的内容格式异常，无法解析",
+                location: "整个查询",
+                rule: "N/A",
+                suggestion: "请检查LLM配置或重试"
+              }],
+              recommendations: [],
+              formattingIssues: [],
+              namingConventions: []
+            }
+          };
+        }
+      }
       
       return {
         success: true,
@@ -168,26 +171,15 @@ ${contextInfo}`)
     
     const { sqlQuery, databaseType } = input;
     
-    const systemPrompt = `你是一个SQL代码格式化专家，能够按照最佳实践格式化SQL代码。
-
-你的任务是：
-1. 格式化给定的SQL查询
-2. 确保代码可读性和一致性
-3. 遵循数据库特定的格式化规范
-
-请使用以下JSON格式返回结果：
-{
-  "formattedSql": "格式化后的SQL代码",
-  "formattingChanges": [
-    {
-      "type": "格式化类型",
-      "description": "格式化描述",
-      "before": "格式化前",
-      "after": "格式化后"
-    }
-  ],
-  "styleGuide": "遵循的格式化指南"
-}`;
+    // 使用提示词模板
+    const { systemPrompt } = await buildPrompt(
+      'coding-standards-checker.md',
+      {},
+      {
+        category: 'analyzers',
+        section: 'SQL代码格式化'
+      }
+    );
 
     const messages = [
       new SystemMessage(systemPrompt),
@@ -209,7 +201,41 @@ ${sqlQuery}`)
         }
       }
       
-      const result = JSON.parse(content);
+      // 清理内容：移除可能的BOM和额外空白
+      content = content.trim();
+      
+      // 尝试解析JSON
+      let result;
+      try {
+        result = JSON.parse(content);
+      } catch (parseError) {
+        // 如果直接解析失败，尝试修复常见的JSON格式问题
+        console.warn("首次JSON解析失败，尝试修复格式...");
+        
+        // 尝试修复：移除注释、修复换行等
+        let fixedContent = content
+          .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
+          .replace(/\/\/.*/g, '') // 移除单行注释
+          .replace(/,(\s*[}\]])/g, '$1') // 移除尾随逗号
+          .trim();
+        
+        try {
+          result = JSON.parse(fixedContent);
+        } catch (secondError) {
+          // 如果还是失败，返回一个默认结构
+          console.error("JSON解析失败，使用默认结构:", secondError.message);
+          console.error("原始内容:", content.substring(0, 500));
+          
+          return {
+            success: true,
+            data: {
+              formattedSql: sqlQuery,
+              formattingChanges: [],
+              styleGuide: "无法生成格式化建议"
+            }
+          };
+        }
+      }
       
       return {
         success: true,

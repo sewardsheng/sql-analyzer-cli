@@ -6,6 +6,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
+import { buildPrompt, validateRequiredVariables } from '../../utils/promptLoader.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -78,112 +79,26 @@ class IntelligentRuleLearner {
     
     const { sqlQuery, databaseType, analysisResults } = input;
     
-    const systemPrompt = `你是一个SQL规则学习专家，能够从SQL分析结果中提取有价值的规则和模式。
-
-你的任务是分析给定的SQL查询及其分析结果，提取有价值的规则和模式，并生成可重用的知识。
-
-请关注以下学习方面：
-1. 性能优化规则
-2. 安全最佳实践
-3. 编码规范规则
-4. 数据库特定模式
-5. 常见问题和解决方案
-
-请使用以下JSON格式返回结果：
-{
-  "learnedRules": [
-    {
-      "category": "规则类别",
-      "type": "规则类型",
-      "title": "规则标题",
-      "description": "规则描述",
-      "condition": "触发条件",
-      "example": "示例代码",
-      "severity": "严重程度",
-      "confidence": "置信度"
-    }
-  ],
-  "patterns": [
-    {
-      "name": "模式名称",
-      "description": "模式描述",
-      "category": "模式类别",
-      "example": "示例代码",
-      "frequency": "出现频率"
-    }
-  ],
-  "antiPatterns": [
-    {
-      "name": "反模式名称",
-      "description": "反模式描述",
-      "category": "反模式类别",
-      "example": "示例代码",
-      "consequence": "后果",
-      "alternative": "替代方案"
-    }
-  ],
-  "bestPractices": [
-    {
-      "name": "最佳实践名称",
-      "description": "实践描述",
-      "category": "实践类别",
-      "example": "示例代码",
-      "benefit": "好处"
-    }
-  ]
-}`;
-
-    // 构建分析结果信息
-    let analysisInfo = "";
-    if (analysisResults) {
-      analysisInfo = `
-分析结果摘要：
-- 整体评分: ${analysisResults.overallScore || '未知'}
-- 性能分析: ${analysisResults.performanceAnalysis ? '已完成' : '未完成'}
-- 安全审计: ${analysisResults.securityAudit ? '已完成' : '未完成'}
-- 编码规范检查: ${analysisResults.standardsCheck ? '已完成' : '未完成'}
-- 优化建议: ${analysisResults.optimizationSuggestions ? '已完成' : '未完成'}
-`;
-
-      if (analysisResults.performanceAnalysis && analysisResults.performanceAnalysis.data) {
-        analysisInfo += `
-性能分析详情：
-- 性能评分: ${analysisResults.performanceAnalysis.data.performanceScore || '未知'}
-- 复杂度: ${analysisResults.performanceAnalysis.data.complexityLevel || '未知'}
-- 瓶颈数量: ${analysisResults.performanceAnalysis.data.bottlenecks?.length || 0}
-`;
-      }
-
-      if (analysisResults.securityAudit && analysisResults.securityAudit.data) {
-        analysisInfo += `
-安全审计详情：
-- 安全评分: ${analysisResults.securityAudit.data.securityScore || '未知'}
-- 风险等级: ${analysisResults.securityAudit.data.riskLevel || '未知'}
-- 漏洞数量: ${analysisResults.securityAudit.data.vulnerabilities?.length || 0}
-`;
-      }
-
-      if (analysisResults.standardsCheck && analysisResults.standardsCheck.data) {
-        analysisInfo += `
-编码规范检查详情：
-- 规范评分: ${analysisResults.standardsCheck.data.standardsScore || '未知'}
-- 合规等级: ${analysisResults.standardsCheck.data.complianceLevel || '未知'}
-- 违规数量: ${analysisResults.standardsCheck.data.violations?.length || 0}
-`;
-      }
-    }
-
-    const messages = [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(`请从以下${databaseType || '未知'}数据库的SQL查询分析结果中学习规则：
-
-SQL查询:
-${sqlQuery}
-
-${analysisInfo}`)
-    ];
-
     try {
+      // 验证必需的变量
+      validateRequiredVariables({ sqlQuery, databaseType, analysisResults },
+        ['sqlQuery', 'databaseType', 'analysisResults']);
+      
+      // 构建分析结果摘要
+      const analysisResultsSummary = this.buildAnalysisResultsSummary(analysisResults);
+      
+      // 使用prompt模板构建消息
+      const { systemPrompt, userPrompt } = await buildPrompt('rule-generation.md', {
+        databaseType: databaseType || '未知',
+        sqlQuery,
+        analysisResults: analysisResultsSummary
+      });
+      
+      const messages = [
+        new SystemMessage(systemPrompt),
+        new HumanMessage(userPrompt)
+      ];
+
       const response = await this.llm.invoke(messages);
       let content = response.content;
       
@@ -214,6 +129,76 @@ ${analysisInfo}`)
         error: `学习失败: ${error.message}`
       };
     }
+  }
+
+  /**
+   * 构建分析结果摘要
+   * @param {Object} analysisResults - 完整分析结果
+   * @returns {string} 格式化的分析结果摘要
+   */
+  buildAnalysisResultsSummary(analysisResults) {
+    let summary = "";
+    
+    if (!analysisResults) {
+      return "无分析结果";
+    }
+    
+    summary += "分析结果摘要：\n";
+    summary += `- 整体评分: ${analysisResults.overallScore || '未知'}\n`;
+    summary += `- 性能分析: ${analysisResults.performanceAnalysis ? '已完成' : '未完成'}\n`;
+    summary += `- 安全审计: ${analysisResults.securityAudit ? '已完成' : '未完成'}\n`;
+    summary += `- 编码规范检查: ${analysisResults.standardsCheck ? '已完成' : '未完成'}\n`;
+    summary += `- 优化建议: ${analysisResults.optimizationSuggestions ? '已完成' : '未完成'}\n`;
+    
+    // 性能分析详情
+    if (analysisResults.performanceAnalysis && analysisResults.performanceAnalysis.data) {
+      const perf = analysisResults.performanceAnalysis.data;
+      summary += "\n性能分析详情：\n";
+      summary += `- 性能评分: ${perf.performanceScore || '未知'}\n`;
+      summary += `- 复杂度: ${perf.complexityLevel || '未知'}\n`;
+      summary += `- 瓶颈数量: ${perf.bottlenecks?.length || 0}\n`;
+      
+      if (perf.bottlenecks && perf.bottlenecks.length > 0) {
+        summary += "- 主要瓶颈:\n";
+        perf.bottlenecks.slice(0, 3).forEach((b, i) => {
+          summary += `  ${i + 1}. ${b.description || '未知'} (严重程度: ${b.severity || '未知'})\n`;
+        });
+      }
+    }
+    
+    // 安全审计详情
+    if (analysisResults.securityAudit && analysisResults.securityAudit.data) {
+      const sec = analysisResults.securityAudit.data;
+      summary += "\n安全审计详情：\n";
+      summary += `- 安全评分: ${sec.securityScore || '未知'}\n`;
+      summary += `- 风险等级: ${sec.riskLevel || '未知'}\n`;
+      summary += `- 漏洞数量: ${sec.vulnerabilities?.length || 0}\n`;
+      
+      if (sec.vulnerabilities && sec.vulnerabilities.length > 0) {
+        summary += "- 主要漏洞:\n";
+        sec.vulnerabilities.slice(0, 3).forEach((v, i) => {
+          summary += `  ${i + 1}. ${v.description || '未知'} (严重程度: ${v.severity || '未知'})\n`;
+        });
+      }
+    }
+    
+    // 编码规范检查详情
+    if (analysisResults.standardsCheck && analysisResults.standardsCheck.data) {
+      const std = analysisResults.standardsCheck.data;
+      summary += "\n编码规范检查详情：\n";
+      summary += `- 规范评分: ${std.standardsScore || '未知'}\n`;
+      summary += `- 合规等级: ${std.complianceLevel || '未知'}\n`;
+      summary += `- 违规数量: ${std.violations?.length || 0}\n`;
+      
+      if (std.violations && std.violations.length > 0) {
+        summary += "- 主要违规:\n";
+        std.violations.slice(0, 3).forEach((v, i) => {
+          summary += `  ${i + 1}. ${v.description || '未知'} (严重程度: ${v.severity || '未知'})\n`;
+        });
+      }
+    }
+    
+    return summary;
   }
 
   /**
@@ -450,44 +435,15 @@ ${analysisInfo}`)
     
     const { query, databaseType, limit = 5 } = input;
     
-    const systemPrompt = `你是一个SQL规则检索专家，能够根据查询条件检索相关的规则和知识。
-
-你的任务是分析给定的查询，从知识库中检索最相关的规则和模式。
-
-请使用以下JSON格式返回结果：
-{
-  "relevantRules": [
-    {
-      "category": "规则类别",
-      "type": "规则类型",
-      "title": "规则标题",
-      "description": "规则描述",
-      "condition": "触发条件",
-      "example": "示例代码",
-      "severity": "严重程度",
-      "confidence": "置信度",
-      "relevance": "相关性评分"
-    }
-  ],
-  "relevantPatterns": [
-    {
-      "name": "模式名称",
-      "description": "模式描述",
-      "category": "模式类别",
-      "example": "示例代码",
-      "relevance": "相关性评分"
-    }
-  ],
-  "relevantBestPractices": [
-    {
-      "name": "最佳实践名称",
-      "description": "实践描述",
-      "category": "实践类别",
-      "example": "示例代码",
-      "relevance": "相关性评分"
-    }
-  ]
-}`;
+    // 使用提示词模板
+    const { systemPrompt } = await buildPrompt(
+      'intelligent-rule-learner.md',
+      {},
+      {
+        category: 'analyzers',
+        section: '规则检索'
+      }
+    );
 
     // 这里可以实现更复杂的规则检索逻辑
     // 目前简化为使用LLM进行规则检索
