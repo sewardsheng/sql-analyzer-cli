@@ -1,22 +1,22 @@
 /**
- * 子代理协调器
- * 负责协调各个子代理的工作，整合分析结果
+ * SQL分析协调器
+ * 负责协调各个分析器的工作，整合分析结果
  */
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../services/config/index.js';
-import { createSqlParserAndDialectNormalizerTool } from './subagents/sqlParserAndDialectNormalizer.js';
-import { createPerformanceAnalyzerTool } from './subagents/performanceAnalyzer.js';
-import { createSecurityAuditorTool } from './subagents/securityAuditor.js';
-import { createCodingStandardsCheckerTool } from './subagents/codingStandardsChecker.js';
-import { createSqlOptimizerAndSuggesterTool } from './subagents/sqlOptimizerAndSuggester.js';
-import { createIntelligentRuleLearnerTool } from './subagents/intelligentRuleLearner.js';
+import { readConfig } from '../services/config/index.js';
+import { createSqlParserAndDialectNormalizerTool } from './analyzers/sqlParserAndDialectNormalizer.js';
+import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
+import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
+import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
+import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
+import { createIntelligentRuleLearnerTool } from './analyzers/intelligentRuleLearner.js';
 
 /**
- * 子代理协调器
+ * SQL分析协调器
  */
-class SubagentsCoordinator {
+class SqlAnalysisCoordinator {
   constructor(config = {}) {
     this.config = config;
     this.llm = null;
@@ -25,7 +25,7 @@ class SubagentsCoordinator {
   }
 
   /**
-   * 初始化协调器和所有子代理
+   * 初始化协调器和所有分析器
    */
   async initialize() {
     if (this.initialized) return;
@@ -41,7 +41,7 @@ class SubagentsCoordinator {
       }
     });
     
-    // 初始化所有子代理工具
+    // 初始化所有分析器工具
     this.tools = {
       sqlParser: createSqlParserAndDialectNormalizerTool(this.config),
       performanceAnalyzer: createPerformanceAnalyzerTool(this.config),
@@ -435,12 +435,17 @@ ${analysisInfo}`)
 }
 
 /**
- * 创建子代理协调器实例
+ * 创建SQL分析协调器实例
  * @param {Object} config - 配置参数
- * @returns {SubagentsCoordinator} 协调器实例
+ * @returns {SqlAnalysisCoordinator} 协调器实例
  */
-export function createSubagentsCoordinator(config = {}) {
-  return new SubagentsCoordinator(config);
+export function createCoordinator(config = {}) {
+  return new SqlAnalysisCoordinator(config);
 }
 
-export default SubagentsCoordinator;
+// 保持向后兼容
+export function createSubagentsCoordinator(config = {}) {
+  return createCoordinator(config);
+}
+
+export default SqlAnalysisCoordinator;

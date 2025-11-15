@@ -5,7 +5,7 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../../services/config/index.js';
+import { readConfig } from '../../services/config/index.js';
 
 /**
  * SQL优化与建议生成子代理

@@ -53,5 +53,15 @@
     "databaseType": "标准SQL",
     "mdPath": "2025\\11\\rules-2025-11-15T05-29-15-492Z.md",
     "createdAt": "2025-11-15T05:29:15.493Z"
+  },
+  {
+    "databaseType": "SQL Server",
+    "mdPath": "2025\\11\\rules-2025-11-15T09-11-10-118Z.md",
+    "createdAt": "2025-11-15T09:11:10.119Z"
+  },
+  {
+    "databaseType": "通用SQL",
+    "mdPath": "2025\\11\\rules-2025-11-15T09-53-43-886Z.md",
+    "createdAt": "2025-11-15T09:53:43.888Z"
   }
 ]

@@ -16,7 +16,7 @@ import path from "path";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import crypto from "crypto";
-import { readConfig } from '../../services/config/index.js';
+import { readConfig } from '../services/config/index.js';
 
 // 全局向量存储实例
 let vectorStore = null;

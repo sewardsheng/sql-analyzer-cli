@@ -3,7 +3,7 @@ import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { readConfig } from '../../services/config/index.js';
-import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted, loadVectorStoreFromDisk } from '../../core/graph/vectorStore.js';
+import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted, loadVectorStoreFromDisk } from '../../core/vectorStore.js';
 
 /**
  * 加载rules目录中的文档到知识库
@@ -196,7 +196,7 @@ async function showKnowledgeStatus(showReturnOption = false) {
           }
         } else {
           // 尝试从内存中的向量存储获取信息
-          const { getVectorStore } = await import('../../core/graph/vectorStore.js');
+          const { getVectorStore } = await import('../../core/vectorStore.js');
           const vectorStore = getVectorStore();
           if (vectorStore && vectorStore.docstore && vectorStore.docstore._docs) {
             const docCount = Object.keys(vectorStore.docstore._docs).length;

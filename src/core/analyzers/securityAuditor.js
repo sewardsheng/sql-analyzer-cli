@@ -1,16 +1,16 @@
 /**
- * 性能分析子代理
- * 负责分析SQL查询的性能问题并提供优化建议
+ * 安全审计子代理
+ * 负责分析SQL查询的安全风险并提供修复建议
  */
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../../services/config/index.js';
+import { readConfig } from '../../services/config/index.js';
 
 /**
- * 性能分析子代理
+ * 安全审计子代理
  */
-class PerformanceAnalyzer {
+class SecurityAuditor {
   constructor(config = {}) {
     this.config = config;
     this.llm = null;
@@ -38,63 +38,62 @@ class PerformanceAnalyzer {
   }
 
   /**
-   * 分析SQL性能
+   * 审计SQL安全性
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
    * @param {string} input.databaseType - 数据库类型
    * @param {Object} input.parsedStructure - SQL解析结构
-   * @returns {Promise<Object>} 性能分析结果
+   * @returns {Promise<Object>} 安全审计结果
    */
-  async analyzePerformance(input) {
+  async auditSecurity(input) {
     await this.initialize();
     
     const { sqlQuery, databaseType, parsedStructure } = input;
     
-    const systemPrompt = `你是一个SQL性能分析专家，擅长识别SQL查询中的性能瓶颈并提供优化建议。
+    const systemPrompt = `你是一个SQL安全审计专家，擅长识别SQL查询中的安全风险和漏洞。
 
-你的任务是分析给定的SQL查询，识别潜在的性能问题，并提供具体的优化建议。
+你的任务是分析给定的SQL查询，识别潜在的安全问题，并提供修复建议。
 
-请关注以下性能方面：
-1. 查询执行计划分析
-2. 索引使用情况
-3. 表连接策略
-4. WHERE条件效率
-5. 聚合函数性能
-6. 子查询和临时表
-7. 数据库特定优化
+请关注以下安全方面：
+1. SQL注入风险
+2. 权限提升风险
+3. 敏感数据泄露
+4. 数据完整性风险
+5. 认证和授权问题
+6. 数据库特定安全漏洞
 
 请使用以下JSON格式返回结果：
 {
-  "performanceScore": "性能评分(0-100)",
-  "complexityLevel": "复杂度(低/中/高)",
-  "estimatedExecutionTime": "预估执行时间",
-  "resourceUsage": "资源使用情况(低/中/高)",
-  "bottlenecks": [
+  "securityScore": "安全评分(0-100)",
+  "riskLevel": "风险等级(低/中/高)",
+  "vulnerabilities": [
     {
-      "type": "瓶颈类型",
+      "type": "漏洞类型",
       "severity": "严重程度(高/中/低)",
-      "description": "瓶颈描述",
+      "description": "漏洞描述",
       "location": "位置(行号或代码片段)",
-      "impact": "影响说明"
+      "impact": "影响说明",
+      "cveReferences": ["相关CVE编号"]
     }
   ],
-  "optimizationSuggestions": [
+  "recommendations": [
     {
-      "category": "优化类别",
-      "description": "优化描述",
-      "example": "优化示例代码",
-      "expectedImprovement": "预期改善效果"
+      "category": "修复类别",
+      "description": "修复描述",
+      "example": "修复示例代码",
+      "priority": "优先级(高/中/低)"
     }
   ],
-  "indexRecommendations": [
+  "sensitiveDataAccess": [
     {
       "table": "表名",
-      "columns": ["列名"],
-      "indexType": "索引类型",
-      "reason": "创建索引的原因"
+      "columns": ["敏感列名"],
+      "riskType": "风险类型",
+      "mitigation": "缓解措施"
     }
   ],
-  "executionPlanHints": ["执行计划提示"]
+  "permissionRequirements": ["所需权限列表"],
+  "complianceIssues": ["合规性问题列表"]
 }`;
 
     // 构建上下文信息
@@ -116,7 +115,7 @@ class PerformanceAnalyzer {
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL查询性能：
+      new HumanMessage(`请审计以下${databaseType || '未知'}数据库的SQL查询安全性：
 
 SQL查询:
 ${sqlQuery}
@@ -143,53 +142,51 @@ ${contextInfo}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL性能分析失败:", error);
+      console.error("SQL安全审计失败:", error);
       return {
         success: false,
-        error: `分析失败: ${error.message}`
+        error: `审计失败: ${error.message}`
       };
     }
   }
 
   /**
-   * 生成执行计划分析
+   * 检测SQL注入风险
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
    * @param {string} input.databaseType - 数据库类型
-   * @returns {Promise<Object>} 执行计划分析结果
+   * @returns {Promise<Object>} SQL注入检测结果
    */
-  async analyzeExecutionPlan(input) {
+  async detectSqlInjection(input) {
     await this.initialize();
     
     const { sqlQuery, databaseType } = input;
     
-    const systemPrompt = `你是一个SQL执行计划分析专家，能够解释和分析不同数据库的执行计划。
+    const systemPrompt = `你是一个SQL注入检测专家，擅长识别SQL查询中的注入风险。
 
 你的任务是：
-1. 生成给定SQL查询的预期执行计划
-2. 解释执行计划中的关键步骤
-3. 识别潜在的性能问题
-4. 提供执行计划优化建议
+1. 识别SQL查询中的注入点
+2. 分析注入风险的类型和严重程度
+3. 提供防止SQL注入的建议
 
 请使用以下JSON格式返回结果：
 {
-  "executionPlan": "执行计划描述",
-  "steps": [
+  "injectionRisk": "注入风险等级(无/低/中/高)",
+  "injectionPoints": [
     {
-      "step": "步骤描述",
-      "cost": "成本估算",
-      "rows": "影响行数",
-      "accessMethod": "访问方法",
-      "bottleneck": "是否为瓶颈"
+      "location": "注入位置",
+      "type": "注入类型",
+      "severity": "严重程度",
+      "description": "风险描述"
     }
   ],
-  "bottlenecks": ["瓶颈列表"],
-  "optimizationOpportunities": ["优化机会列表"]
+  "preventionMethods": ["防止方法列表"],
+  "secureAlternatives": ["安全替代方案"]
 }`;
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL执行计划：
+      new HumanMessage(`请检测以下${databaseType || '未知'}数据库的SQL注入风险：
 
 SQL查询:
 ${sqlQuery}`)
@@ -214,32 +211,32 @@ ${sqlQuery}`)
         data: result
       };
     } catch (error) {
-      console.error("执行计划分析失败:", error);
+      console.error("SQL注入检测失败:", error);
       return {
         success: false,
-        error: `分析失败: ${error.message}`
+        error: `检测失败: ${error.message}`
       };
     }
   }
 }
 
 /**
- * 创建性能分析工具
+ * 创建安全审计工具
  * @param {Object} config - 配置参数
  * @returns {Object} 工具对象
  */
-export function createPerformanceAnalyzerTool(config = {}) {
-  const agent = new PerformanceAnalyzer(config);
+export function createSecurityAuditorTool(config = {}) {
+  const agent = new SecurityAuditor(config);
   
   return {
-    name: "performance_analyzer",
-    description: "分析SQL查询的性能问题并提供优化建议",
+    name: "security_auditor",
+    description: "分析SQL查询的安全风险并提供修复建议",
     parameters: {
       type: "object",
       properties: {
         sqlQuery: {
           type: "string",
-          description: "要分析的SQL查询语句"
+          description: "要审计的SQL查询语句"
         },
         databaseType: {
           type: "string",
@@ -253,9 +250,9 @@ export function createPerformanceAnalyzerTool(config = {}) {
       required: ["sqlQuery", "databaseType"]
     },
     func: async (input) => {
-      return await agent.analyzePerformance(input);
+      return await agent.auditSecurity(input);
     }
   };
 }
 
-export default PerformanceAnalyzer;
+export default SecurityAuditor;

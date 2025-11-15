@@ -1,16 +1,16 @@
 /**
- * 编码规范检查子代理
- * 负责检查SQL查询的编码规范和最佳实践
+ * 性能分析子代理
+ * 负责分析SQL查询的性能问题并提供优化建议
  */
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../../services/config/index.js';
+import { readConfig } from '../../services/config/index.js';
 
 /**
- * 编码规范检查子代理
+ * 性能分析子代理
  */
-class CodingStandardsChecker {
+class PerformanceAnalyzer {
   constructor(config = {}) {
     this.config = config;
     this.llm = null;
@@ -38,68 +38,63 @@ class CodingStandardsChecker {
   }
 
   /**
-   * 检查SQL编码规范
+   * 分析SQL性能
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
    * @param {string} input.databaseType - 数据库类型
    * @param {Object} input.parsedStructure - SQL解析结构
-   * @returns {Promise<Object>} 编码规范检查结果
+   * @returns {Promise<Object>} 性能分析结果
    */
-  async checkCodingStandards(input) {
+  async analyzePerformance(input) {
     await this.initialize();
     
     const { sqlQuery, databaseType, parsedStructure } = input;
     
-    const systemPrompt = `你是一个SQL编码规范检查专家，擅长评估SQL查询的代码质量和最佳实践。
+    const systemPrompt = `你是一个SQL性能分析专家，擅长识别SQL查询中的性能瓶颈并提供优化建议。
 
-你的任务是检查给定的SQL查询，评估其是否符合编码规范和最佳实践。
+你的任务是分析给定的SQL查询，识别潜在的性能问题，并提供具体的优化建议。
 
-请关注以下编码规范方面：
-1. 命名规范
-2. 代码格式和缩进
-3. 注释和文档
-4. 可读性和维护性
-5. 性能最佳实践
-6. 安全最佳实践
-7. 数据库特定规范
+请关注以下性能方面：
+1. 查询执行计划分析
+2. 索引使用情况
+3. 表连接策略
+4. WHERE条件效率
+5. 聚合函数性能
+6. 子查询和临时表
+7. 数据库特定优化
 
 请使用以下JSON格式返回结果：
 {
-  "standardsScore": "规范评分(0-100)",
-  "complianceLevel": "合规等级(高/中/低)",
-  "violations": [
+  "performanceScore": "性能评分(0-100)",
+  "complexityLevel": "复杂度(低/中/高)",
+  "estimatedExecutionTime": "预估执行时间",
+  "resourceUsage": "资源使用情况(低/中/高)",
+  "bottlenecks": [
     {
-      "type": "违规类型",
+      "type": "瓶颈类型",
       "severity": "严重程度(高/中/低)",
-      "description": "违规描述",
+      "description": "瓶颈描述",
       "location": "位置(行号或代码片段)",
-      "rule": "违反的规则",
-      "suggestion": "修改建议"
+      "impact": "影响说明"
     }
   ],
-  "recommendations": [
+  "optimizationSuggestions": [
     {
-      "category": "建议类别",
-      "description": "建议描述",
-      "example": "示例代码",
-      "benefit": "改进后的好处"
+      "category": "优化类别",
+      "description": "优化描述",
+      "example": "优化示例代码",
+      "expectedImprovement": "预期改善效果"
     }
   ],
-  "formattingIssues": [
+  "indexRecommendations": [
     {
-      "type": "格式问题类型",
-      "description": "问题描述",
-      "fix": "修复方法"
+      "table": "表名",
+      "columns": ["列名"],
+      "indexType": "索引类型",
+      "reason": "创建索引的原因"
     }
   ],
-  "namingConventions": [
-    {
-      "type": "命名类型",
-      "current": "当前命名",
-      "suggested": "建议命名",
-      "reason": "原因"
-    }
-  ]
+  "executionPlanHints": ["执行计划提示"]
 }`;
 
     // 构建上下文信息
@@ -121,7 +116,7 @@ class CodingStandardsChecker {
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请检查以下${databaseType || '未知'}数据库的SQL编码规范：
+      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL查询性能：
 
 SQL查询:
 ${sqlQuery}
@@ -148,50 +143,53 @@ ${contextInfo}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL编码规范检查失败:", error);
+      console.error("SQL性能分析失败:", error);
       return {
         success: false,
-        error: `检查失败: ${error.message}`
+        error: `分析失败: ${error.message}`
       };
     }
   }
 
   /**
-   * 格式化SQL代码
+   * 生成执行计划分析
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
    * @param {string} input.databaseType - 数据库类型
-   * @returns {Promise<Object>} 格式化结果
+   * @returns {Promise<Object>} 执行计划分析结果
    */
-  async formatSql(input) {
+  async analyzeExecutionPlan(input) {
     await this.initialize();
     
     const { sqlQuery, databaseType } = input;
     
-    const systemPrompt = `你是一个SQL代码格式化专家，能够按照最佳实践格式化SQL代码。
+    const systemPrompt = `你是一个SQL执行计划分析专家，能够解释和分析不同数据库的执行计划。
 
 你的任务是：
-1. 格式化给定的SQL查询
-2. 确保代码可读性和一致性
-3. 遵循数据库特定的格式化规范
+1. 生成给定SQL查询的预期执行计划
+2. 解释执行计划中的关键步骤
+3. 识别潜在的性能问题
+4. 提供执行计划优化建议
 
 请使用以下JSON格式返回结果：
 {
-  "formattedSql": "格式化后的SQL代码",
-  "formattingChanges": [
+  "executionPlan": "执行计划描述",
+  "steps": [
     {
-      "type": "格式化类型",
-      "description": "格式化描述",
-      "before": "格式化前",
-      "after": "格式化后"
+      "step": "步骤描述",
+      "cost": "成本估算",
+      "rows": "影响行数",
+      "accessMethod": "访问方法",
+      "bottleneck": "是否为瓶颈"
     }
   ],
-  "styleGuide": "遵循的格式化指南"
+  "bottlenecks": ["瓶颈列表"],
+  "optimizationOpportunities": ["优化机会列表"]
 }`;
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请格式化以下${databaseType || '未知'}数据库的SQL代码：
+      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL执行计划：
 
 SQL查询:
 ${sqlQuery}`)
@@ -216,32 +214,32 @@ ${sqlQuery}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL代码格式化失败:", error);
+      console.error("执行计划分析失败:", error);
       return {
         success: false,
-        error: `格式化失败: ${error.message}`
+        error: `分析失败: ${error.message}`
       };
     }
   }
 }
 
 /**
- * 创建编码规范检查工具
+ * 创建性能分析工具
  * @param {Object} config - 配置参数
  * @returns {Object} 工具对象
  */
-export function createCodingStandardsCheckerTool(config = {}) {
-  const agent = new CodingStandardsChecker(config);
+export function createPerformanceAnalyzerTool(config = {}) {
+  const agent = new PerformanceAnalyzer(config);
   
   return {
-    name: "coding_standards_checker",
-    description: "检查SQL查询的编码规范和最佳实践",
+    name: "performance_analyzer",
+    description: "分析SQL查询的性能问题并提供优化建议",
     parameters: {
       type: "object",
       properties: {
         sqlQuery: {
           type: "string",
-          description: "要检查的SQL查询语句"
+          description: "要分析的SQL查询语句"
         },
         databaseType: {
           type: "string",
@@ -255,9 +253,9 @@ export function createCodingStandardsCheckerTool(config = {}) {
       required: ["sqlQuery", "databaseType"]
     },
     func: async (input) => {
-      return await agent.checkCodingStandards(input);
+      return await agent.analyzePerformance(input);
     }
   };
 }
 
-export default CodingStandardsChecker;
+export default PerformanceAnalyzer;
