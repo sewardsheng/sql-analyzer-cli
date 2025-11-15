@@ -9,7 +9,8 @@ import crypto from 'crypto';
 
 class HistoryService {
   constructor() {
-    this.historyDir = path.join(process.cwd(), 'history');
+    // 使用项目根目录的绝对路径，确保历史记录始终保存在项目目录的history文件夹中
+    this.historyDir = path.resolve(__dirname, '../../../history');
     this.ensureHistoryDir();
   }
 
@@ -191,17 +192,15 @@ class HistoryService {
    */
   getHistoryStats() {
     try {
-      const files = fs.readdirSync(this.historyDir)
-        .filter(file => file.endsWith('.json'));
+      const files = this.getAllHistoryFiles();
       
       const stats = {
         total: files.length,
         byType: {},
-        byDatabase: {} // 添加按数据库类型统计
+        byDatabase: {}
       };
       
-      files.forEach(file => {
-        const filePath = path.join(this.historyDir, file);
+      files.forEach(filePath => {
         const content = fs.readFileSync(filePath, 'utf8');
         const record = JSON.parse(content);
         

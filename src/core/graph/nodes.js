@@ -8,7 +8,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { updateState, completeStep } from './states.js';
-import { readConfig } from '../../utils/config.js';
+import { readConfig } from '../../services/config/index.js';
 
 /**
  * 系统提示词

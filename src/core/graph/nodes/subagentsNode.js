@@ -4,7 +4,7 @@
  */
 
 import { createSubagentsCoordinator } from '../../agents/subagentsCoordinator.js';
-import { readConfig } from '../../../utils/config.js';
+import { readConfig } from '../../../services/config/index.js';
 
 /**
  * 子代理集成节点

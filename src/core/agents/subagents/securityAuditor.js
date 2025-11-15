@@ -5,7 +5,7 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../../utils/config.js';
+import { readConfig } from '../../../services/config/index.js';
 
 /**
  * 安全审计子代理

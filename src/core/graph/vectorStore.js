@@ -15,7 +15,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { readConfig } from '../../utils/config.js';
+import { readConfig } from '../../services/config/index.js';
 
 // 全局向量存储实例
 let vectorStore = null;

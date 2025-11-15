@@ -5,7 +5,7 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../utils/config.js';
+import { readConfig } from '../../services/config/index.js';
 import { createSqlParserAndDialectNormalizerTool } from './subagents/sqlParserAndDialectNormalizer.js';
 import { createPerformanceAnalyzerTool } from './subagents/performanceAnalyzer.js';
 import { createSecurityAuditorTool } from './subagents/securityAuditor.js';

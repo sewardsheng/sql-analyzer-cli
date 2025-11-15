@@ -3,7 +3,7 @@ import { createInitialState, updateState, completeAnalysis, setError } from './s
 import { initializeAndValidate, retrieveRelevantDocuments, analyzeSql, postProcessResults } from './nodes.js';
 import { subagentsAnalysisNode, traditionalAnalysisNode, subagentsPostProcessNode, shouldUseSubagents } from './nodes/subagentsNode.js';
 import { shouldRetrieveDocuments, shouldAnalyze, shouldPostProcess, isAnalysisComplete, decideErrorHandling, decideNextAnalysisStep } from './edges.js';
-import { readConfig } from '../../utils/config.js';
+import { readConfig } from '../../services/config/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 

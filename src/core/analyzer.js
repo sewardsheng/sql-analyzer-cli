@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import chalk from 'chalk';
 import { handleError, logInfo, logError, createError } from '../utils/logger.js';
 import { retrieveDocuments, isVectorStoreInitialized, loadVectorStoreFromDisk } from './graph/vectorStore.js';
-import { readConfig } from '../utils/config.js';
+import { readConfig } from '../services/config/index.js';
 
 /**
  * 系统提示词

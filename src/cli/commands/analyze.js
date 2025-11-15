@@ -3,7 +3,7 @@
  * 提供SQL语句分析功能
  */
 
-import { analyzeSql } from '../../index.js';
+import { analyzeSql } from '../../services/analysis/index.js';
 
 /**
  * 注册analyze命令

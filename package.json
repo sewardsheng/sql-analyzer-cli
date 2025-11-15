@@ -5,15 +5,12 @@
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "sql-analyzer": "./bin/cli.js"
+    "sql-analyzer": "./src/index.js"
   },
   "scripts": {
-    "start": "bun run bin/cli.js",
-    "dev": "bun run bin/cli.js",
-    "prod": "bun run dist/bin/cli.js",
-    "build": "bun build ./src/index.js --outdir ./dist --target node --external ./src/cli/commands/api.js --external ./src/services/api && bun build ./bin/cli.js --outdir ./dist/bin --target node --external ./src/cli/commands/api.js --external ./src/services/api",
-    "build:api": "bun build ./src/services/api/apiServer.js --outdir ./dist --target bun --entry-naming '[name].js'",
-    "api": "bun run src/services/api/apiServer.js"
+    "dev": "bun run src/index.js",
+    "prod": "bun run dist/index.js",
+    "build": "bun build ./src/index.js --outdir ./dist --target node"
   },
   "keywords": [
     "sql",

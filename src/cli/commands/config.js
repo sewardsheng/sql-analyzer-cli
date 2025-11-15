@@ -19,7 +19,7 @@ function register(program) {
     .description('显示所有配置项')
     .action(async () => {
       try {
-        const { listConfig } = await import('../../utils/config.js');
+        const { listConfig } = await import('../../services/config/index.js');
         await listConfig();
         process.exit(0);
       } catch (error) {
@@ -34,8 +34,8 @@ function register(program) {
     .description('获取特定配置项')
     .action(async (key) => {
       try {
-        const { getConfigValue } = await import('../../utils/config.js');
-        await getConfigValue(key);
+        const { configGet } = await import('../../services/config/index.js');
+        await configGet(key);
         process.exit(0);
       } catch (error) {
         console.error('获取配置项时发生错误:', error.message);
@@ -49,7 +49,7 @@ function register(program) {
     .description('设置配置项')
     .action(async (key, value) => {
       try {
-        const { setConfigValue } = await import('../../utils/config.js');
+        const { setConfigValue } = await import('../../services/config/index.js');
         await setConfigValue(key, value);
         process.exit(0);
       } catch (error) {
@@ -64,7 +64,7 @@ function register(program) {
     .description('重置所有配置为默认值')
     .action(async () => {
       try {
-        const { resetConfig } = await import('../../utils/config.js');
+        const { resetConfig } = await import('../../services/config/index.js');
         await resetConfig();
         process.exit(0);
       } catch (error) {
@@ -77,7 +77,7 @@ function register(program) {
   configCommand
     .action(async () => {
       try {
-        const { configureSettings } = await import('../../utils/config.js');
+        const { configureSettings } = await import('../../services/config/index.js');
         await configureSettings();
         process.exit(0);
       } catch (error) {

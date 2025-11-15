@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { readConfig } from '../../utils/config.js';
+import { readConfig } from '../../services/config/index.js';
 import { loadDocumentsFromRulesDirectory, resetVectorStore, isVectorStoreInitialized, saveVectorStore, isVectorStorePersisted, loadVectorStoreFromDisk } from '../../core/graph/vectorStore.js';
 
 /**

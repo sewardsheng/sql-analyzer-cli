@@ -33,5 +33,25 @@
     "databaseType": "通用SQL",
     "mdPath": "2025\\11\\rules-2025-11-15T01-56-04-771Z.md",
     "createdAt": "2025-11-15T01:56:04.772Z"
+  },
+  {
+    "databaseType": "SQL Server",
+    "mdPath": "2025\\11\\rules-2025-11-15T02-43-58-996Z.md",
+    "createdAt": "2025-11-15T02:43:58.998Z"
+  },
+  {
+    "databaseType": "SQL Server",
+    "mdPath": "2025\\11\\rules-2025-11-15T05-20-33-959Z.md",
+    "createdAt": "2025-11-15T05:20:33.960Z"
+  },
+  {
+    "databaseType": "通用SQL",
+    "mdPath": "2025\\11\\rules-2025-11-15T05-23-12-225Z.md",
+    "createdAt": "2025-11-15T05:23:12.228Z"
+  },
+  {
+    "databaseType": "标准SQL",
+    "mdPath": "2025\\11\\rules-2025-11-15T05-29-15-492Z.md",
+    "createdAt": "2025-11-15T05:29:15.493Z"
   }
 ]
