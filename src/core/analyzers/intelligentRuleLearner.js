@@ -55,8 +55,8 @@ class IntelligentRuleLearner {
       const year = now.getFullYear().toString();
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
       
-      // 创建年-月份目录路径
-      this.rulesDirectory = path.join(this.baseRulesDirectory, year, month);
+      // 创建年-月份目录路径，格式为 YYYY-MM
+      this.rulesDirectory = path.join(this.baseRulesDirectory, `${year}-${month}`);
       
       // 确保目录存在
       await fs.mkdir(this.rulesDirectory, { recursive: true });
@@ -373,51 +373,9 @@ class IntelligentRuleLearner {
       await fs.writeFile(mdFilePath, markdownContent, 'utf8');
       console.log(`Markdown规则已保存到: ${mdFilePath}`);
       
-      // 更新规则索引
-      await this.updateRulesIndex(mdFilePath, databaseType);
-      
       return { mdFilePath };
     } catch (error) {
       console.error("保存规则失败:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * 更新规则索引
-   * @param {string} mdFilePath - Markdown规则文件路径
-   * @param {string} databaseType - 数据库类型
-   * @param {string} timestamp - 时间戳
-   */
-  async updateRulesIndex(mdFilePath, databaseType, timestamp) {
-    try {
-      const indexFile = path.join(this.baseRulesDirectory, 'index.json');
-      
-      let index = [];
-      try {
-        const indexData = await fs.readFile(indexFile, 'utf8');
-        index = JSON.parse(indexData);
-      } catch (error) {
-        // 索引文件不存在，创建新的
-        console.log("创建新的规则索引文件");
-      }
-      
-      // 获取相对路径
-      const mdRelativePath = path.relative(this.baseRulesDirectory, mdFilePath);
-      
-      // 添加新规则到索引
-      index.push({
-        id: timestamp,
-        databaseType,
-        mdPath: mdRelativePath,
-        createdAt: new Date().toISOString()
-      });
-      
-      // 保存索引
-      await fs.writeFile(indexFile, JSON.stringify(index, null, 2), 'utf8');
-      console.log("规则索引已更新");
-    } catch (error) {
-      console.error("更新规则索引失败:", error);
       throw error;
     }
   }

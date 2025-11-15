@@ -85,11 +85,6 @@ const { systemPrompt, userPrompt } = await buildPrompt(
 - SQL解析器 (SqlParserAndDialectNormalizer)
 - 智能规则学习器 (IntelligentRuleLearner)
 
-### 4. 测试验证
-- 创建测试脚本 `test-prompts.js`
-- 验证所有提示词加载功能正常
-- 所有测试通过 ✓
-
 ## 优势
 
 ### 1. 可维护性
@@ -130,22 +125,9 @@ const { systemPrompt, userPrompt } = await buildPrompt(
 - 保持向后兼容性
 - 必要时创建新部分而非修改现有部分
 
-### 4. 测试
-- 添加新提示词后运行测试脚本
-- 验证提示词加载和替换功能
-- 确保输出格式符合预期
-
-## 未来改进方向
-
-1. **多语言支持**: 支持不同语言的提示词
-2. **提示词版本化**: 管理不同版本的提示词
-3. **动态加载**: 支持运行时动态加载和切换提示词
-4. **提示词优化**: 持续优化提示词质量和效果
-5. **A/B测试**: 支持不同提示词版本的对比测试
 
 ## 相关文件
 
 - `src/prompts/analyzers/README.md`: 分析器提示词详细说明
 - `src/prompts/rule-learning/README.md`: 规则学习提示词详细说明
 - `src/utils/promptLoader.js`: 提示词加载工具
-- `test-prompts.js`: 提示词测试脚本
