@@ -5,7 +5,6 @@
 
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { buildPrompt } from '../../utils/promptLoader.js';
-import JSONCleaner from '../../utils/jsonCleaner.js';
 import BaseAnalyzer from './BaseAnalyzer.js';
 
 /**
@@ -17,14 +16,12 @@ class PerformanceAnalyzer extends BaseAnalyzer {
    * 分析SQL性能
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
-   * @param {string} input.databaseType - 数据库类型
-   * @param {Object} input.parsedStructure - SQL解析结构
    * @returns {Promise<Object>} 性能分析结果
    */
   async analyzePerformance(input) {
     await this.initialize();
     
-    const { sqlQuery, databaseType, parsedStructure } = input;
+    const { sqlQuery } = input;
     
     // 使用提示词模板
     const { systemPrompt } = await buildPrompt(
@@ -36,27 +33,21 @@ class PerformanceAnalyzer extends BaseAnalyzer {
       }
     );
 
-    // 使用基类方法构建上下文信息
-    const contextInfo = this.buildStructureContext(parsedStructure);
-
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL查询性能：
+      new HumanMessage(`请分析以下SQL查询性能，并识别数据库类型：
 
 SQL查询:
-${sqlQuery}
-
-${contextInfo}`)
+${sqlQuery}`)
     ];
 
     try {
-      const response = await this.getLLM().invoke(messages);
-      const result = JSONCleaner.parse(response.content);
+      const result = await this.invokeLLMAndParse(messages);
       
       return {
         success: true,
         data: result,
-        databaseType: result.databaseType || 'unknown' // 提取数据库类型
+        databaseType: result.databaseType || 'unknown'
       };
     } catch (error) {
       return this.handleError('SQL性能分析', error);
@@ -67,13 +58,12 @@ ${contextInfo}`)
    * 生成执行计划分析
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
-   * @param {string} input.databaseType - 数据库类型
    * @returns {Promise<Object>} 执行计划分析结果
    */
   async analyzeExecutionPlan(input) {
     await this.initialize();
     
-    const { sqlQuery, databaseType } = input;
+    const { sqlQuery } = input;
     
     // 使用提示词模板
     const { systemPrompt } = await buildPrompt(
@@ -87,20 +77,15 @@ ${contextInfo}`)
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请分析以下${databaseType || '未知'}数据库的SQL执行计划：
+      new HumanMessage(`请分析以下SQL执行计划：
 
 SQL查询:
 ${sqlQuery}`)
     ];
 
     try {
-      const response = await this.getLLM().invoke(messages);
-      const result = JSONCleaner.parse(response.content);
-      
-      return {
-        success: true,
-        data: result
-      };
+      const result = await this.invokeLLMAndParse(messages);
+      return this.formatResponse(result);
     } catch (error) {
       return this.handleError('执行计划分析', error);
     }
@@ -124,17 +109,9 @@ export function createPerformanceAnalyzerTool(config = {}) {
         sqlQuery: {
           type: "string",
           description: "要分析的SQL查询语句"
-        },
-        databaseType: {
-          type: "string",
-          description: "数据库类型(mysql, postgresql, oracle, sqlserver, sqlite等)"
-        },
-        parsedStructure: {
-          type: "object",
-          description: "SQL解析结构信息"
         }
       },
-      required: ["sqlQuery", "databaseType"]
+      required: ["sqlQuery"]
     },
     func: async (input) => {
       return await agent.analyzePerformance(input);

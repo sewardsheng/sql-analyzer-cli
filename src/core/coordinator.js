@@ -88,9 +88,7 @@ class SqlAnalysisCoordinator {
     if (options.performance !== false) {
       parallelTasks.push(
         this.tools.performanceAnalyzer.func({
-          sqlQuery,
-          databaseType,
-          parsedStructure: null
+          sqlQuery
         }).then(result => ({ type: 'performance', result }))
         .catch(error => ({ type: 'performance', result: { success: false, error: error.message } }))
       );
@@ -100,9 +98,7 @@ class SqlAnalysisCoordinator {
     if (options.security !== false) {
       parallelTasks.push(
         this.tools.securityAuditor.func({
-          sqlQuery,
-          databaseType,
-          parsedStructure: null
+          sqlQuery
         }).then(result => ({ type: 'security', result }))
         .catch(error => ({ type: 'security', result: { success: false, error: error.message } }))
       );
@@ -112,9 +108,7 @@ class SqlAnalysisCoordinator {
     if (options.standards !== false) {
       parallelTasks.push(
         this.tools.standardsChecker.func({
-          sqlQuery,
-          databaseType,
-          parsedStructure: null
+          sqlQuery
         }).then(result => ({ type: 'standards', result }))
         .catch(error => ({ type: 'standards', result: { success: false, error: error.message } }))
       );
@@ -148,12 +142,11 @@ class SqlAnalysisCoordinator {
       else if (type === 'standards') tempResults.standardsCheck = result;
     });
     
-    // 优化建议生成
+    // 优化建议生成（此时已有数据库类型）
     additionalTasks.push(
       this.tools.optimizer.func({
         sqlQuery,
         databaseType,
-        parsedStructure: null,
         performanceAnalysis: tempResults.performanceAnalysis,
         securityAudit: tempResults.securityAudit,
         standardsCheck: tempResults.standardsCheck

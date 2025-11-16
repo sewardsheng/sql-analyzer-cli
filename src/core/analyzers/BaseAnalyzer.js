@@ -5,6 +5,7 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { readConfig } from '../../services/config/index.js';
+import JSONCleaner from '../../utils/jsonCleaner.js';
 
 /**
  * 分析器基类
@@ -68,6 +69,34 @@ class BaseAnalyzer {
 - 聚合函数: ${parsedStructure.aggregations?.join(', ') || '无'}
 - 子查询: ${parsedStructure.subqueries?.join(', ') || '无'}
 `;
+  }
+
+  /**
+   * 调用LLM并解析JSON响应
+   * 提供统一的LLM调用和JSON解析逻辑，避免子类重复实现
+   * @param {Array} messages - LLM消息数组
+   * @returns {Promise<Object>} 解析后的JSON对象
+   */
+  async invokeLLMAndParse(messages) {
+    const response = await this.getLLM().invoke(messages);
+    return JSONCleaner.parse(response.content);
+  }
+
+  /**
+   * 格式化分析响应
+   * 提供统一的响应格式化逻辑
+   * @param {Object} result - LLM返回的分析结果
+   * @param {string} databaseType - 数据库类型（可选）
+   * @returns {Object} 标准化的响应对象
+   */
+  formatResponse(result, databaseType = null) {
+    return {
+      success: true,
+      data: {
+        ...result,
+        databaseType: result.databaseType || databaseType || 'unknown'
+      }
+    };
   }
 
   /**

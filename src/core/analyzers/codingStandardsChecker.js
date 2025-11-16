@@ -5,7 +5,6 @@
 
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { buildPrompt } from '../../utils/promptLoader.js';
-import JSONCleaner from '../../utils/jsonCleaner.js';
 import BaseAnalyzer from './BaseAnalyzer.js';
 
 /**
@@ -17,14 +16,12 @@ class CodingStandardsChecker extends BaseAnalyzer {
    * 检查SQL编码规范
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
-   * @param {string} input.databaseType - 数据库类型
-   * @param {Object} input.parsedStructure - SQL解析结构
    * @returns {Promise<Object>} 编码规范检查结果
    */
   async checkCodingStandards(input) {
     await this.initialize();
     
-    const { sqlQuery, databaseType, parsedStructure } = input;
+    const { sqlQuery } = input;
     
     // 使用提示词模板
     const { systemPrompt } = await buildPrompt(
@@ -36,29 +33,17 @@ class CodingStandardsChecker extends BaseAnalyzer {
       }
     );
 
-    const contextInfo = this.buildStructureContext(parsedStructure);
-
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请检查以下${databaseType || '未知'}数据库的SQL编码规范：
+      new HumanMessage(`请检查以下SQL编码规范，并识别数据库类型：
 
 SQL查询:
-${sqlQuery}
-
-${contextInfo}`)
+${sqlQuery}`)
     ];
 
     try {
-      const response = await this.getLLM().invoke(messages);
-      const result = JSONCleaner.parse(response.content);
-      
-      return {
-        success: true,
-        data: {
-          ...result,
-          databaseType: result.databaseType || databaseType || 'unknown'
-        }
-      };
+      const result = await this.invokeLLMAndParse(messages);
+      return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL编码规范检查', error);
     }
@@ -68,13 +53,12 @@ ${contextInfo}`)
    * 格式化SQL代码
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
-   * @param {string} input.databaseType - 数据库类型
    * @returns {Promise<Object>} 格式化结果
    */
   async formatSql(input) {
     await this.initialize();
     
-    const { sqlQuery, databaseType } = input;
+    const { sqlQuery } = input;
     
     // 使用提示词模板
     const { systemPrompt } = await buildPrompt(
@@ -88,20 +72,15 @@ ${contextInfo}`)
 
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`请格式化以下${databaseType || '未知'}数据库的SQL代码：
+      new HumanMessage(`请格式化以下SQL代码：
 
 SQL查询:
 ${sqlQuery}`)
     ];
 
     try {
-      const response = await this.getLLM().invoke(messages);
-      const result = JSONCleaner.parse(response.content);
-      
-      return {
-        success: true,
-        data: result
-      };
+      const result = await this.invokeLLMAndParse(messages);
+      return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL代码格式化', error);
     }
@@ -125,17 +104,9 @@ export function createCodingStandardsCheckerTool(config = {}) {
         sqlQuery: {
           type: "string",
           description: "要检查的SQL查询语句"
-        },
-        databaseType: {
-          type: "string",
-          description: "数据库类型(mysql, postgresql, oracle, sqlserver, sqlite等)"
-        },
-        parsedStructure: {
-          type: "object",
-          description: "SQL解析结构信息"
         }
       },
-      required: ["sqlQuery", "databaseType"]
+      required: ["sqlQuery"]
     },
     func: async (input) => {
       return await agent.checkCodingStandards(input);
