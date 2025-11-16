@@ -168,29 +168,57 @@ async function writeEnvFile(env) {
  */
 export async function listConfig() {
   const config = await readConfig();
+  const chalk = (await import('chalk')).default;
   
-  console.log('当前配置:');
-  console.log('-'.repeat(50));
+  console.clear();
+  console.log(chalk.cyan(`
+╔═════════════════════════════════════════════════════════════╗
+║                        系统配置                             ║
+╚═════════════════════════════════════════════════════════════╝
+`));
+  
+  console.log(chalk.blue('当前配置项:'));
+  console.log(chalk.gray('─'.repeat(60)));
   
   for (const key of Object.keys(DEFAULT_CONFIG)) {
     const value = config[key];
-    const displayValue = value === '' ? '(未设置)' : value;
-    console.log(`${key.padEnd(20)}: ${displayValue}`);
+    const displayValue = value === '' ? chalk.gray('(未设置)') : chalk.white(value);
+    const keyName = chalk.cyan(CONFIG_DESC[key] || key);
+    console.log(`${keyName.padEnd(30)}: ${displayValue}`);
   }
   
-  console.log('-'.repeat(50));
+  console.log(chalk.gray('─'.repeat(60)));
+  console.log(chalk.yellow('\n💡 提示: 使用 "sql-analyzer config set <key> <value>" 修改配置\n'));
 }
 
 /**
  * 重置配置为默认值
  */
 export async function resetConfig() {
+  const chalk = (await import('chalk')).default;
+  const inquirer = (await import('inquirer')).default;
+  
+  // 确认重置操作
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: '确定要重置所有配置为默认值吗？',
+      default: false
+    }
+  ]);
+  
+  if (!confirm) {
+    console.log(chalk.gray('操作已取消'));
+    return;
+  }
+  
   const env = {};
   for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
     env[envKey] = String(DEFAULT_CONFIG[key]);
   }
   
   await writeEnvFile(env);
-  console.log('配置已重置为默认值');
+  console.log(chalk.green('✅ 配置已重置为默认值\n'));
   await listConfig();
 }

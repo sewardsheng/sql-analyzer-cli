@@ -18,8 +18,15 @@ function listHistory() {
   try {
     const historyList = historyService.getAllHistory();
     
+    console.clear();
+    console.log(chalk.cyan(`
+╔═════════════════════════════════════════════════════════════╗
+║                    SQL分析历史记录                          ║
+╚═════════════════════════════════════════════════════════════╝
+`));
+    
     if (historyList.length === 0) {
-      console.log(chalk.yellow('📝 暂无历史记录'));
+      console.log(chalk.yellow('📝 暂无历史记录\n'));
       return;
     }
     
@@ -52,9 +59,9 @@ function listHistory() {
       ]);
     });
     
-    console.log(chalk.green('📋 SQL分析历史记录列表'));
     console.log(table.toString());
     console.log(chalk.gray(`\n共 ${historyList.length} 条记录`));
+    console.log(chalk.yellow('\n💡 提示: 使用 "sql-analyzer history detail <id>" 查看详情\n'));
     
   } catch (error) {
     console.error(chalk.red('❌ 获取历史记录失败:'), error.message);
@@ -75,24 +82,32 @@ function showHistoryDetail(id) {
       process.exit(1);
     }
     
-    console.log(chalk.green('📋 历史记录详情'));
-    console.log(chalk.cyan('────────────────────────────────────'));
-    console.log(`${chalk.blue('ID:')} ${record.id}`);
-    console.log(`${chalk.blue('时间:')} ${new Date(record.timestamp).toLocaleString('zh-CN')}`);
-    console.log(`${chalk.blue('数据库类型:')} ${getDatabaseLabel(record.databaseType)}`);
-    console.log(`${chalk.blue('分析类型:')} ${getTypeLabel(record.type)}`);
+    console.clear();
+    console.log(chalk.cyan(`
+╔═════════════════════════════════════════════════════════════╗
+║                    历史记录详情                             ║
+╚═════════════════════════════════════════════════════════════╝
+`));
+    
+    console.log(chalk.blue('基本信息:'));
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log(`${chalk.cyan('ID:')} ${record.id}`);
+    console.log(`${chalk.cyan('时间:')} ${new Date(record.timestamp).toLocaleString('zh-CN')}`);
+    console.log(`${chalk.cyan('数据库类型:')} ${getDatabaseLabel(record.databaseType)}`);
+    console.log(`${chalk.cyan('分析类型:')} ${getTypeLabel(record.type)}`);
     
     if (record.parentId) {
-      console.log(`${chalk.blue('父记录ID:')} ${record.parentId}`);
+      console.log(`${chalk.cyan('父记录ID:')} ${record.parentId}`);
     }
     
-    console.log(chalk.cyan('\n────────────────────────────────────'));
+    console.log(chalk.gray('\n─'.repeat(60)));
     console.log(chalk.blue('SQL语句:'));
-    console.log(record.sql);
+    console.log(chalk.white(record.sql));
     
-    console.log(chalk.cyan('\n────────────────────────────────────'));
+    console.log(chalk.gray('\n─'.repeat(60)));
     console.log(chalk.blue('分析结果:'));
     console.log(JSON.stringify(record.result, null, 2));
+    console.log('');
     
   } catch (error) {
     console.error(chalk.red('❌ 获取历史记录详情失败:'), error.message);
@@ -172,33 +187,43 @@ function showHistoryStats() {
   try {
     const stats = historyService.getHistoryStats();
     
-    console.log(chalk.green('📊 历史记录统计信息'));
-    console.log(chalk.cyan('────────────────────────────────────'));
-    console.log(`${chalk.blue('总记录数:')} ${stats.total}`);
+    console.clear();
+    console.log(chalk.cyan(`
+╔═════════════════════════════════════════════════════════════╗
+║                    历史记录统计                             ║
+╚═════════════════════════════════════════════════════════════╝
+`));
+    
+    console.log(chalk.blue('总体统计:'));
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log(`${chalk.cyan('总记录数:')} ${chalk.white(stats.total)}`);
     
     // 按类型统计
-    console.log(chalk.cyan('\n按分析类型统计:'));
+    console.log(chalk.gray('\n─'.repeat(60)));
+    console.log(chalk.blue('按分析类型统计:'));
     if (Object.keys(stats.byType).length === 0) {
       console.log(chalk.gray('  暂无数据'));
     } else {
       Object.entries(stats.byType).forEach(([type, count]) => {
         const percentage = ((count / stats.total) * 100).toFixed(1);
-        console.log(`  ${getTypeLabel(type)}: ${count} 条 (${percentage}%)`);
+        console.log(`  ${chalk.cyan(getTypeLabel(type))}: ${chalk.white(count)} 条 (${chalk.yellow(percentage + '%')})`);
       });
     }
     
     // 按数据库类型统计
-    console.log(chalk.cyan('\n按数据库类型统计:'));
+    console.log(chalk.gray('\n─'.repeat(60)));
+    console.log(chalk.blue('按数据库类型统计:'));
     if (Object.keys(stats.byDatabase).length === 0) {
       console.log(chalk.gray('  暂无数据'));
     } else {
       Object.entries(stats.byDatabase).forEach(([db, count]) => {
         const percentage = ((count / stats.total) * 100).toFixed(1);
-        console.log(`  ${getDatabaseLabel(db)}: ${count} 条 (${percentage}%)`);
+        console.log(`  ${chalk.cyan(getDatabaseLabel(db))}: ${chalk.white(count)} 条 (${chalk.yellow(percentage + '%')})`);
       });
     }
     
-    console.log(chalk.cyan('────────────────────────────────────'));
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log('');
     
   } catch (error) {
     console.error(chalk.red('❌ 获取统计信息失败:'), error.message);

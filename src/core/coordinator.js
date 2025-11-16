@@ -5,7 +5,6 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { readConfig } from '../services/config/index.js';
-import { createSqlParserAndDialectNormalizerTool } from './analyzers/sqlParserAndDialectNormalizer.js';
 import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
 import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
 import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
@@ -28,6 +27,64 @@ class SqlAnalysisCoordinator {
   }
 
   /**
+   * 基于规则快速检测数据库方言
+   * @param {string} sqlQuery - SQL查询语句
+   * @returns {string} 检测到的数据库类型
+   */
+  detectDatabaseType(sqlQuery) {
+    const dialectFeatures = {
+      mysql: [
+        /LIMIT\s+\d+/i,
+        /AUTO_INCREMENT/i,
+        /`[^`]+`/,
+        /UNSIGNED/i,
+        /CHARSET\s*=/i,
+        /ENGINE\s*=/i
+      ],
+      postgresql: [
+        /ILIKE/i,
+        /SERIAL/i,
+        /\$\$/,
+        /RETURNING/i,
+        /::/,
+        /ARRAY\[/i
+      ],
+      sqlserver: [
+        /TOP\s+\d+/i,
+        /IDENTITY/i,
+        /\[[^\]]+\]/,
+        /GETDATE\(\)/i,
+        /LEN\(/i,
+        /NVARCHAR/i
+      ],
+      oracle: [
+        /ROWNUM/i,
+        /SEQUENCE/i,
+        /DUAL/i,
+        /SYSDATE/i,
+        /NVL\(/i,
+        /VARCHAR2/i
+      ]
+    };
+    
+    const scores = {};
+    for (const [dialect, patterns] of Object.entries(dialectFeatures)) {
+      scores[dialect] = patterns.filter(pattern => pattern.test(sqlQuery)).length;
+    }
+    
+    const maxScore = Math.max(...Object.values(scores));
+    if (maxScore >= 2) {
+      const detected = Object.entries(scores)
+        .filter(([_, score]) => score === maxScore)
+        .map(([dialect, _]) => dialect);
+      
+      return detected[0];
+    }
+    
+    return 'generic';
+  }
+
+  /**
    * 初始化协调器和所有分析器
    */
   async initialize() {
@@ -46,7 +103,6 @@ class SqlAnalysisCoordinator {
     
     // 初始化所有分析器工具
     this.tools = {
-      sqlParser: createSqlParserAndDialectNormalizerTool(this.config),
       performanceAnalyzer: createPerformanceAnalyzerTool(this.config),
       securityAuditor: createSecurityAuditorTool(this.config),
       standardsChecker: createCodingStandardsCheckerTool(this.config),
@@ -104,53 +160,27 @@ class SqlAnalysisCoordinator {
     let databaseType = providedDatabaseType;
     if (!databaseType) {
       console.log("⚡ 正在快速检测数据库类型...");
-      const detectResult = await this.tools.sqlParser.func({
-        sqlQuery,
-        detectDialect: true
-      });
-      
-      if (detectResult.success && detectResult.data.detectedDatabaseType) {
-        databaseType = detectResult.data.detectedDatabaseType;
-        console.log(`✅ 检测到数据库类型: ${databaseType} (置信度: ${detectResult.data.confidence})`);
-      } else {
-        console.warn("⚠️  无法自动检测数据库类型，将使用通用分析");
-        databaseType = 'generic';
-      }
+      databaseType = this.detectDatabaseType(sqlQuery);
+      console.log(`✅ 检测到数据库类型: ${databaseType}`);
     } else {
       console.log(`📌 使用指定的数据库类型: ${databaseType}`);
     }
     
-    console.log("\n🚀 开始完全并行执行分析流程...\n");
+    console.log("\n🚀 开始并行执行分析流程...\n");
     console.log('='.repeat(60));
     
-    // 优化策略：步骤1和步骤2-4完全并行执行
-    // parsedStructure 对于分析来说是可选的增强信息，不是必需的
-    const parsedSQL = sqlQuery;
     const parallelTasks = [];
     
-    // 步骤1: SQL结构解析（并行执行，提取SQL结构信息）
-    console.log("📋 步骤1: SQL结构解析（并行）");
-    parallelTasks.push(
-      this.tools.sqlParser.func({
-        sqlQuery,
-        databaseType
-      }).then(result => ({ type: 'parse', result }))
-      .catch(error => {
-        console.warn("⚠️  SQL结构解析失败，但不影响其他分析");
-        return { type: 'parse', result: { success: false, error: error.message } };
-      })
-    );
+    // 步骤1-3: 三大核心分析（并行执行）
+    console.log("⚡ 步骤1-3: 性能/安全/规范分析（并行）");
     
-    // 步骤2-4: 直接对SQL语句进行三大分析（并行执行，不依赖步骤1）
-    console.log("⚡ 步骤2-4: 直接分析SQL语句（性能/安全/规范，并行）");
-    
-    // 性能分析（parsedStructure会在后续从步骤1结果中获取）
+    // 性能分析
     if (options.performance !== false) {
       parallelTasks.push(
         this.tools.performanceAnalyzer.func({
-          sqlQuery: parsedSQL,
+          sqlQuery,
           databaseType,
-          parsedStructure: null  // 初始为null，不等待解析完成
+          parsedStructure: null
         }).then(result => ({ type: 'performance', result }))
         .catch(error => ({ type: 'performance', result: { success: false, error: error.message } }))
       );
@@ -160,9 +190,9 @@ class SqlAnalysisCoordinator {
     if (options.security !== false) {
       parallelTasks.push(
         this.tools.securityAuditor.func({
-          sqlQuery: parsedSQL,
+          sqlQuery,
           databaseType,
-          parsedStructure: null  // 初始为null，不等待解析完成
+          parsedStructure: null
         }).then(result => ({ type: 'security', result }))
         .catch(error => ({ type: 'security', result: { success: false, error: error.message } }))
       );
@@ -172,42 +202,20 @@ class SqlAnalysisCoordinator {
     if (options.standards !== false) {
       parallelTasks.push(
         this.tools.standardsChecker.func({
-          sqlQuery: parsedSQL,
+          sqlQuery,
           databaseType,
-          parsedStructure: null  // 初始为null，不等待解析完成
+          parsedStructure: null
         }).then(result => ({ type: 'standards', result }))
         .catch(error => ({ type: 'standards', result: { success: false, error: error.message } }))
       );
     }
     
-    // 等待所有并行任务完成（步骤1的结构解析 + 步骤2-4的直接分析）
-    console.log("\n⏳ 等待所有并行任务完成...\n");
+    // 等待所有并行任务完成
+    console.log("\n⏳ 等待所有分析任务完成...\n");
     const initialResults = await Promise.all(parallelTasks);
     
-    // 提取解析结果
-    let parseResult = { success: false, data: {} };
-    let parsedStructure = null;
-    
-    initialResults.forEach(({ type, result }) => {
-      if (type === 'parse') {
-        parseResult = result;
-        if (result.success) {
-          parsedStructure = result.data?.parsedStructure || null;
-          console.log("✅ SQL结构解析完成（提供增强信息）");
-          console.log(`   解析状态: ${result.data.parseStatus || 'success'}`);
-          if (result.data.suspiciousPatterns?.length > 0) {
-            console.log(`   ⚠️  检测到可疑模式: ${result.data.suspiciousPatterns.slice(0, 2).join(', ')}`);
-          }
-        } else {
-          console.warn("⚠️  SQL结构解析失败（不影响其他分析）: " + result.error);
-        }
-      }
-    });
-    
-    const dialectInfo = parseResult.data || {};
-    
     // 继续执行优化建议和规则学习（这些依赖前面的分析结果）
-    console.log("\n💡 步骤5: 生成优化建议...");
+    console.log("\n💡 步骤4: 生成优化建议...");
     const additionalTasks = [];
     
     // 整合前面的分析结果
@@ -226,9 +234,9 @@ class SqlAnalysisCoordinator {
     // 优化建议生成
     additionalTasks.push(
       this.tools.optimizer.func({
-        sqlQuery: parsedSQL,
+        sqlQuery,
         databaseType,
-        parsedStructure,
+        parsedStructure: null,
         performanceAnalysis: tempResults.performanceAnalysis,
         securityAudit: tempResults.securityAudit,
         standardsCheck: tempResults.standardsCheck
@@ -238,15 +246,12 @@ class SqlAnalysisCoordinator {
     
     // 规则学习（可选）
     if (options.learn !== false) {
-      console.log("🎓 步骤6: 规则学习...");
+      console.log("🎓 步骤5: 规则学习...");
       additionalTasks.push(
         this.tools.ruleLearner.func({
-          sqlQuery: parsedSQL,
+          sqlQuery,
           databaseType,
-          analysisResults: {
-            parseResult,
-            ...tempResults
-          }
+          analysisResults: tempResults
         }).then(result => ({ type: 'learner', result }))
         .catch(error => ({ type: 'learner', result: { success: false, error: error.message } }))
       );
@@ -260,7 +265,6 @@ class SqlAnalysisCoordinator {
     
     // 整合所有结果
     const integratedResults = {
-      parseResult,
       performanceAnalysis: null,
       securityAudit: null,
       standardsCheck: null,
@@ -281,10 +285,10 @@ class SqlAnalysisCoordinator {
     // 输出分析结果摘要
     this.reportGenerator.printSummary(integratedResults);
     
-    // 步骤5: 生成简化的综合报告（不使用LLM）
+    // 生成简化的综合报告（不使用LLM）
     const report = this.reportGenerator.generateReport({
       sqlQuery,
-      parsedSQL,
+      parsedSQL: sqlQuery,
       databaseType,
       integratedResults
     });
@@ -303,9 +307,8 @@ class SqlAnalysisCoordinator {
       success: true,
       data: {
         originalQuery: sqlQuery,
-        normalizedQuery: parsedSQL,
+        normalizedQuery: sqlQuery,
         databaseType,
-        dialectInfo,
         analysisResults: integratedResults,
         report,
         // 添加各个子代理的详细结果，以便在UI中显示
@@ -313,8 +316,7 @@ class SqlAnalysisCoordinator {
           performanceAnalysis: integratedResults.performanceAnalysis,
           securityAudit: integratedResults.securityAudit,
           standardsCheck: integratedResults.standardsCheck,
-          optimizationSuggestions: integratedResults.optimizationSuggestions,
-          parseResult: integratedResults.parseResult
+          optimizationSuggestions: integratedResults.optimizationSuggestions
         }
       }
     };

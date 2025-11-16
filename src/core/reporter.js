@@ -278,12 +278,20 @@ class ReportGenerator {
       }
     }
     
-    // 安全审计
+    // 安全审计（考虑一票否决机制）
     if (integratedResults.securityAudit?.success) {
       const sec = integratedResults.securityAudit.data;
+      const securityVeto = this.checkSecurityVeto(integratedResults.securityAudit);
+      
       console.log("\n🔒 安全审计:");
       console.log(`   评分: ${sec.securityScore || '未知'}`);
       console.log(`   风险等级: ${sec.riskLevel || '未知'}`);
+      
+      // 如果触发一票否决，添加警告提示
+      if (securityVeto.veto) {
+        console.log(`   ⚠️  警告: 触发安全一票否决机制（评分<40或风险等级为高/严重）`);
+      }
+      
       if (sec.vulnerabilities?.length > 0) {
         console.log(`   主要漏洞: ${sec.vulnerabilities.slice(0, 2).map(v => v.description).join(', ')}`);
       }

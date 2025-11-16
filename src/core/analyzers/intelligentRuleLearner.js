@@ -92,11 +92,20 @@ class IntelligentRuleLearner extends BaseAnalyzer {
       // 验证结果结构
       this.validateRuleStructure(result);
       
+      // 验证生成的规则质量(在保存前)
+      try {
+        this.validateRuleQualityBeforeSave(result);
+      } catch (validationError) {
+        // 如果验证失败,记录详细错误并抛出
+        console.error('❌ 规则质量验证失败:', validationError.message);
+        throw new Error(`规则质量不符合要求: ${validationError.message}`);
+      }
+      
       // 保存学习到的规则
       const savedFiles = await this.saveLearnedRules(
-        result, 
-        databaseType, 
-        sqlQuery, 
+        result,
+        databaseType,
+        sqlQuery,
         analysisResults
       );
       
@@ -132,6 +141,45 @@ class IntelligentRuleLearner extends BaseAnalyzer {
         throw new Error(`${field} 必须是一个数组`);
       }
     });
+  }
+
+  /**
+   * 在保存前验证规则质量
+   * @param {Object} rules - 学习到的规则
+   * @throws {Error} 如果规则质量不符合要求
+   */
+  validateRuleQualityBeforeSave(rules) {
+    // 检查是否至少有一条规则
+    if (!rules.learnedRules || rules.learnedRules.length === 0) {
+      throw new Error('规则生成失败：未生成任何规则。请检查分析结果是否包含足够的信息。');
+    }
+
+    // 验证每条规则的完整性
+    rules.learnedRules.forEach((rule, index) => {
+      const requiredFields = ['category', 'type', 'title', 'description', 'condition', 'severity'];
+      const missingFields = requiredFields.filter(field => !rule[field] || rule[field].trim() === '');
+      
+      if (missingFields.length > 0) {
+        throw new Error(`规则 ${index + 1} "${rule.title || '未命名'}" 缺少必需字段: ${missingFields.join(', ')}`);
+      }
+
+      // 验证描述长度（至少20个字符）
+      if (rule.description.length < 20) {
+        throw new Error(`规则 ${index + 1} "${rule.title}" 的描述过于简短，至少需要20个字符`);
+      }
+
+      // 验证示例是否存在（可选但推荐）
+      if (!rule.example || rule.example.trim() === '') {
+        console.warn(`⚠️ 警告: 规则 "${rule.title}" 缺少示例代码`);
+      }
+    });
+
+    // 推荐至少有2条规则
+    if (rules.learnedRules.length < 2) {
+      console.warn(`⚠️ 警告: 仅生成了 ${rules.learnedRules.length} 条规则，建议至少生成2条规则`);
+    }
+
+    console.log(`✅ 规则验证通过：共 ${rules.learnedRules.length} 条规则`);
   }
 
   /**
@@ -500,6 +548,51 @@ class IntelligentRuleLearner extends BaseAnalyzer {
       };
     } catch (error) {
       return this.handleError('规则检索', error);
+    }
+  }
+
+  /**
+   * 评估规则文件质量
+   * @param {Object} input - 输入参数
+   * @param {string} input.filePath - 规则文件路径
+   * @param {string} input.content - 规则文件内容
+   * @returns {Promise<Object>} 评估结果
+   */
+  async evaluateRuleQuality(input) {
+    await this.initialize();
+    
+    const { filePath, content } = input;
+    
+    try {
+      // 使用提示词模板
+      const { systemPrompt, userPrompt } = await buildPrompt(
+        'rule-evaluation.md',
+        {
+          filePath,
+          fileContent: content
+        }
+      );
+      
+      const messages = [
+        new SystemMessage(systemPrompt),
+        new HumanMessage(userPrompt)
+      ];
+
+      // 调用LLM
+      const response = await this.getLLM().invoke(messages);
+      const result = JSONCleaner.parse(response.content);
+      
+      // 验证结果结构
+      if (!result.qualityScore || typeof result.qualityScore !== 'number') {
+        throw new Error('评估结果缺少质量分数');
+      }
+      
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      return this.handleError('规则质量评估', error);
     }
   }
 }

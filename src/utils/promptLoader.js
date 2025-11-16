@@ -99,7 +99,8 @@ export function extractPromptsFromTemplate(template, section = null) {
   const systemPrompt = systemSections.join('\n\n');
   
   // 提取输入信息部分作为user prompt的基础
-  const inputMatch = workingTemplate.match(/## 输入信息\s+([\s\S]*?)(?=\n##|$)/);
+  // 注意：使用贪婪匹配以确保包含完整的多行内容（如嵌套的markdown代码块）
+  const inputMatch = workingTemplate.match(/## 输入信息\s+([\s\S]*?)(?=\n## (?:输出格式|评估|特殊|$))/);
   const userPrompt = inputMatch ? inputMatch[1].trim() : '';
   
   return {
