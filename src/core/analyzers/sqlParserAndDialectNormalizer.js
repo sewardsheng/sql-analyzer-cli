@@ -7,6 +7,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
+import JSONCleaner from '../../utils/jsonCleaner.js';
 
 /**
  * SQL解析与方言标准化子代理
@@ -218,23 +219,7 @@ ${sqlQuery}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      // 尝试修复常见的JSON问题
-      content = content
-        .replace(/,(\s*[}\]])/g, '$1')  // 移除尾随逗号
-        .replace(/\n/g, ' ')             // 移除换行
-        .trim();
-      
-      const result = JSON.parse(content);
+      const result = JSONCleaner.parse(response.content);
       
       // 将预处理警告添加到结果中
       if (preprocessResult && preprocessResult.warnings.length > 0) {
@@ -298,17 +283,7 @@ ${sqlQuery}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      const result = JSON.parse(content);
+      const result = JSONCleaner.parse(response.content);
       
       return {
         success: true,

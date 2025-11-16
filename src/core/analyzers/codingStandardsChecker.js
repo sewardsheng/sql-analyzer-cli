@@ -7,6 +7,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
+import JSONCleaner from '../../utils/jsonCleaner.js';
 
 /**
  * 编码规范检查子代理
@@ -90,61 +91,7 @@ ${contextInfo}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      // 清理内容：移除可能的BOM和额外空白
-      content = content.trim();
-      
-      // 尝试解析JSON
-      let result;
-      try {
-        result = JSON.parse(content);
-      } catch (parseError) {
-        // 如果直接解析失败，尝试修复常见的JSON格式问题
-        console.warn("首次JSON解析失败，尝试修复格式...");
-        
-        // 尝试修复：移除注释、修复换行等
-        let fixedContent = content
-          .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
-          .replace(/\/\/.*/g, '') // 移除单行注释
-          .replace(/,(\s*[}\]])/g, '$1') // 移除尾随逗号
-          .trim();
-        
-        try {
-          result = JSON.parse(fixedContent);
-        } catch (secondError) {
-          // 如果还是失败，返回一个默认结构
-          console.error("JSON解析失败，使用默认结构:", secondError.message);
-          console.error("原始内容:", content.substring(0, 500));
-          
-          return {
-            success: true,
-            data: {
-              standardsScore: 0,
-              complianceLevel: "未知",
-              violations: [{
-                type: "解析错误",
-                severity: "高",
-                description: "LLM返回的内容格式异常，无法解析",
-                location: "整个查询",
-                rule: "N/A",
-                suggestion: "请检查LLM配置或重试"
-              }],
-              recommendations: [],
-              formattingIssues: [],
-              namingConventions: []
-            }
-          };
-        }
-      }
+      const result = JSONCleaner.parse(response.content);
       
       return {
         success: true,
@@ -191,51 +138,7 @@ ${sqlQuery}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      // 清理内容：移除可能的BOM和额外空白
-      content = content.trim();
-      
-      // 尝试解析JSON
-      let result;
-      try {
-        result = JSON.parse(content);
-      } catch (parseError) {
-        // 如果直接解析失败，尝试修复常见的JSON格式问题
-        console.warn("首次JSON解析失败，尝试修复格式...");
-        
-        // 尝试修复：移除注释、修复换行等
-        let fixedContent = content
-          .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
-          .replace(/\/\/.*/g, '') // 移除单行注释
-          .replace(/,(\s*[}\]])/g, '$1') // 移除尾随逗号
-          .trim();
-        
-        try {
-          result = JSON.parse(fixedContent);
-        } catch (secondError) {
-          // 如果还是失败，返回一个默认结构
-          console.error("JSON解析失败，使用默认结构:", secondError.message);
-          console.error("原始内容:", content.substring(0, 500));
-          
-          return {
-            success: true,
-            data: {
-              formattedSql: sqlQuery,
-              formattingChanges: [],
-              styleGuide: "无法生成格式化建议"
-            }
-          };
-        }
-      }
+      const result = JSONCleaner.parse(response.content);
       
       return {
         success: true,

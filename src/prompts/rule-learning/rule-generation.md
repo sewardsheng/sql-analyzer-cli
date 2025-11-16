@@ -61,7 +61,7 @@
       "title": "规则标题(简明扼要)",
       "description": "规则详细描述(说明什么、为什么、怎么做)",
       "condition": "触发条件(明确的检测条件)",
-      "example": "示例SQL代码",
+      "example": "示例SQL代码或带占位符的模式",
       "severity": "严重程度(critical/high/medium/low)",
       "confidence": "置信度(0-1之间的小数)"
     }
@@ -71,7 +71,7 @@
       "name": "模式名称",
       "description": "模式详细描述",
       "category": "模式类别",
-      "example": "示例代码",
+      "example": "示例SQL代码",
       "frequency": "出现频率(common/occasional/rare)"
     }
   ],
@@ -80,7 +80,7 @@
       "name": "反模式名称",
       "description": "反模式详细描述",
       "category": "反模式类别",
-      "example": "问题代码示例",
+      "example": "问题SQL示例",
       "consequence": "后果说明",
       "alternative": "推荐的替代方案"
     }
@@ -90,12 +90,37 @@
       "name": "最佳实践名称",
       "description": "实践详细描述",
       "category": "实践类别",
-      "example": "示例代码",
+      "example": "示例SQL代码",
       "benefit": "好处说明"
     }
   ]
 }
 ```
+
+**特别注意 - example字段的格式要求：**
+
+1. **纯SQL示例**（推荐）：
+   ```json
+   "example": "SELECT id, name FROM users WHERE status = 'active'"
+   ```
+
+2. **展示SQL注入漏洞时**，使用占位符而不是编程语言的字符串拼接：
+   - ❌ 错误：`"example": "SELECT * FROM " + tableName + " WHERE id = " + userId`
+   - ✅ 正确：`"example": "SELECT * FROM {tableName} WHERE id = {userId}"`
+   - ✅ 正确：`"example": "SELECT * FROM $1 WHERE id = $2"`
+
+3. **说明动态SQL构建问题时**，在description中用文字说明，example中用占位符：
+   ```json
+   {
+     "description": "使用字符串拼接构建SQL会导致注入风险",
+     "example": "SELECT * FROM users WHERE name = {userInput}"
+   }
+   ```
+
+**为什么要这样？**
+- JSON格式不支持编程语言语法（如`+`运算符）
+- 使用占位符（`{variable}`、`$1`、`:param`）既能表达动态性，又不会破坏JSON结构
+- 这样的示例更通用，适用于所有编程语言
 
 ## 规则生成指导原则
 
@@ -133,8 +158,80 @@
 
 ## 输出要求
 
+**【重要】JSON格式严格要求：**
+
+1. **仅返回纯JSON**：不要添加任何代码块标记（如 \`\`\`json 或 \`\`\`），不要添加任何解释性文字
+2. **禁止JavaScript语法**：不要使用变量声明（const/let/var）、字符串连接符（+）、注释（//或/**/）等JavaScript语法
+3. **直接输出JSON对象**：从 { 开始，到 } 结束，中间不要有任何其他内容
+4. **字符串内换行**：如果字符串内容需要换行，使用 \\n 转义字符，不要使用实际换行
+5. **属性名使用双引号**：所有属性名必须使用双引号，如 "category"
+6. **值使用双引号**：所有字符串值必须使用双引号，如 "performance"
+7. **移除尾随逗号**：数组和对象的最后一个元素后面不要有逗号
+
+**内容要求：**
+
 1. 至少生成2-5条高质量规则
 2. 识别1-3个常见模式或反模式
 3. 提供1-3条最佳实践建议
-4. 确保所有输出均为有效的JSON格式
-5. 不要包含任何JSON之外的说明文字
+4. 每个规则都必须包含完整的字段信息
+
+**错误示例（禁止）：**
+
+1. 使用JavaScript语法：
+```javascript
+const rules = {
+  "learnedRules": [
+    {
+      "title": "避免使用" + "SELECT *"
+    }
+  ]
+}
+```
+
+2. example字段中使用编程语言的字符串拼接：
+```json
+{
+  "example": "SELECT * FROM " + tableName + " WHERE id = " + userId
+}
+```
+
+**正确示例：**
+
+1. 完整的正确格式：
+```json
+{
+  "learnedRules": [
+    {
+      "category": "performance",
+      "type": "query-optimization",
+      "title": "避免使用SELECT *",
+      "description": "明确指定需要的列可以提升性能",
+      "condition": "检测到SELECT * FROM语句",
+      "example": "SELECT id, name FROM users WHERE status = 'active'",
+      "severity": "medium",
+      "confidence": 0.9
+    }
+  ],
+  "patterns": [],
+  "antiPatterns": [],
+  "bestPractices": []
+}
+```
+
+2. 展示SQL注入问题的正确方式：
+```json
+{
+  "learnedRules": [
+    {
+      "category": "security",
+      "type": "sql-injection",
+      "title": "禁止使用字符串拼接构建SQL",
+      "description": "动态构建SQL时必须使用参数化查询，避免直接拼接用户输入",
+      "condition": "检测到动态SQL构建模式",
+      "example": "SELECT * FROM users WHERE name = {userInput}",
+      "severity": "critical",
+      "confidence": 0.95
+    }
+  ]
+}
+```

@@ -7,6 +7,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
+import JSONCleaner from '../../utils/jsonCleaner.js';
 
 /**
  * SQL优化与建议生成子代理
@@ -132,17 +133,7 @@ ${contextInfo}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      const result = JSON.parse(content);
+      const result = JSONCleaner.parse(response.content);
       
       return {
         success: true,
@@ -205,17 +196,7 @@ ${suggestionsInfo}`)
 
     try {
       const response = await this.llm.invoke(messages);
-      let content = response.content;
-      
-      // 处理可能的代码块包装
-      if (content.includes('```')) {
-        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          content = codeBlockMatch[1];
-        }
-      }
-      
-      const result = JSON.parse(content);
+      const result = JSONCleaner.parse(response.content);
       
       return {
         success: true,
