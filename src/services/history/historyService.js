@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 class HistoryService {
   constructor() {
     // 使用项目根目录的绝对路径，确保历史记录始终保存在项目目录的history文件夹中
-    this.historyDir = path.resolve(__dirname, '../../../history');
+    this.baseHistoryDir = path.resolve(__dirname, '../../../history');
     this.ensureHistoryDir();
   }
 
@@ -23,9 +23,28 @@ class HistoryService {
    * 确保历史记录目录存在
    */
   ensureHistoryDir() {
-    if (!fs.existsSync(this.historyDir)) {
-      fs.mkdirSync(this.historyDir, { recursive: true });
+    if (!fs.existsSync(this.baseHistoryDir)) {
+      fs.mkdirSync(this.baseHistoryDir, { recursive: true });
     }
+  }
+
+  /**
+   * 获取当前月份的历史记录目录
+   * 格式: history/YYYY-MM/
+   * @param {Date} [date] - 日期对象，默认为当前日期
+   * @returns {string} 月份目录路径
+   */
+  getMonthDir(date = new Date()) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const monthDir = path.join(this.baseHistoryDir, `${year}-${month}`);
+    
+    // 确保月份目录存在
+    if (!fs.existsSync(monthDir)) {
+      fs.mkdirSync(monthDir, { recursive: true });
+    }
+    
+    return monthDir;
   }
 
   /**
@@ -58,7 +77,8 @@ class HistoryService {
    */
   saveAnalysis(analysisData) {
     const fileName = this.generateFileName();
-    const filePath = path.join(this.historyDir, fileName);
+    const monthDir = this.getMonthDir();
+    const filePath = path.join(monthDir, fileName);
     const recordId = path.basename(fileName, '.json');
     
     // 从分析结果中提取数据库类型（由agent自动分析得出）
@@ -105,16 +125,38 @@ class HistoryService {
    */
   getAllHistory() {
     try {
-      const files = fs.readdirSync(this.historyDir)
-        .filter(file => file.endsWith('.json'))
-        .sort((a, b) => {
-          // 按文件名排序（日期倒序）
-          return b.localeCompare(a);
-        });
+      const allRecords = [];
       
-      return files.map(file => {
-        const filePath = path.join(this.historyDir, file);
-        const content = fs.readFileSync(filePath, 'utf8');
+      // 遍历所有月份目录
+      if (fs.existsSync(this.baseHistoryDir)) {
+        const monthDirs = fs.readdirSync(this.baseHistoryDir)
+          .filter(dir => {
+            const fullPath = path.join(this.baseHistoryDir, dir);
+            return fs.statSync(fullPath).isDirectory() && /^\d{4}-\d{2}$/.test(dir);
+          })
+          .sort((a, b) => b.localeCompare(a)); // 按月份倒序
+        
+        // 收集所有月份的历史记录文件
+        monthDirs.forEach(monthDir => {
+          const monthPath = path.join(this.baseHistoryDir, monthDir);
+          const files = fs.readdirSync(monthPath)
+            .filter(file => file.endsWith('.json'));
+          
+          files.forEach(file => {
+            allRecords.push({
+              file,
+              monthDir,
+              fullPath: path.join(monthPath, file)
+            });
+          });
+        });
+      }
+      
+      // 按文件名排序（日期倒序）
+      allRecords.sort((a, b) => b.file.localeCompare(a.file));
+      
+      return allRecords.map(({ fullPath }) => {
+        const content = fs.readFileSync(fullPath, 'utf8');
         const record = JSON.parse(content);
         
         // 返回简化的记录信息，用于列表显示
@@ -142,7 +184,13 @@ class HistoryService {
    */
   getHistoryById(id) {
     try {
-      const filePath = path.join(this.historyDir, `${id}.json`);
+      // 从ID中提取日期信息 (格式: YYYYMMDDHHMM-xxxx)
+      const dateStr = id.substring(0, 8); // YYYYMMDD
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const monthDir = path.join(this.baseHistoryDir, `${year}-${month}`);
+      
+      const filePath = path.join(monthDir, `${id}.json`);
       if (!fs.existsSync(filePath)) {
         return null;
       }
@@ -162,7 +210,13 @@ class HistoryService {
    */
   deleteHistory(id) {
     try {
-      const filePath = path.join(this.historyDir, `${id}.json`);
+      // 从ID中提取日期信息
+      const dateStr = id.substring(0, 8);
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const monthDir = path.join(this.baseHistoryDir, `${year}-${month}`);
+      
+      const filePath = path.join(monthDir, `${id}.json`);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
         return true;
@@ -180,13 +234,29 @@ class HistoryService {
    */
   clearAllHistory() {
     try {
-      const files = fs.readdirSync(this.historyDir)
-        .filter(file => file.endsWith('.json'));
-      
-      files.forEach(file => {
-        const filePath = path.join(this.historyDir, file);
-        fs.unlinkSync(filePath);
-      });
+      // 遍历所有月份目录
+      if (fs.existsSync(this.baseHistoryDir)) {
+        const monthDirs = fs.readdirSync(this.baseHistoryDir)
+          .filter(dir => {
+            const fullPath = path.join(this.baseHistoryDir, dir);
+            return fs.statSync(fullPath).isDirectory() && /^\d{4}-\d{2}$/.test(dir);
+          });
+        
+        monthDirs.forEach(monthDir => {
+          const monthPath = path.join(this.baseHistoryDir, monthDir);
+          const files = fs.readdirSync(monthPath)
+            .filter(file => file.endsWith('.json'));
+          
+          files.forEach(file => {
+            fs.unlinkSync(path.join(monthPath, file));
+          });
+          
+          // 删除空的月份目录
+          if (fs.readdirSync(monthPath).length === 0) {
+            fs.rmdirSync(monthPath);
+          }
+        });
+      }
       
       return true;
     } catch (error) {
@@ -227,6 +297,33 @@ class HistoryService {
       console.error('获取历史记录统计失败:', error);
       return { total: 0, byType: {}, byDatabase: {} };
     }
+  }
+
+  /**
+   * 获取所有历史记录文件（内部辅助方法）
+   * @returns {Array} 文件路径列表
+   */
+  getAllHistoryFiles() {
+    const allFiles = [];
+    
+    if (fs.existsSync(this.baseHistoryDir)) {
+      const monthDirs = fs.readdirSync(this.baseHistoryDir)
+        .filter(dir => {
+          const fullPath = path.join(this.baseHistoryDir, dir);
+          return fs.statSync(fullPath).isDirectory() && /^\d{4}-\d{2}$/.test(dir);
+        });
+      
+      monthDirs.forEach(monthDir => {
+        const monthPath = path.join(this.baseHistoryDir, monthDir);
+        const files = fs.readdirSync(monthPath)
+          .filter(file => file.endsWith('.json'))
+          .map(file => path.join(monthPath, file));
+        
+        allFiles.push(...files);
+      });
+    }
+    
+    return allFiles;
   }
 }
 

@@ -90,14 +90,38 @@ class JSONCleaner {
                 result += '\\u' + hexPart;
                 i += 6;
                 continue;
+              } else {
+                // Unicode转义序列不完整，转义反斜杠
+                result += '\\\\';
+                i++;
+                continue;
               }
             }
-            result += '\\' + nextChar;
+            // 统一处理引号转义
+            if (nextChar === '"') {
+              result += '\\"';
+            } else if (nextChar === "'") {
+              result += "\\'";
+            } else {
+              result += '\\' + nextChar;
+            }
             i += 2;
-          } else {
-            // 无效的转义序列，转义反斜杠本身
+          } else if (nextChar === '') {
+            // 反斜杠在末尾，转义它
             result += '\\\\';
             i++;
+          } else {
+            // 无效的转义序列，移除反斜杠或转义它
+            // 检查下一个字符是否是特殊字符
+            if (/[{}[\]:,]/.test(nextChar)) {
+              // 如果下一个字符是JSON结构字符，移除反斜杠
+              result += nextChar;
+              i += 2;
+            } else {
+              // 否则转义反斜杠本身
+              result += '\\\\';
+              i++;
+            }
           }
         }
         // 处理控制字符
@@ -198,6 +222,19 @@ class JSONCleaner {
       const extracted = this.extractJSON(content);
       const fixed = this.fixCommonIssues(extracted);
       return JSON.parse(fixed);
+    } catch (error) {
+      if (verbose) {
+        console.error('第三次尝试失败，尝试激进修复');
+      }
+    }
+
+    // 第四次尝试：激进修复 - 移除所有无效转义
+    try {
+      const extracted = this.extractJSON(content);
+      const fixed = this.fixCommonIssues(extracted);
+      // 激进策略：将所有反斜杠替换为双反斜杠，然后再解析
+      const aggressive = fixed.replace(/\\/g, '\\\\').replace(/\\\\\"/g, '\\"').replace(/\\\\\'/g, "\\'");
+      return JSON.parse(aggressive);
     } catch (error) {
       if (verbose) {
         console.error('所有解析尝试均失败');

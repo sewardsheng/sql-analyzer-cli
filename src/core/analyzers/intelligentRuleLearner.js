@@ -3,45 +3,31 @@
  * 负责从分析结果中学习并生成规则文档，维护知识库
  */
 
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../services/config/index.js';
 import { buildPrompt, validateRequiredVariables } from '../../utils/promptLoader.js';
 import JSONCleaner from '../../utils/jsonCleaner.js';
+import BaseAnalyzer from './BaseAnalyzer.js';
 import fs from 'fs/promises';
 import path from 'path';
 
 /**
  * 智能规则学习子代理
  */
-class IntelligentRuleLearner {
+class IntelligentRuleLearner extends BaseAnalyzer {
   constructor(config = {}) {
-    this.config = config;
-    this.llm = null;
-    this.initialized = false;
-    this.baseRulesDirectory = config.rulesDirectory || 
+    super(config);
+    this.baseRulesDirectory = config.rulesDirectory ||
       path.join(process.cwd(), 'rules', 'learning-rules', 'issues');
   }
 
   /**
-   * 初始化LLM
+   * 初始化LLM并确保规则目录存在
    */
   async initialize() {
-    if (this.initialized) return;
-    
-    const envConfig = await readConfig();
-    this.llm = new ChatOpenAI({
-      modelName: this.config.model || envConfig.model,
-      temperature: 0.1,
-      maxTokens: 99999,
-      configuration: {
-        apiKey: this.config.apiKey || envConfig.apiKey,
-        baseURL: this.config.baseURL || envConfig.baseURL
-      }
-    });
-    
-    await this.ensureRulesDirectory();
-    this.initialized = true;
+    await super.initialize();
+    if (!this.rulesDirectory) {
+      await this.ensureRulesDirectory();
+    }
   }
 
   /**
@@ -97,7 +83,7 @@ class IntelligentRuleLearner {
       ];
 
       // 调用LLM
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const content = response.content;
       
       // 使用共享的JSONCleaner解析响应
@@ -124,11 +110,7 @@ class IntelligentRuleLearner {
         message: `成功从分析结果中学习了 ${result.learnedRules?.length || 0} 条规则`
       };
     } catch (error) {
-      console.error("规则学习失败:", error);
-      return {
-        success: false,
-        error: `学习失败: ${error.message}`
-      };
+      return this.handleError('规则学习', error);
     }
   }
 
@@ -509,7 +491,7 @@ class IntelligentRuleLearner {
         new HumanMessage(`请为以下${databaseType || '未知'}数据库的SQL查询检索相关规则：\n\n查询: ${query}`)
       ];
 
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       return {
@@ -517,11 +499,7 @@ class IntelligentRuleLearner {
         data: result
       };
     } catch (error) {
-      console.error("规则检索失败:", error);
-      return {
-        success: false,
-        error: `检索失败: ${error.message}`
-      };
+      return this.handleError('规则检索', error);
     }
   }
 }

@@ -17,7 +17,7 @@ function register(program) {
     .option('--cors-origin <origin>', 'CORS允许的源', '*')
     .action(async (options) => {
       try {
-        const { createApiServer } = await import('../../services/api/apiServer.js');
+        const { createApiServer } = await import('../../services/api/index.js');
         createApiServer(options);
         // API服务器是长期运行的服务，不需要自动退出
       } catch (error) {

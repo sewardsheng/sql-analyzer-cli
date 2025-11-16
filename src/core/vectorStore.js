@@ -1,6 +1,6 @@
 /**
- * 向量存储模块
- * 用于管理全局的向量存储实例，支持文档加载和检索功能
+ * 向量存储与知识库管理模块
+ * 统一管理向量存储和知识库检索功能
  */
 
 import { DirectoryLoader } from "@langchain/classic/document_loaders/fs/directory";
@@ -12,11 +12,14 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { tool } from "langchain";
+import { z } from "zod";
 import path from "path";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import crypto from "crypto";
 import { readConfig } from '../services/config/index.js';
+import { logError } from '../utils/logger.js';
 
 // 全局向量存储实例
 let vectorStore = null;
@@ -490,6 +493,77 @@ function isVectorStoreInitialized() {
   return isVectorStorePersisted();
 }
 
+/**
+ * 创建知识库检索工具（从knowledgeBase.js合并）
+ * @returns {Object} 知识库检索工具
+ */
+function createRetrieveTool() {
+  // 定义检索工具的输入模式
+  const retrieveSchema = z.object({
+    query: z.string().describe("用于检索相关文档的查询字符串")
+  });
+
+  // 创建检索工具
+  const retrieve = tool(
+    async ({ query }) => {
+      try {
+        // 检查向量存储是否已初始化
+        if (!isVectorStoreInitialized()) {
+          return "知识库未初始化，请先运行 'learn' 命令加载文档。";
+        }
+
+        // 从向量存储中检索相关文档
+        const { text, documents } = await retrieveDocuments(query, 4);
+
+        // 格式化检索结果
+        const formattedResult = `检索到 ${documents.length} 个相关文档:\n${text}`;
+
+        return [formattedResult, documents];
+      } catch (error) {
+        logError('检索文档时出错', error);
+        return `检索文档时出错: ${error.message}`;
+      }
+    },
+    {
+      name: "retrieve",
+      description: "从知识库中检索与查询相关的信息",
+      schema: retrieveSchema,
+      responseFormat: "content_and_artifact",
+    }
+  );
+
+  return retrieve;
+}
+
+/**
+ * 直接检索知识库文档（从knowledgeBase.js合并）
+ * @param {string} query - 查询字符串
+ * @param {number} k - 返回文档数量
+ * @returns {Promise<Object>} 检索结果
+ */
+async function retrieveKnowledge(query, k = 4) {
+  try {
+    if (!isVectorStoreInitialized()) {
+      return {
+        success: false,
+        error: "知识库未初始化，请先运行 'learn' 命令加载文档。"
+      };
+    }
+
+    const result = await retrieveDocuments(query, k);
+    return {
+      success: true,
+      data: result
+    };
+  } catch (error) {
+    logError('检索知识库失败', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 export {
   initializeVectorStore,
   loadDocumentsFromRulesDirectory,
@@ -499,7 +573,9 @@ export {
   loadVectorStoreFromDisk,
   saveVectorStore,
   isVectorStorePersisted,
-  similaritySearch
+  similaritySearch,
+  createRetrieveTool,
+  retrieveKnowledge
 };
 
 

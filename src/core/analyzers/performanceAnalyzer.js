@@ -3,41 +3,15 @@
  * 负责分析SQL查询的性能问题并提供优化建议
  */
 
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
 import JSONCleaner from '../../utils/jsonCleaner.js';
+import BaseAnalyzer from './BaseAnalyzer.js';
 
 /**
  * 性能分析子代理
  */
-class PerformanceAnalyzer {
-  constructor(config = {}) {
-    this.config = config;
-    this.llm = null;
-    this.initialized = false;
-  }
-
-  /**
-   * 初始化LLM
-   */
-  async initialize() {
-    if (this.initialized) return;
-    
-    const envConfig = await readConfig();
-    this.llm = new ChatOpenAI({
-      modelName: this.config.model || envConfig.model,
-      temperature: 0.1,
-      maxTokens: 99999,
-      configuration: {
-        apiKey: this.config.apiKey || envConfig.apiKey,
-        baseURL: this.config.baseURL || envConfig.baseURL
-      }
-    });
-    
-    this.initialized = true;
-  }
+class PerformanceAnalyzer extends BaseAnalyzer {
 
   /**
    * 分析SQL性能
@@ -62,22 +36,8 @@ class PerformanceAnalyzer {
       }
     );
 
-    // 构建上下文信息
-    let contextInfo = "";
-    if (parsedStructure) {
-      contextInfo = `
-已解析的SQL结构信息：
-- 操作类型: ${parsedStructure.operationType}
-- 涉及表: ${parsedStructure.tables?.join(', ') || '未知'}
-- 涉及字段: ${parsedStructure.columns?.join(', ') || '未知'}
-- 连接信息: ${parsedStructure.joins?.join(', ') || '无'}
-- WHERE条件: ${parsedStructure.whereConditions?.join(', ') || '无'}
-- 分组字段: ${parsedStructure.groupBy?.join(', ') || '无'}
-- 排序字段: ${parsedStructure.orderBy?.join(', ') || '无'}
-- 聚合函数: ${parsedStructure.aggregations?.join(', ') || '无'}
-- 子查询: ${parsedStructure.subqueries?.join(', ') || '无'}
-`;
-    }
+    // 使用基类方法构建上下文信息
+    const contextInfo = this.buildStructureContext(parsedStructure);
 
     const messages = [
       new SystemMessage(systemPrompt),
@@ -90,7 +50,7 @@ ${contextInfo}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       return {
@@ -98,11 +58,7 @@ ${contextInfo}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL性能分析失败:", error);
-      return {
-        success: false,
-        error: `分析失败: ${error.message}`
-      };
+      return this.handleError('SQL性能分析', error);
     }
   }
 
@@ -137,7 +93,7 @@ ${sqlQuery}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       return {
@@ -145,11 +101,7 @@ ${sqlQuery}`)
         data: result
       };
     } catch (error) {
-      console.error("执行计划分析失败:", error);
-      return {
-        success: false,
-        error: `分析失败: ${error.message}`
-      };
+      return this.handleError('执行计划分析', error);
     }
   }
 }

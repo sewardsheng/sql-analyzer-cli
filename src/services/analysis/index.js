@@ -111,8 +111,7 @@ async function analyzeSql(options) {
     }
     
     // 显示增强的结果摘要
-    // displayEnhancedSummary(result, config);
-    console.log("--flag 显示增强的结果摘要");
+    displayEnhancedSummary(result, config);
     return result;
   } catch (error) {
     console.error(chalk.red(`\n✗ 分析失败: ${error.message}`));

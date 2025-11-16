@@ -233,6 +233,25 @@ export function displayEnhancedSummary(result, config = {}) {
   // 显示关键指标
   displayKeyMetrics(result);
   
+  // 显示优化后的SQL
+  if (result.data?.report?.optimizedSql?.optimizedSql) {
+    const optimizedData = result.data.report.optimizedSql;
+    console.log(chalk.blue.bold('\n✨ 优化后的SQL:'));
+    console.log('─'.repeat(60));
+    console.log(chalk.cyan(optimizedData.optimizedSql));
+    
+    if (optimizedData.changes && optimizedData.changes.length > 0) {
+      console.log(chalk.yellow.bold('\n📝 优化说明:'));
+      optimizedData.changes.forEach((change, index) => {
+        console.log(`   ${index + 1}. ${chalk.bold(change.type)}: ${change.description}`);
+        if (change.benefit) {
+          console.log(`      ${chalk.green('→ 预期收益:')} ${change.benefit}`);
+        }
+      });
+    }
+    console.log('─'.repeat(60));
+  }
+  
   // CI模式输出机器可读格式
   if (ci) {
     console.log('\n# CI 输出');

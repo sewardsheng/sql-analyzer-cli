@@ -3,41 +3,15 @@
  * 负责生成SQL优化建议和改进方案
  */
 
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
 import JSONCleaner from '../../utils/jsonCleaner.js';
+import BaseAnalyzer from './BaseAnalyzer.js';
 
 /**
  * SQL优化与建议生成子代理
  */
-class SqlOptimizerAndSuggester {
-  constructor(config = {}) {
-    this.config = config;
-    this.llm = null;
-    this.initialized = false;
-  }
-
-  /**
-   * 初始化LLM
-   */
-  async initialize() {
-    if (this.initialized) return;
-    
-    const envConfig = await readConfig();
-    this.llm = new ChatOpenAI({
-      modelName: this.config.model || envConfig.model,
-      temperature: 0.1,
-      maxTokens: 99999,
-      configuration: {
-        apiKey: this.config.apiKey || envConfig.apiKey,
-        baseURL: this.config.baseURL || envConfig.baseURL
-      }
-    });
-    
-    this.initialized = true;
-  }
+class SqlOptimizerAndSuggester extends BaseAnalyzer {
 
   /**
    * 生成SQL优化建议
@@ -132,19 +106,52 @@ ${contextInfo}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
+      
+      // 如果生成了优化建议,自动生成优化后的SQL
+      let optimizedSqlData = null;
+      if (result.queryRewrites && result.queryRewrites.length > 0) {
+        // 使用第一个查询重写作为优化后的SQL
+        optimizedSqlData = {
+          optimizedSql: result.queryRewrites[0].rewrittenQuery,
+          changes: [{
+            type: "查询重写",
+            description: result.queryRewrites[0].description,
+            before: sqlQuery,
+            after: result.queryRewrites[0].rewrittenQuery,
+            benefit: result.queryRewrites[0].benefit
+          }]
+        };
+      } else if (result.optimizationSuggestions && result.optimizationSuggestions.length > 0) {
+        // 如果没有queryRewrites,尝试从优化建议中生成
+        const sqlSuggestions = result.optimizationSuggestions.filter(s =>
+          s.optimizedCode && s.optimizedCode.toLowerCase().includes('select')
+        );
+        
+        if (sqlSuggestions.length > 0) {
+          optimizedSqlData = {
+            optimizedSql: sqlSuggestions[0].optimizedCode,
+            changes: sqlSuggestions.map(s => ({
+              type: s.type,
+              description: s.description,
+              before: s.originalCode || sqlQuery,
+              after: s.optimizedCode,
+              benefit: s.expectedBenefit
+            }))
+          };
+        }
+      }
       
       return {
         success: true,
-        data: result
+        data: {
+          ...result,
+          optimizedSqlData
+        }
       };
     } catch (error) {
-      console.error("SQL优化建议生成失败:", error);
-      return {
-        success: false,
-        error: `生成失败: ${error.message}`
-      };
+      return this.handleError('SQL优化建议生成', error);
     }
   }
 
@@ -195,7 +202,7 @@ ${suggestionsInfo}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       return {
@@ -203,11 +210,7 @@ ${suggestionsInfo}`)
         data: result
       };
     } catch (error) {
-      console.error("SQL重写失败:", error);
-      return {
-        success: false,
-        error: `重写失败: ${error.message}`
-      };
+      return this.handleError('SQL重写', error);
     }
   }
 }

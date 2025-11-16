@@ -3,21 +3,15 @@
  * 负责解析不同数据库方言的SQL并转换为标准化格式
  */
 
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { readConfig } from '../../services/config/index.js';
 import { buildPrompt } from '../../utils/promptLoader.js';
 import JSONCleaner from '../../utils/jsonCleaner.js';
+import BaseAnalyzer from './BaseAnalyzer.js';
 
 /**
  * SQL解析与方言标准化子代理
  */
-class SqlParserAndDialectNormalizer {
-  constructor(config = {}) {
-    this.config = config;
-    this.llm = null;
-    this.initialized = false;
-  }
+class SqlParserAndDialectNormalizer extends BaseAnalyzer {
 
   /**
    * 预处理SQL，检测可能导致解析失败的模式
@@ -122,26 +116,6 @@ class SqlParserAndDialectNormalizer {
   }
 
   /**
-   * 初始化LLM
-   */
-  async initialize() {
-    if (this.initialized) return;
-    
-    const envConfig = await readConfig();
-    this.llm = new ChatOpenAI({
-      modelName: this.config.model || envConfig.model,
-      temperature: 0.1,
-      maxTokens: 99999,
-      configuration: {
-        apiKey: this.config.apiKey || envConfig.apiKey,
-        baseURL: this.config.baseURL || envConfig.baseURL
-      }
-    });
-    
-    this.initialized = true;
-  }
-
-  /**
    * 解析SQL并标准化方言
    * @param {Object} input - 输入参数
    * @param {string} input.sqlQuery - SQL查询语句
@@ -218,7 +192,7 @@ ${sqlQuery}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       // 将预处理警告添加到结果中
@@ -282,7 +256,7 @@ ${sqlQuery}`)
     ];
 
     try {
-      const response = await this.llm.invoke(messages);
+      const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
       return {
