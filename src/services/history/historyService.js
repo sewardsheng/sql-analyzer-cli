@@ -7,6 +7,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+// 获取当前文件的目录路径（Bun项目中的优雅方式）
+// 在Bun中，我们可以直接使用import.meta.path来获取当前文件路径
+const __filename = import.meta.path;
+const __dirname = path.dirname(__filename);
+
 class HistoryService {
   constructor() {
     // 使用项目根目录的绝对路径，确保历史记录始终保存在项目目录的history文件夹中

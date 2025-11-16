@@ -42,7 +42,6 @@ async function readSqlFromFile(filePath) {
  * @param {Object} options - 分析选项
  * @param {string} [options.sql] - 要分析的SQL语句
  * @param {string} [options.file] - 包含SQL语句的文件路径
- * @param {boolean} [options.simplifiedOutput] - 是否简化输出
  * @param {boolean} [options.learn] - 是否启用学习功能
  * @param {boolean} [options.performance] - 是否启用性能分析
  * @param {boolean} [options.security] - 是否启用安全审计
@@ -109,17 +108,6 @@ async function analyzeSql(options) {
     // 显示结果摘要
     console.log(chalk.green.bold('\n✓ 分析完成!'));
     console.log(chalk.gray('\n分析结果已生成，详细信息请查看上方输出。'));
-    
-    // 如果需要简化输出，只返回关键信息
-    if (analysisOptions.simplifiedOutput) {
-      return {
-        success: true,
-        summary: result.data.report?.summary || '分析完成',
-        overallScore: result.data.report?.overallAssessment?.score || '未知',
-        databaseType: result.data.databaseType,
-        recommendations: result.data.report?.overallAssessment?.recommendations || []
-      };
-    }
     
     return result;
   } catch (error) {

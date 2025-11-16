@@ -28,7 +28,7 @@ class PerformanceAnalyzer {
     this.llm = new ChatOpenAI({
       modelName: this.config.model || envConfig.model,
       temperature: 0.1,
-      maxTokens: 2000,
+      maxTokens: 99999,
       configuration: {
         apiKey: this.config.apiKey || envConfig.apiKey,
         baseURL: this.config.baseURL || envConfig.baseURL

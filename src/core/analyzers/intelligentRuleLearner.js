@@ -32,7 +32,7 @@ class IntelligentRuleLearner {
     this.llm = new ChatOpenAI({
       modelName: this.config.model || envConfig.model,
       temperature: 0.1,
-      maxTokens: 2000,
+      maxTokens: 99999,
       configuration: {
         apiKey: this.config.apiKey || envConfig.apiKey,
         baseURL: this.config.baseURL || envConfig.baseURL
@@ -110,15 +110,62 @@ class IntelligentRuleLearner {
         }
       }
       
-      const result = JSON.parse(content);
+      // 更健壮的JSON内容清理
+      let cleanedContent = content;
+      
+      // 移除JavaScript风格的注释
+      cleanedContent = cleanedContent.replace(/\/\/.*$/gm, '');
+      cleanedContent = cleanedContent.replace(/\/\*[\s\S]*?\*\//g, '');
+      
+      // 移除可能的变量声明和赋值
+      cleanedContent = cleanedContent.replace(/(?:const|let|var)\s+\w+\s*=\s*/g, '');
+      
+      // 移除错误的字符串连接符
+      cleanedContent = cleanedContent.replace(/"\s*\+\s*"/g, '');
+      cleanedContent = cleanedContent.replace(/\n\s*\+\s*/g, '');
+      
+      // 移除可能的前后缀非JSON内容
+      cleanedContent = cleanedContent.trim();
+      
+      // 尝试找到JSON对象的开始和结束
+      const jsonStart = cleanedContent.indexOf('{');
+      const jsonEnd = cleanedContent.lastIndexOf('}');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedContent = cleanedContent.substring(jsonStart, jsonEnd + 1);
+      }
+      
+      // 修复尾随逗号
+      cleanedContent = cleanedContent.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 最终修剪
+      cleanedContent = cleanedContent.trim();
+      
+      let result;
+      try {
+        result = JSON.parse(cleanedContent);
+      } catch (parseError) {
+        console.error("JSON解析失败，尝试更宽松的解析:", parseError.message);
+        console.error("原始内容:", content);
+        console.error("清理后内容:", cleanedContent);
+        
+        // 尝试使用eval作为最后的手段（仅用于开发环境）
+        try {
+          result = eval(`(${cleanedContent})`);
+        } catch (evalError) {
+          throw new Error(`无法解析LLM返回的内容为JSON: ${parseError.message}`);
+        }
+      }
       
       // 保存学习到的规则
       const savedFiles = await this.saveLearnedRules(result, databaseType, sqlQuery, analysisResults);
-      console.log(`规则已保存到: ${savedFiles.mdFilePath}`);
       
       return {
         success: true,
-        data: result,
+        data: {
+          ...result,
+          mdFilePath: savedFiles.mdFilePath
+        },
         savedFiles,
         message: `成功从分析结果中学习了 ${result.learnedRules?.length || 0} 条规则`
       };
@@ -368,10 +415,9 @@ class IntelligentRuleLearner {
       
       const mdFilePath = path.join(this.rulesDirectory, mdFileName);
       
-      // 保存Markdown格式的规则
-      const markdownContent = this.convertRulesToMarkdown(rules, databaseType, sqlQuery, analysisResults);
-      await fs.writeFile(mdFilePath, markdownContent, 'utf8');
-      console.log(`Markdown规则已保存到: ${mdFilePath}`);
+      // 保存Markdown规则文件
+    const mdContent = this.convertRulesToMarkdown(rules, databaseType, sqlQuery, analysisResults);
+    await fs.writeFile(mdFilePath, mdContent, 'utf8');
       
       return { mdFilePath };
     } catch (error) {

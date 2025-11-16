@@ -15,7 +15,6 @@ function register(program) {
     .description('分析SQL语句的性能、安全性和规范性')
     .option('-s, --sql <sql>', '要分析的SQL语句')
     .option('-f, --file <file>', '包含SQL语句的文件路径')
-    .option('--simplified-output', '简化输出格式')
     .option('--no-learn', '禁用学习功能')
     .option('--no-performance', '禁用性能分析')
     .option('--no-security', '禁用安全审计')

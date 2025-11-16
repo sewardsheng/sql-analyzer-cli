@@ -94,7 +94,7 @@ class SqlAnalysisCoordinator {
     this.llm = new ChatOpenAI({
       modelName: this.config.model || envConfig.model,
       temperature: 0.1,
-      maxTokens: 4000,
+      maxTokens: 99999,
       configuration: {
         apiKey: this.config.apiKey || envConfig.apiKey,
         baseURL: this.config.baseURL || envConfig.baseURL
@@ -436,6 +436,9 @@ class SqlAnalysisCoordinator {
         console.log(`   状态: 成功`);
         if (integratedResults.ruleLearning.data?.savedPath) {
           console.log(`   保存路径: ${integratedResults.ruleLearning.data.savedPath}`);
+        }
+        if (integratedResults.ruleLearning.data?.mdFilePath) {
+          console.log(`   Markdown规则已保存到: ${integratedResults.ruleLearning.data.mdFilePath}`);
         }
       } else {
         console.log(`   状态: 失败 - ${integratedResults.ruleLearning.error}`);
