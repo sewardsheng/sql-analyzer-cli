@@ -325,6 +325,81 @@ class HistoryService {
     
     return allFiles;
   }
+
+  /**
+   * 搜索历史记录
+   * @param {Object} criteria - 搜索条件
+   * @param {string} [criteria.keyword] - SQL关键词
+   * @param {string} [criteria.databaseType] - 数据库类型
+   * @param {string} [criteria.type] - 分析类型
+   * @param {string} [criteria.fromDate] - 开始日期 (YYYY-MM-DD)
+   * @param {string} [criteria.toDate] - 结束日期 (YYYY-MM-DD)
+   * @returns {Array} 符合条件的历史记录列表
+   */
+  searchHistory(criteria = {}) {
+    try {
+      const allHistory = this.getAllHistory();
+      
+      // 如果没有任何搜索条件，返回所有记录
+      if (!criteria.keyword && !criteria.databaseType && !criteria.type && !criteria.fromDate && !criteria.toDate) {
+        return allHistory;
+      }
+      
+      return allHistory.filter(record => {
+        // 获取完整记录以访问SQL内容
+        const fullRecord = this.getHistoryById(record.id);
+        if (!fullRecord) return false;
+        
+        // 关键词搜索（不区分大小写）
+        if (criteria.keyword) {
+          const keyword = criteria.keyword.toLowerCase();
+          const sql = (fullRecord.sql || '').toLowerCase();
+          if (!sql.includes(keyword)) {
+            return false;
+          }
+        }
+        
+        // 数据库类型筛选
+        if (criteria.databaseType) {
+          if (record.databaseType !== criteria.databaseType) {
+            return false;
+          }
+        }
+        
+        // 分析类型筛选
+        if (criteria.type) {
+          if (record.type !== criteria.type) {
+            return false;
+          }
+        }
+        
+        // 日期范围筛选
+        if (criteria.fromDate || criteria.toDate) {
+          const recordDate = new Date(record.timestamp);
+          
+          if (criteria.fromDate) {
+            const fromDate = new Date(criteria.fromDate);
+            if (recordDate < fromDate) {
+              return false;
+            }
+          }
+          
+          if (criteria.toDate) {
+            const toDate = new Date(criteria.toDate);
+            toDate.setHours(23, 59, 59, 999); // 包含当天结束时间
+            if (recordDate > toDate) {
+              return false;
+            }
+          }
+        }
+        
+        return true;
+      });
+    } catch (error) {
+      console.error('搜索历史记录失败:', error);
+      return [];
+    }
+  }
 }
 
 export default HistoryService;

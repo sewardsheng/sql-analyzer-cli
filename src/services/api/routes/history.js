@@ -89,7 +89,7 @@ export function registerHistoryRoutes(app) {
       const { default: HistoryService } = await import('../../history/historyService.js');
       const historyService = new HistoryService();
       
-      const success = historyService.clearHistory();
+      const success = historyService.clearAllHistory();
       
       if (!success) {
         return c.json(formatErrorResponse('清空历史记录失败'), 500);
