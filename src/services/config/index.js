@@ -13,7 +13,11 @@ export const DEFAULT_CONFIG = {
   apiPort: 3000,
   apiHost: '0.0.0.0',
   apiCorsEnabled: true,
-  apiCorsOrigin: '*'
+  apiCorsOrigin: '*',
+  // 摘要显示配置
+  enableAISummary: !process.env.CI,  // CI环境中禁用AI摘要
+  enableColors: !process.env.CI,     // CI环境中可选禁用颜色
+  summaryOutputFormat: process.env.CI ? 'structured' : 'pretty'
 };
 
 // 配置键映射 (内部键名 -> 环境变量名)
@@ -25,7 +29,10 @@ const CONFIG_MAP = {
   apiPort: 'API_PORT',
   apiHost: 'API_HOST',
   apiCorsEnabled: 'API_CORS_ENABLED',
-  apiCorsOrigin: 'API_CORS_ORIGIN'
+  apiCorsOrigin: 'API_CORS_ORIGIN',
+  enableAISummary: 'ENABLE_AI_SUMMARY',
+  enableColors: 'ENABLE_COLORS',
+  summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT'
 };
 
 // 配置键描述
@@ -37,7 +44,10 @@ const CONFIG_DESC = {
   apiPort: 'API服务器端口',
   apiHost: 'API服务器主机',
   apiCorsEnabled: '是否启用CORS',
-  apiCorsOrigin: 'CORS允许的源'
+  apiCorsOrigin: 'CORS允许的源',
+  enableAISummary: '是否启用AI摘要',
+  enableColors: '是否启用颜色输出',
+  summaryOutputFormat: '摘要输出格式'
 };
 
 /**
@@ -77,7 +87,7 @@ export async function readConfig() {
       if (key === 'apiPort') {
         config[key] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG[key];
         if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
-      } else if (key === 'apiCorsEnabled') {
+      } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
         config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
       } else {
         config[key] = envValue || DEFAULT_CONFIG[key];

@@ -6,6 +6,7 @@
 import { createCoordinator } from '../../core/coordinator.js';
 import { readConfig } from '../config/index.js';
 import HistoryService from '../history/historyService.js';
+import { displayEnhancedSummary } from '../../utils/summaryDisplay.js';
 import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
@@ -57,14 +58,18 @@ async function analyzeSql(options) {
       throw new Error('必须提供 --sql 或 --file 参数');
     }
     
-    // 获取SQL语句
+    // 获取SQL语句和输入类型
     let sqlQuery;
+    let inputType; // 'command' 表示命令行输入, 'file' 表示文件输入
+    
     if (sql) {
       sqlQuery = sql;
+      inputType = 'command';
       console.log(chalk.blue('\n正在分析SQL语句...'));
     } else {
-      console.log(chalk.blue(`\n正在从文件读取SQL: ${file}`));
       sqlQuery = await readSqlFromFile(file);
+      inputType = 'file';
+      console.log(chalk.blue(`\n正在从文件读取SQL: ${file}`));
       console.log(chalk.green('✓ 文件读取成功'));
     }
     
@@ -98,17 +103,16 @@ async function analyzeSql(options) {
       const historyId = historyService.saveAnalysis({
         sql: sqlQuery,
         result: result,
-        type: 'single'
+        type: inputType // 使用实际的输入类型: 'command' 或 'file'
       });
       console.log(chalk.gray(`\n历史记录已保存: ${historyId}`));
     } catch (historyError) {
       console.warn(chalk.yellow(`警告: 保存历史记录失败: ${historyError.message}`));
     }
     
-    // 显示结果摘要
-    console.log(chalk.green.bold('\n✓ 分析完成!'));
-    console.log(chalk.gray('\n分析结果已生成，详细信息请查看上方输出。'));
-    
+    // 显示增强的结果摘要
+    // displayEnhancedSummary(result, config);
+    console.log("--flag 显示增强的结果摘要");
     return result;
   } catch (error) {
     console.error(chalk.red(`\n✗ 分析失败: ${error.message}`));

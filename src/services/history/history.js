@@ -213,8 +213,9 @@ function showHistoryStats() {
  */
 function getTypeLabel(type) {
   const labels = {
+    'command': '命令输入',
+    'file': '文件输入',
     'single': '单个分析',
-    'file': '文件分析',
     'batch': '批量分析',
     'followup': '追问'
   };
@@ -231,9 +232,11 @@ function getDatabaseLabel(db) {
     'mysql': 'MySQL',
     'postgresql': 'PostgreSQL',
     'oracle': 'Oracle',
-    'sqlserver': 'SQL Server'
+    'sqlserver': 'SQL Server',
+    'clickhouse': 'ClickHouse',
+    'generic': '通用'
   };
-  return labels[db] || db;
+  return labels[db] || db || '未知';
 }
 
 export {

@@ -1,9 +1,6 @@
 /**
  * JSON清理和解析工具类
- * 用于处理LLM返回的可能包含非法的JSON内容
-
-/**
- * JSON清理工具类
+ * 用于处理LLM返回的可能包含非标准格式的JSON内容
  */
 class JSONCleaner {
   /**
@@ -12,106 +9,22 @@ class JSONCleaner {
    * @returns {string} 清理后的JSON字符串
    */
   static extractJSON(content) {
-    let cleaned = content;
+    let cleaned = content.trim();
 
-    // 1. 移除代码块标记（支持多种语言标识）
-    if (cleaned.includes('```')) {
-      // 支持常见的代码块语言标识：json, javascript, js, python, py, java, go, rust, typescript, ts, sql, yaml, xml等
-      const codeBlockMatch = cleaned.match(/```(?:json|javascript|js|python|py|java|go|rust|typescript|ts|sql|yaml|yml|xml|html|css|shell|bash|sh|c|cpp|csharp|cs|php|ruby|rb|swift|kotlin|dart|scala|r|matlab|perl|lua)?\s*([\s\S]*?)\s*```/);
-      if (codeBlockMatch) {
-        cleaned = codeBlockMatch[1];
-      }
+    // 1. 提取代码块中的内容
+    const codeBlockMatch = cleaned.match(/```(?:json|javascript|js)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+      cleaned = codeBlockMatch[1].trim();
     }
 
-    // 2. 移除多种编程语言的注释
-    // JavaScript/Java/C/C++/Go/Rust/TypeScript 风格注释
-    cleaned = cleaned.replace(/\/\/.*$/gm, ''); // 单行注释
-    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // 多行注释
-    
-    // Python/Ruby/Shell/YAML 风格注释
-    cleaned = cleaned.replace(/^\s*#.*$/gm, ''); // 行首的 # 注释
-    
-    // SQL 风格注释
-    cleaned = cleaned.replace(/--.*$/gm, ''); // SQL 单行注释
-    
-    // HTML/XML 注释
-    cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+    // 2. 移除注释
+    cleaned = cleaned.replace(/\/\/.*$/gm, '');  // 单行注释
+    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');  // 多行注释
 
-    // 3. 移除多种语言的变量声明和赋值语句
-    // JavaScript/TypeScript
-    cleaned = cleaned.replace(/(?:const|let|var)\s+\w+\s*=\s*/g, '');
-    // Python
-    cleaned = cleaned.replace(/^\s*\w+\s*=\s*(?=\{)/gm, '');
-    // Java/C#/C++
-    cleaned = cleaned.replace(/(?:public|private|protected|static|final)?\s*(?:String|int|float|double|boolean|var|auto|Object|Map|List|Dictionary)\s+\w+\s*=\s*/g, '');
-    // Go
-    cleaned = cleaned.replace(/(?:var\s+\w+\s*=\s*|:\s*=\s*)/g, '');
-    // Rust
-    cleaned = cleaned.replace(/let\s+(?:mut\s+)?\w+\s*=\s*/g, '');
+    // 3. 移除变量声明
+    cleaned = cleaned.replace(/^(const|let|var)\s+\w+\s*=\s*/m, '');
 
-    // 4. 处理多种语言的字符串连接符
-    // JavaScript/Java/C/C++/Go: + 连接符
-    // Python: 空格连接、f-string、.format()
-    // Ruby: #{} 插值
-    // PHP: . 连接符
-    
-    // 策略A：JavaScript/Java/C++ 风格的字符串连接
-    // 匹配模式："key": "value" + var + "value"
-    cleaned = cleaned.replace(
-      /"([^"]*?)"\s*\+\s*(\w+)\s*\+\s*"([^"]*?)"/g,
-      '"$1{$2}$3"'
-    );
-    
-    // 策略B：迭代处理复杂的字符串连接
-    let prevCleaned = '';
-    let iterations = 0;
-    const maxIterations = 10;
-    
-    while (prevCleaned !== cleaned && iterations < maxIterations) {
-      prevCleaned = cleaned;
-      // JavaScript/Java 风格: "text" + variable
-      cleaned = cleaned.replace(/"([^"]*?)"\s*\+\s*(\w+)/g, '"$1{$2}"');
-      cleaned = cleaned.replace(/(\w+)\s*\+\s*"([^"]*?)"/g, '"{$1}$2"');
-      
-      // Python f-string: f"text {variable}"
-      cleaned = cleaned.replace(/f"([^"]*?)"/g, '"$1"');
-      cleaned = cleaned.replace(/f'([^']*?)'/g, '"$1"');
-      
-      // Python .format(): "text {}".format(var)
-      cleaned = cleaned.replace(/"([^"]*?)"\s*\.format\([^)]*\)/g, '"$1"');
-      
-      // PHP 风格: "text" . $variable
-      cleaned = cleaned.replace(/"([^"]*?)"\s*\.\s*\$(\w+)/g, '"$1{$2}"');
-      cleaned = cleaned.replace(/\$(\w+)\s*\.\s*"([^"]*?)"/g, '"{$1}$2"');
-      
-      // Ruby 插值: "text #{variable}"
-      cleaned = cleaned.replace(/"([^"]*?)#\{([^}]+)\}([^"]*?)"/g, '"$1{$2}$3"');
-      
-      iterations++;
-    }
-    
-    // 策略C：处理简单的字符串连接（无变量）
-    cleaned = cleaned.replace(/"\s*\+\s*"/g, ''); // JavaScript/Java
-    cleaned = cleaned.replace(/'\s*\+\s*'/g, '');
-    cleaned = cleaned.replace(/"\s*\.\s*"/g, ''); // PHP
-    cleaned = cleaned.replace(/'\s*\.\s*'/g, '');
-    
-    // 策略D：处理跨行的字符串连接
-    cleaned = cleaned.replace(/"\s*\+\s*\n\s*"/g, '');
-    cleaned = cleaned.replace(/'\s*\+\s*\n\s*'/g, '');
-    cleaned = cleaned.replace(/"\s*\.\s*\n\s*"/g, ''); // PHP
-    
-    // 策略E：移除 Python 的三引号字符串标记
-    cleaned = cleaned.replace(/"""/g, '"');
-    cleaned = cleaned.replace(/'''/g, '"');
-    
-    // 策略E：处理SQL注入中常见的特殊模式
-    // 例如：' OR '1'='1 或 " OR "1"="1
-    // 这些在JSON字符串中需要正确转义
-    cleaned = this.escapeSqlInjectionPatterns(cleaned);
-
-    // 5. 提取JSON对象
-    cleaned = cleaned.trim();
+    // 4. 提取JSON对象
     const jsonStart = cleaned.indexOf('{');
     const jsonEnd = cleaned.lastIndexOf('}');
     
@@ -119,115 +32,135 @@ class JSONCleaner {
       cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
     }
 
-    // 6. 修复常见JSON错误
-    cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1'); // 移除尾随逗号
-    
-    // 为没有引号的属性名添加引号（但要小心不要破坏已经有引号的）
-    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)(\s*:)/g, '$1"$2"$3');
-    
-    // 修复单引号为双引号（JSON 标准要求双引号）
-    // 但要小心不要破坏字符串内部的单引号
-    cleaned = this.normalizeSingleQuotes(cleaned);
-    
-    // 移除 Python None/True/False，转换为 JSON null/true/false
-    cleaned = cleaned.replace(/:\s*None\b/g, ': null');
-    cleaned = cleaned.replace(/:\s*True\b/g, ': true');
-    cleaned = cleaned.replace(/:\s*False\b/g, ': false');
-    
-    // 移除空格和制表符（在键值对中）
-    cleaned = cleaned.replace(/\s*:\s*/g, ':');
-    cleaned = cleaned.replace(/\s*,\s*/g, ',');
+    // 5. 基本修复
+    cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');  // 移除尾随逗号
+    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)(\s*:)/g, '$1"$2"$3');  // 为属性名添加引号
 
-    return cleaned.trim();
+    return cleaned;
   }
 
   /**
-   * 规范化单引号为双引号
-   * @param {string} content - JSON内容
-   * @returns {string} 处理后的内容
+   * 修复字符串中的特殊字符
+   * @param {string} content - JSON字符串
+   * @returns {string} 修复后的JSON字符串
    */
-  static normalizeSingleQuotes(content) {
+  static fixStringContent(content) {
     let result = '';
     let inString = false;
-    let stringChar = null;
-    let escaped = false;
-    
-    for (let i = 0; i < content.length; i++) {
+    let stringDelimiter = null;
+    let i = 0;
+
+    while (i < content.length) {
       const char = content[i];
+      const nextChar = i < content.length - 1 ? content[i + 1] : '';
       const prevChar = i > 0 ? content[i - 1] : '';
-      
-      if (escaped) {
-        result += char;
-        escaped = false;
-        continue;
-      }
-      
-      if (char === '\\') {
-        escaped = true;
-        result += char;
-        continue;
-      }
-      
+
       // 处理字符串边界
-      if ((char === '"' || char === "'") && !inString) {
-        inString = true;
-        stringChar = char;
-        result += '"'; // 统一使用双引号
-      } else if (char === stringChar && inString) {
-        inString = false;
-        stringChar = null;
-        result += '"'; // 统一使用双引号
-      } else if (char === "'" && !inString) {
-        // 键名外的单引号也转换为双引号
-        result += '"';
+      if ((char === '"' || char === "'") && prevChar !== '\\') {
+        if (!inString) {
+          // 开始字符串
+          inString = true;
+          stringDelimiter = char;
+          result += '"';  // 统一使用双引号
+        } else if (char === stringDelimiter) {
+          // 结束字符串
+          inString = false;
+          stringDelimiter = null;
+          result += '"';
+        } else {
+          // 字符串内部的其他类型引号，需要转义
+          result += '\\' + char;
+        }
+        i++;
+        continue;
+      }
+
+      // 在字符串内部处理特殊字符
+      if (inString) {
+        // 处理反斜杠
+        if (char === '\\') {
+          const validEscapes = ['n', 'r', 't', 'b', 'f', '"', "'", '\\', '/', 'u'];
+          
+          if (validEscapes.includes(nextChar)) {
+            // 有效的转义序列
+            if (nextChar === 'u') {
+              // Unicode转义序列
+              const hexPart = content.substring(i + 2, i + 6);
+              if (/^[0-9a-fA-F]{4}$/.test(hexPart)) {
+                result += '\\u' + hexPart;
+                i += 6;
+                continue;
+              }
+            }
+            result += '\\' + nextChar;
+            i += 2;
+          } else {
+            // 无效的转义序列，转义反斜杠本身
+            result += '\\\\';
+            i++;
+          }
+        }
+        // 处理控制字符
+        else if (char === '\n') {
+          result += '\\n';
+          i++;
+        } else if (char === '\r') {
+          result += '\\r';
+          i++;
+        } else if (char === '\t') {
+          result += '\\t';
+          i++;
+        } else {
+          result += char;
+          i++;
+        }
       } else {
         result += char;
+        i++;
       }
     }
-    
+
+    // 如果字符串未闭合，添加闭合引号
+    if (inString) {
+      result += '"';
+    }
+
     return result;
   }
 
   /**
-   * 转义SQL注入模式中的特殊字符
-   * @param {string} content - JSON内容
-   * @returns {string} 处理后的内容
+   * 修复常见的JSON格式问题
+   * @param {string} content - JSON字符串
+   * @returns {string} 修复后的JSON字符串
    */
-  static escapeSqlInjectionPatterns(content) {
-    // 在JSON字符串内部，SQL注入示例可能包含：
-    // 1. 单引号和双引号的混合使用
-    // 2. 注释符号 -- 或 #
-    // 3. 分号和其他SQL特殊字符
-    // 4. 逻辑操作符 OR, AND
-    // 5. 比较操作符 =, <>, !=
-    
-    // 这些字符在JSON字符串中都是合法的，但需要确保它们在正确的上下文中
-    // 我们主要需要防止的是这些字符破坏JSON结构
-    
-    // 临时占位符，用于保护已经正确转义的内容
-    const protectedPatterns = new Map();
-    let protectedIndex = 0;
-    
-    // 保护已经正确转义的引号
-    content = content.replace(/\\"/g, () => {
-      const placeholder = `__PROTECTED_QUOTE_${protectedIndex++}__`;
-      protectedPatterns.set(placeholder, '\\"');
-      return placeholder;
-    });
-    
-    // 保护已经正确转义的反斜杠
-    content = content.replace(/\\\\/g, () => {
-      const placeholder = `__PROTECTED_BACKSLASH_${protectedIndex++}__`;
-      protectedPatterns.set(placeholder, '\\\\');
-      return placeholder;
-    });
-    
-    // 还原保护的内容
-    protectedPatterns.forEach((original, placeholder) => {
-      content = content.replace(new RegExp(placeholder, 'g'), original);
-    });
-    
-    return content;
+  static fixCommonIssues(content) {
+    let fixed = content;
+
+    // 1. 先修复字符串内容（处理引号和特殊字符）
+    fixed = this.fixStringContent(fixed);
+
+    // 2. 修复Python布尔值和None
+    fixed = fixed.replace(/:\s*True\b/g, ': true');
+    fixed = fixed.replace(/:\s*False\b/g, ': false');
+    fixed = fixed.replace(/:\s*None\b/g, ': null');
+
+    // 3. 修复未闭合的括号
+    const openBraces = (fixed.match(/\{/g) || []).length;
+    const closeBraces = (fixed.match(/\}/g) || []).length;
+    if (openBraces > closeBraces) {
+      fixed += '}'.repeat(openBraces - closeBraces);
+    }
+
+    const openBrackets = (fixed.match(/\[/g) || []).length;
+    const closeBrackets = (fixed.match(/\]/g) || []).length;
+    if (openBrackets > closeBrackets) {
+      fixed += ']'.repeat(openBrackets - closeBrackets);
+    }
+
+    // 4. 修复缺少值的键
+    fixed = fixed.replace(/"([^"]+)":\s*([,}\]])/g, '"$1":null$2');
+
+    return fixed;
   }
 
   /**
@@ -246,126 +179,43 @@ class JSONCleaner {
       return JSON.parse(content);
     } catch (error) {
       if (verbose) {
-        console.warn('首次JSON解析失败，尝试清理后重新解析');
+        console.warn('直接解析失败，尝试提取和清理JSON内容');
       }
     }
 
-    // 第二次尝试：清理后解析
-    const cleaned = this.extractJSON(content);
+    // 第二次尝试：提取并清理后解析
     try {
-      return JSON.parse(cleaned);
+      const extracted = this.extractJSON(content);
+      return JSON.parse(extracted);
     } catch (error) {
       if (verbose) {
-        console.warn('清理后JSON解析失败，尝试修复特殊字符');
+        console.warn('提取后解析失败，尝试修复常见问题');
       }
     }
 
-    // 第三次尝试：转义特殊字符
-    const fixed = this.fixSpecialCharacters(cleaned);
+    // 第三次尝试：修复常见问题后解析
     try {
+      const extracted = this.extractJSON(content);
+      const fixed = this.fixCommonIssues(extracted);
       return JSON.parse(fixed);
     } catch (error) {
       if (verbose) {
-        console.error('所有JSON解析尝试均失败');
-        this.debugParseError(content, cleaned, fixed, error);
+        console.error('所有解析尝试均失败');
+        console.error('错误信息:', error.message);
+        console.error('原始内容（前500字符）:', content.substring(0, 500));
+        
+        // 显示修复后的内容（用于调试）
+        try {
+          const extracted = this.extractJSON(content);
+          const fixed = this.fixCommonIssues(extracted);
+          console.error('修复后内容（前500字符）:', fixed.substring(0, 500));
+        } catch (e) {
+          // 忽略
+        }
       }
       
-      throw new Error(`无法解析LLM返回的JSON内容: ${error.message}`);
+      throw new Error(`无法解析JSON内容: ${error.message}`);
     }
-  }
-
-  /**
-   * 修复JSON字符串中的特殊字符
-   * @param {string} content - JSON字符串
-   * @returns {string} 修复后的JSON字符串
-   */
-  static fixSpecialCharacters(content) {
-    // 使用临时占位符保护已转义的字符
-    const placeholders = {
-      '\\n': '___ESCAPED_N___',
-      '\\r': '___ESCAPED_R___',
-      '\\t': '___ESCAPED_T___',
-      '\\"': '___ESCAPED_QUOTE___',
-      '\\\\': '___ESCAPED_BACKSLASH___',
-      '\\\'': '___ESCAPED_SINGLE_QUOTE___',
-      '\\b': '___ESCAPED_BACKSPACE___',
-      '\\f': '___ESCAPED_FORMFEED___'
-    };
-
-    let fixed = content;
-
-    // 保护已转义的字符
-    Object.entries(placeholders).forEach(([escaped, placeholder]) => {
-      fixed = fixed.replace(new RegExp(escaped.replace(/\\/g, '\\\\'), 'g'), placeholder);
-    });
-
-    // 转义未转义的特殊字符
-    fixed = fixed.replace(/\n/g, '\\n');
-    fixed = fixed.replace(/\r/g, '\\r');
-    fixed = fixed.replace(/\t/g, '\\t');
-    fixed = fixed.replace(/\b/g, '\\b');
-    fixed = fixed.replace(/\f/g, '\\f');
-
-    // 还原受保护的字符
-    Object.entries(placeholders).forEach(([escaped, placeholder]) => {
-      fixed = fixed.replace(new RegExp(placeholder, 'g'), escaped);
-    });
-
-    return fixed;
-  }
-
-  /**
-   * 调试JSON解析错误
-   * @param {string} original - 原始内容
-   * @param {string} cleaned - 清理后的内容
-   * @param {string} fixed - 修复后的内容
-   * @param {Error} error - 解析错误
-   */
-  static debugParseError(original, cleaned, fixed, error) {
-    console.error('=== JSON解析错误调试信息 ===');
-    console.error('错误信息:', error.message);
-    
-    // 显示原始内容的前500字符
-    console.error('\n原始内容（前500字符）:');
-    console.error(original.substring(0, 500));
-    
-    // 显示清理后内容的前500字符
-    console.error('\n清理后内容（前500字符）:');
-    console.error(cleaned.substring(0, 500));
-    
-    // 尝试定位特殊字符
-    const specialChars = ['+', '\n', '\r', '\t', '"', "'", '\\', ';', '--', '#'];
-    specialChars.forEach(char => {
-      const pos = fixed.indexOf(char);
-      if (pos !== -1 && pos < 1000) { // 只显示前1000个字符内的
-        console.error(`\n发现特殊字符 '${char.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}' 位置: ${pos}`);
-        const start = Math.max(0, pos - 50);
-        const end = Math.min(fixed.length, pos + 50);
-        console.error('附近内容:', fixed.substring(start, end).replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t'));
-      }
-    });
-    
-    // 检查SQL注入相关模式
-    const sqlInjectionPatterns = [
-      /OR\s+['"]1['"]\s*=\s*['"]1['"]/gi,
-      /--/g,
-      /;.*(?:DROP|DELETE|UPDATE|INSERT)/gi,
-      /UNION.*SELECT/gi,
-      /'.*OR.*'/gi
-    ];
-    
-    console.error('\n检测到的可能SQL注入模式:');
-    sqlInjectionPatterns.forEach((pattern, index) => {
-      const matches = fixed.match(pattern);
-      if (matches && matches.length > 0) {
-        console.error(`  模式 ${index + 1}: 找到 ${matches.length} 个匹配`);
-        matches.slice(0, 3).forEach(match => {
-          console.error(`    - ${match.substring(0, 50)}`);
-        });
-      }
-    });
-    
-    console.error('\n=== 调试信息结束 ===');
   }
 
   /**
@@ -379,7 +229,9 @@ class JSONCleaner {
     try {
       return this.parse(content, options);
     } catch (error) {
-      console.error('JSON解析失败，返回默认值:', error.message);
+      if (options.verbose) {
+        console.error('JSON解析失败，返回默认值:', error.message);
+      }
       return defaultValue;
     }
   }
@@ -393,80 +245,45 @@ class JSONCleaner {
     const issues = [];
     
     // 检查括号匹配
-    const braceStack = [];
-    const bracketStack = [];
+    let braceCount = 0;
+    let bracketCount = 0;
     
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i];
-      
-      if (char === '{') braceStack.push(i);
-      else if (char === '}') {
-        if (braceStack.length === 0) {
-          issues.push({ type: 'unmatched_brace', position: i, message: '发现未匹配的右花括号' });
-        } else {
-          braceStack.pop();
-        }
-      } else if (char === '[') bracketStack.push(i);
-      else if (char === ']') {
-        if (bracketStack.length === 0) {
-          issues.push({ type: 'unmatched_bracket', position: i, message: '发现未匹配的右方括号' });
-        } else {
-          bracketStack.pop();
-        }
-      }
+    for (const char of content) {
+      if (char === '{') braceCount++;
+      else if (char === '}') braceCount--;
+      else if (char === '[') bracketCount++;
+      else if (char === ']') bracketCount--;
     }
     
-    if (braceStack.length > 0) {
-      issues.push({ type: 'unclosed_brace', positions: braceStack, message: '存在未闭合的左花括号' });
+    if (braceCount !== 0) {
+      issues.push({ 
+        type: 'unmatched_braces', 
+        message: `花括号不匹配: ${braceCount > 0 ? '缺少' : '多余'} ${Math.abs(braceCount)} 个` 
+      });
     }
     
-    if (bracketStack.length > 0) {
-      issues.push({ type: 'unclosed_bracket', positions: bracketStack, message: '存在未闭合的左方括号' });
+    if (bracketCount !== 0) {
+      issues.push({ 
+        type: 'unmatched_brackets', 
+        message: `方括号不匹配: ${bracketCount > 0 ? '缺少' : '多余'} ${Math.abs(bracketCount)} 个` 
+      });
     }
     
-    // 检查常见的SQL注入模式
-    const sqlPatterns = [
-      { pattern: /\bOR\b.*['"]\d+['"]\s*=\s*['"]\d+['"]/gi, message: 'SQL注入模式: OR 1=1' },
-      { pattern: /--.*$/gm, message: 'SQL注释符号' },
-      { pattern: /;.*(?:DROP|DELETE|UPDATE|INSERT)\b/gi, message: '危险SQL操作' }
-    ];
-    
-    sqlPatterns.forEach(({ pattern, message }) => {
-      const matches = content.match(pattern);
-      if (matches) {
-        issues.push({ type: 'sql_injection_pattern', count: matches.length, message });
-      }
-    });
+    // 尝试解析
+    try {
+      JSON.parse(content);
+    } catch (error) {
+      issues.push({ 
+        type: 'parse_error', 
+        message: `解析错误: ${error.message}` 
+      });
+    }
     
     return {
       valid: issues.length === 0,
       issues,
       summary: issues.length === 0 ? 'JSON结构完整' : `发现 ${issues.length} 个问题`
     };
-  }
-
-  /**
-   * 清理SQL注入示例中的危险字符
-   * @param {string} sqlExample - SQL示例字符串
-   * @returns {string} 清理后的SQL示例
-   */
-  static sanitizeSqlExample(sqlExample) {
-    // 将常见的SQL注入模式转换为占位符表示
-    let sanitized = sqlExample;
-    
-    // 1. OR '1'='1' -> OR {condition}
-    sanitized = sanitized.replace(/OR\s+['"]1['"]\s*=\s*['"]1['"]/gi, 'OR {always_true_condition}');
-    
-    // 2. ' OR 1=1-- -> {input} OR 1=1--
-    sanitized = sanitized.replace(/['"]\s*OR\s+\d+\s*=\s*\d+\s*--/gi, '{malicious_input}');
-    
-    // 3. UNION SELECT -> UNION SELECT {columns}
-    sanitized = sanitized.replace(/UNION\s+SELECT\s+\*/gi, 'UNION SELECT {columns}');
-    
-    // 4. ; DROP TABLE -> ; DROP TABLE {table}
-    sanitized = sanitized.replace(/;\s*DROP\s+TABLE\s+\w+/gi, '; DROP TABLE {table_name}');
-    
-    return sanitized;
   }
 }
 

@@ -65,11 +65,15 @@ class HistoryService {
     let databaseType = null;
     const result = analysisData.result;
     
-    // 优先从子代理分析结果中提取
-    if (result && result.subagentsData && result.subagentsData.data && result.subagentsData.data.databaseType) {
+    // 优先从data.databaseType提取（coordinator返回的标准位置）
+    if (result && result.data && result.data.databaseType) {
+      databaseType = result.data.databaseType;
+    }
+    // 其次从子代理分析结果中提取
+    else if (result && result.subagentsData && result.subagentsData.data && result.subagentsData.data.databaseType) {
       databaseType = result.subagentsData.data.databaseType;
     }
-    // 其次从传统分析结果中提取
+    // 再次从传统分析结果中提取
     else if (result && result.databaseType) {
       databaseType = result.databaseType;
     }

@@ -25,9 +25,7 @@ const config = {
   analyzerPath: 'sql-analyzer',
   // 本地备用命令路径（当全局命令不可用时）
   localAnalyzerPath: 'bun bin/cli.js',
-  // 数据库类型
-  databaseType: 'mysql',
-  // 分析维度
+  // 分析维度（数据库类型将由LLM自动推理，无需手动指定）
   analysisDimensions: ['performance', 'security', 'standards']
 };
 
@@ -76,7 +74,8 @@ function analyzeSqlFile(filePath) {
     }
     
     // 尝试使用全局安装的sql-analyzer命令，如果失败则回退到本地命令
-    let command = `${config.analyzerPath} analyze -f "${filePath}" -d ${config.databaseType}`;
+    // 注意: 数据库类型将由LLM自动推理，无需手动指定
+    let command = `${config.analyzerPath} analyze -f "${filePath}"`;
     let useLocalCommand = false;
     
     try {
@@ -84,7 +83,7 @@ function analyzeSqlFile(filePath) {
       execSync('which sql-analyzer', { stdio: 'ignore' });
     } catch (error) {
       // 全局命令不可用，使用本地命令
-      command = `${config.localAnalyzerPath} analyze -f "${filePath}" -d ${config.databaseType}`;
+      command = `${config.localAnalyzerPath} analyze -f "${filePath}"`;
       useLocalCommand = true;
       if (config.verbose) {
         console.log(chalk.yellow(`全局sql-analyzer命令不可用，使用本地命令`));
