@@ -544,7 +544,8 @@ class IntelligentRuleLearner extends BaseAnalyzer {
       
       return {
         success: true,
-        data: result
+        data: result,
+        databaseType: result.databaseType || databaseType || 'unknown'
       };
     } catch (error) {
       return this.handleError('规则检索', error);

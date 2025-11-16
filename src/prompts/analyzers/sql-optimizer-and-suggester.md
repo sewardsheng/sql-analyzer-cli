@@ -15,11 +15,23 @@
 6. 安全性改进
 7. 可读性和维护性改进
 
+## 数据库类型识别
+
+在开始优化分析前，请先基于SQL语法和特性识别数据库类型。支持的数据库类型包括：
+- mysql
+- postgresql
+- sqlserver
+- oracle
+- clickhouse
+- sqlite
+- generic（通用SQL，无法确定具体数据库）
+
 ## 输出格式
 
 请使用以下JSON格式返回结果:
 ```json
 {
+  "databaseType": "识别出的数据库类型",
   "overallScore": "整体评分(0-100)",
   "optimizationLevel": "优化等级(低/中/高)",
   "optimizationPotential": "优化潜力(低/中/高)",

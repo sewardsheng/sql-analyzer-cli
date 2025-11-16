@@ -54,7 +54,10 @@ ${contextInfo}`)
       
       return {
         success: true,
-        data: result
+        data: {
+          ...result,
+          databaseType: result.databaseType || databaseType || 'unknown'
+        }
       };
     } catch (error) {
       return this.handleError('SQL编码规范检查', error);

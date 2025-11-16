@@ -15,11 +15,23 @@
 6. 安全最佳实践
 7. 数据库特定规范
 
+## 数据库类型识别
+
+在开始编码规范检查前，请先基于SQL语法和特性识别数据库类型。支持的数据库类型包括：
+- mysql
+- postgresql
+- sqlserver
+- oracle
+- clickhouse
+- sqlite
+- generic（通用SQL，无法确定具体数据库）
+
 ## 输出格式
 
 请使用以下JSON格式返回结果:
 ```json
 {
+  "databaseType": "识别出的数据库类型",
   "standardsScore": "规范评分(0-100)",
   "complianceLevel": "合规等级(高/中/低)",
   "violations": [

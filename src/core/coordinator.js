@@ -10,7 +10,6 @@ import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
 import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
 import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
 import { createIntelligentRuleLearnerTool } from './analyzers/intelligentRuleLearner.js';
-import CacheManager from './cache.js';
 import ReportGenerator from './reporter.js';
 
 /**
@@ -22,67 +21,10 @@ class SqlAnalysisCoordinator {
     this.llm = null;
     this.initialized = false;
     this.tools = {};
-    this.cacheManager = new CacheManager(config);
     this.reportGenerator = new ReportGenerator();
   }
 
-  /**
-   * 基于规则快速检测数据库方言
-   * @param {string} sqlQuery - SQL查询语句
-   * @returns {string} 检测到的数据库类型
-   */
-  detectDatabaseType(sqlQuery) {
-    const dialectFeatures = {
-      mysql: [
-        /LIMIT\s+\d+/i,
-        /AUTO_INCREMENT/i,
-        /`[^`]+`/,
-        /UNSIGNED/i,
-        /CHARSET\s*=/i,
-        /ENGINE\s*=/i
-      ],
-      postgresql: [
-        /ILIKE/i,
-        /SERIAL/i,
-        /\$\$/,
-        /RETURNING/i,
-        /::/,
-        /ARRAY\[/i
-      ],
-      sqlserver: [
-        /TOP\s+\d+/i,
-        /IDENTITY/i,
-        /\[[^\]]+\]/,
-        /GETDATE\(\)/i,
-        /LEN\(/i,
-        /NVARCHAR/i
-      ],
-      oracle: [
-        /ROWNUM/i,
-        /SEQUENCE/i,
-        /DUAL/i,
-        /SYSDATE/i,
-        /NVL\(/i,
-        /VARCHAR2/i
-      ]
-    };
-    
-    const scores = {};
-    for (const [dialect, patterns] of Object.entries(dialectFeatures)) {
-      scores[dialect] = patterns.filter(pattern => pattern.test(sqlQuery)).length;
-    }
-    
-    const maxScore = Math.max(...Object.values(scores));
-    if (maxScore >= 2) {
-      const detected = Object.entries(scores)
-        .filter(([_, score]) => score === maxScore)
-        .map(([dialect, _]) => dialect);
-      
-      return detected[0];
-    }
-    
-    return 'generic';
-  }
+
 
   /**
    * 初始化协调器和所有分析器
@@ -127,44 +69,12 @@ class SqlAnalysisCoordinator {
     
     await this.initialize();
     
-    const { sqlQuery, databaseType: providedDatabaseType, options = {} } = input;
+    const { sqlQuery, options = {} } = input;
     
-    // 检查内存缓存
-    const cacheKey = this.cacheManager.generateKey(
-      sqlQuery,
-      providedDatabaseType || 'auto',
-      options
-    );
-    const cachedResult = this.cacheManager.get(cacheKey);
+    // 数据库类型将由分析器通过大模型识别
+    let databaseType = 'unknown'; // 初始值，将由分析器更新
     
-    if (cachedResult) {
-      console.log("✨ 使用内存缓存的分析结果");
-      console.log(`   缓存时间: ${new Date(cachedResult.timestamp).toLocaleString('zh-CN')}`);
-      console.log('='.repeat(60));
-      
-      // 打印缓存结果摘要
-      if (cachedResult.result.data && cachedResult.result.data.analysisResults) {
-        this.reportGenerator.printSummary(cachedResult.result.data.analysisResults);
-      }
-      
-      // 计算并显示分析用时（缓存情况）
-      const analysisEndTime = Date.now();
-      const analysisDuration = (analysisEndTime - analysisStartTime) / 1000; // 转换为秒
-      console.log(`⏱️  本次分析用时: ${analysisDuration.toFixed(2)} 秒（使用缓存）\n`);
-      console.log('='.repeat(60));
-      
-      return cachedResult.result;
-    }
-    
-    // 如果没有提供数据库类型，则自动检测
-    let databaseType = providedDatabaseType;
-    if (!databaseType) {
-      console.log("⚡ 正在快速检测数据库类型...");
-      databaseType = this.detectDatabaseType(sqlQuery);
-      console.log(`✅ 检测到数据库类型: ${databaseType}`);
-    } else {
-      console.log(`📌 使用指定的数据库类型: ${databaseType}`);
-    }
+    console.log(`\n🔍 数据库类型将由大模型识别...\n`);
     
     console.log("\n🚀 开始并行执行分析流程...\n");
     console.log('='.repeat(60));
@@ -213,6 +123,13 @@ class SqlAnalysisCoordinator {
     // 等待所有并行任务完成
     console.log("\n⏳ 等待所有分析任务完成...\n");
     const initialResults = await Promise.all(parallelTasks);
+    
+    // 从性能分析结果中提取数据库类型
+    const performanceResult = initialResults.find(r => r.type === 'performance');
+    if (performanceResult && performanceResult.result.databaseType) {
+      databaseType = performanceResult.result.databaseType;
+      console.log(`\n🔍 识别到数据库类型: ${databaseType}\n`);
+    }
     
     // 继续执行优化建议和规则学习（这些依赖前面的分析结果）
     console.log("\n💡 步骤4: 生成优化建议...");
@@ -305,6 +222,7 @@ class SqlAnalysisCoordinator {
     // 构建结果对象
     const result = {
       success: true,
+      databaseType: databaseType, // 添加数据库类型到顶层
       data: {
         originalQuery: sqlQuery,
         normalizedQuery: sqlQuery,
@@ -321,17 +239,7 @@ class SqlAnalysisCoordinator {
       }
     };
     
-    // 设置缓存
-    this.cacheManager.set(cacheKey, result);
-    
     return result;
-  }
-
-  /**
-   * 清除缓存
-   */
-  clearCache() {
-    this.cacheManager.clear();
   }
 }
 
@@ -342,11 +250,6 @@ class SqlAnalysisCoordinator {
  */
 export function createCoordinator(config = {}) {
   return new SqlAnalysisCoordinator(config);
-}
-
-// 保持向后兼容
-export function createSubagentsCoordinator(config = {}) {
-  return createCoordinator(config);
 }
 
 export default SqlAnalysisCoordinator;

@@ -2,9 +2,64 @@
  * JSON清理和解析工具类
  * 用于处理LLM返回的可能包含非标准格式的JSON内容
  */
+import bestEffortJsonParser from 'best-effort-json-parser';
+
 class JSONCleaner {
   /**
-   * 从响应中提取JSON内容
+   * 预处理SQL特殊字符和可能导致JSON解析失败的模式
+   * @param {string} content - 原始内容
+   * @returns {string} 预处理后的内容
+   */
+  static preprocessSpecialPatterns(content) {
+    let processed = content;
+    
+    // 处理常见的SQL注入模式，确保它们在JSON字符串中正确转义
+    // 这些模式经常在恶意SQL中出现
+    const sqlInjectionPatterns = [
+      { pattern: /OR\s+'1'\s*=\s*'1'/gi, placeholder: 'OR_1_EQUALS_1' },
+      { pattern: /OR\s+1\s*=\s*1/gi, placeholder: 'OR_1_EQ_1' },
+      { pattern: /UNION\s+SELECT/gi, placeholder: 'UNION_SELECT' },
+      { pattern: /--\s*$/gm, placeholder: 'SQL_COMMENT' }
+    ];
+    
+    // 暂时替换这些模式以避免解析问题
+    const replacements = [];
+    sqlInjectionPatterns.forEach(({ pattern, placeholder }) => {
+      const matches = processed.match(pattern);
+      if (matches) {
+        matches.forEach(match => {
+          replacements.push({ placeholder, original: match });
+        });
+        processed = processed.replace(pattern, `__${placeholder}__`);
+      }
+    });
+    
+    // 处理文件路径中的特殊字符（如 @/test_mongodb.sql）
+    // 在JSON字符串值中，@ 本身不需要转义，但需要确保路径作为完整字符串处理
+    processed = processed.replace(/(@[\w/.-]+\.sql)/gi, (match) => {
+      // 确保路径被正确引用
+      return match;
+    });
+    
+    return { processed, replacements };
+  }
+  
+  /**
+   * 恢复预处理时替换的SQL模式
+   * @param {string} content - 处理后的内容
+   * @param {Array} replacements - 替换记录
+   * @returns {string} 恢复后的内容
+   */
+  static restoreSpecialPatterns(content, replacements) {
+    let restored = content;
+    replacements.forEach(({ placeholder, original }) => {
+      restored = restored.replace(new RegExp(`__${placeholder}__`, 'g'), original);
+    });
+    return restored;
+  }
+
+  /**
+   * 从响应中提取JSON内容（增强版，修复未闭合引号）
    * @param {string} content - LLM响应内容
    * @returns {string} 清理后的JSON字符串
    */
@@ -32,7 +87,10 @@ class JSONCleaner {
       cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
     }
 
-    // 5. 基本修复
+    // 5. 修复未闭合的引号（关键改进）
+    cleaned = this.fixUnclosedQuotes(cleaned);
+
+    // 6. 基本修复
     cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');  // 移除尾随逗号
     cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)(\s*:)/g, '$1"$2"$3');  // 为属性名添加引号
 
@@ -40,155 +98,56 @@ class JSONCleaner {
   }
 
   /**
-   * 修复字符串中的特殊字符
+   * 修复未闭合的引号
    * @param {string} content - JSON字符串
    * @returns {string} 修复后的JSON字符串
    */
-  static fixStringContent(content) {
-    let result = '';
+  static fixUnclosedQuotes(content) {
+    // 检查引号是否配对
     let inString = false;
-    let stringDelimiter = null;
-    let i = 0;
-
-    while (i < content.length) {
+    let quoteChar = null;
+    let lastQuoteIndex = -1;
+    
+    for (let i = 0; i < content.length; i++) {
       const char = content[i];
-      const nextChar = i < content.length - 1 ? content[i + 1] : '';
       const prevChar = i > 0 ? content[i - 1] : '';
-
-      // 处理字符串边界
+      
+      // 跳过转义的引号
       if ((char === '"' || char === "'") && prevChar !== '\\') {
         if (!inString) {
-          // 开始字符串
           inString = true;
-          stringDelimiter = char;
-          result += '"';  // 统一使用双引号
-        } else if (char === stringDelimiter) {
-          // 结束字符串
+          quoteChar = char;
+          lastQuoteIndex = i;
+        } else if (char === quoteChar) {
           inString = false;
-          stringDelimiter = null;
-          result += '"';
-        } else {
-          // 字符串内部的其他类型引号，需要转义
-          result += '\\' + char;
+          quoteChar = null;
         }
-        i++;
-        continue;
-      }
-
-      // 在字符串内部处理特殊字符
-      if (inString) {
-        // 处理反斜杠
-        if (char === '\\') {
-          const validEscapes = ['n', 'r', 't', 'b', 'f', '"', "'", '\\', '/', 'u'];
-          
-          if (validEscapes.includes(nextChar)) {
-            // 有效的转义序列
-            if (nextChar === 'u') {
-              // Unicode转义序列
-              const hexPart = content.substring(i + 2, i + 6);
-              if (/^[0-9a-fA-F]{4}$/.test(hexPart)) {
-                result += '\\u' + hexPart;
-                i += 6;
-                continue;
-              } else {
-                // Unicode转义序列不完整，转义反斜杠
-                result += '\\\\';
-                i++;
-                continue;
-              }
-            }
-            // 统一处理引号转义
-            if (nextChar === '"') {
-              result += '\\"';
-            } else if (nextChar === "'") {
-              result += "\\'";
-            } else {
-              result += '\\' + nextChar;
-            }
-            i += 2;
-          } else if (nextChar === '') {
-            // 反斜杠在末尾，转义它
-            result += '\\\\';
-            i++;
-          } else {
-            // 无效的转义序列，移除反斜杠或转义它
-            // 检查下一个字符是否是特殊字符
-            if (/[{}[\]:,]/.test(nextChar)) {
-              // 如果下一个字符是JSON结构字符，移除反斜杠
-              result += nextChar;
-              i += 2;
-            } else {
-              // 否则转义反斜杠本身
-              result += '\\\\';
-              i++;
-            }
-          }
-        }
-        // 处理控制字符
-        else if (char === '\n') {
-          result += '\\n';
-          i++;
-        } else if (char === '\r') {
-          result += '\\r';
-          i++;
-        } else if (char === '\t') {
-          result += '\\t';
-          i++;
-        } else {
-          result += char;
-          i++;
-        }
-      } else {
-        result += char;
-        i++;
       }
     }
-
-    // 如果字符串未闭合，添加闭合引号
-    if (inString) {
-      result += '"';
+    
+    // 如果有未闭合的引号，在适当位置添加闭合引号
+    if (inString && lastQuoteIndex !== -1) {
+      // 查找下一个换行符或结束大括号的位置
+      let closeIndex = content.length;
+      
+      // 从最后一个引号开始搜索
+      for (let i = lastQuoteIndex + 1; i < content.length; i++) {
+        if (content[i] === '\n' || content[i] === '}' || content[i] === ',') {
+          closeIndex = i;
+          break;
+        }
+      }
+      
+      // 在该位置插入闭合引号
+      content = content.substring(0, closeIndex) + '"' + content.substring(closeIndex);
     }
-
-    return result;
+    
+    return content;
   }
 
-  /**
-   * 修复常见的JSON格式问题
-   * @param {string} content - JSON字符串
-   * @returns {string} 修复后的JSON字符串
-   */
-  static fixCommonIssues(content) {
-    let fixed = content;
-
-    // 1. 先修复字符串内容（处理引号和特殊字符）
-    fixed = this.fixStringContent(fixed);
-
-    // 2. 修复Python布尔值和None
-    fixed = fixed.replace(/:\s*True\b/g, ': true');
-    fixed = fixed.replace(/:\s*False\b/g, ': false');
-    fixed = fixed.replace(/:\s*None\b/g, ': null');
-
-    // 3. 修复未闭合的括号
-    const openBraces = (fixed.match(/\{/g) || []).length;
-    const closeBraces = (fixed.match(/\}/g) || []).length;
-    if (openBraces > closeBraces) {
-      fixed += '}'.repeat(openBraces - closeBraces);
-    }
-
-    const openBrackets = (fixed.match(/\[/g) || []).length;
-    const closeBrackets = (fixed.match(/\]/g) || []).length;
-    if (openBrackets > closeBrackets) {
-      fixed += ']'.repeat(openBrackets - closeBrackets);
-    }
-
-    // 4. 修复缺少值的键
-    fixed = fixed.replace(/"([^"]+)":\s*([,}\]])/g, '"$1":null$2');
-
-    return fixed;
-  }
 
   /**
-   * 尝试解析JSON，如果失败则尝试修复
+   * 尝试解析JSON（重构简化版，使用best-effort-json-parser）
    * @param {string} content - JSON字符串
    * @param {Object} options - 解析选项
    * @param {boolean} options.verbose - 是否输出详细的调试信息
@@ -198,61 +157,51 @@ class JSONCleaner {
   static parse(content, options = {}) {
     const { verbose = false } = options;
     
-    // 第一次尝试：直接解析
+    // 策略1: 直接使用标准JSON解析（最快，适用于标准JSON）
     try {
       return JSON.parse(content);
     } catch (error) {
-      if (verbose) {
-        console.warn('直接解析失败，尝试提取和清理JSON内容');
-      }
+      if (verbose) console.warn('标准解析失败，尝试提取清理...');
     }
 
-    // 第二次尝试：提取并清理后解析
+    // 策略2: 提取并清理后使用标准解析（处理代码块、注释等）
     try {
       const extracted = this.extractJSON(content);
       return JSON.parse(extracted);
     } catch (error) {
-      if (verbose) {
-        console.warn('提取后解析失败，尝试修复常见问题');
-      }
+      if (verbose) console.warn('清理后解析失败，使用 best-effort-json-parser...');
     }
 
-    // 第三次尝试：修复常见问题后解析
+    // 策略3: 使用best-effort-json-parser处理提取后的内容（专为LLM设计）
     try {
       const extracted = this.extractJSON(content);
-      const fixed = this.fixCommonIssues(extracted);
-      return JSON.parse(fixed);
-    } catch (error) {
-      if (verbose) {
-        console.error('第三次尝试失败，尝试激进修复');
-      }
-    }
-
-    // 第四次尝试：激进修复 - 移除所有无效转义
-    try {
-      const extracted = this.extractJSON(content);
-      const fixed = this.fixCommonIssues(extracted);
-      // 激进策略：将所有反斜杠替换为双反斜杠，然后再解析
-      const aggressive = fixed.replace(/\\/g, '\\\\').replace(/\\\\\"/g, '\\"').replace(/\\\\\'/g, "\\'");
-      return JSON.parse(aggressive);
-    } catch (error) {
-      if (verbose) {
-        console.error('所有解析尝试均失败');
-        console.error('错误信息:', error.message);
-        console.error('原始内容（前500字符）:', content.substring(0, 500));
-        
-        // 显示修复后的内容（用于调试）
-        try {
-          const extracted = this.extractJSON(content);
-          const fixed = this.fixCommonIssues(extracted);
-          console.error('修复后内容（前500字符）:', fixed.substring(0, 500));
-        } catch (e) {
-          // 忽略
-        }
-      }
+      const result = bestEffortJsonParser(extracted);
       
-      throw new Error(`无法解析JSON内容: ${error.message}`);
+      if (result && typeof result === 'object') {
+        if (verbose) console.log('✓ best-effort-json-parser 成功解析（提取后）');
+        return result;
+      }
+    } catch (error) {
+      if (verbose) console.warn('提取后 best-effort 解析失败，尝试原始内容...');
     }
+
+    // 策略4: 直接对原始内容使用best-effort-json-parser（最后的保险）
+    try {
+      const result = bestEffortJsonParser(content);
+      
+      if (result && typeof result === 'object') {
+        if (verbose) console.log('✓ best-effort-json-parser 成功解析（原始内容）');
+        return result;
+      }
+    } catch (error) {
+      if (verbose) {
+        console.error('所有解析策略均失败');
+        console.error('错误:', error.message);
+        console.error('内容片段:', content.substring(0, 200));
+      }
+    }
+    
+    throw new Error(`无法解析JSON内容：所有策略失败`);
   }
 
   /**

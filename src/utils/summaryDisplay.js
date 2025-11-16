@@ -1,128 +1,77 @@
-/**
- * 分析结果摘要显示工具
- * 提供风险等级计算和颜色编码显示功能
- */
-
 import chalk from 'chalk';
 
-/**
- * 检测是否在CI环境中
- * @returns {boolean}
- */
-export function isCI() {
-  return !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_HOME);
-}
-
-/**
- * 风险等级枚举
- */
-export const RISK_LEVELS = {
-  SAFE: 'safe',
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical'
-};
-
-/**
- * 风险等级中文映射
- */
+// 风险等级定义
 const RISK_LEVEL_CN = {
-  [RISK_LEVELS.SAFE]: '安全',
-  [RISK_LEVELS.LOW]: '低风险',
-  [RISK_LEVELS.MEDIUM]: '中等风险',
-  [RISK_LEVELS.HIGH]: '高风险',
-  [RISK_LEVELS.CRITICAL]: '严重风险'
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '严重'
 };
 
-/**
- * 风险等级图标映射
- */
 const RISK_LEVEL_ICONS = {
-  [RISK_LEVELS.SAFE]: '✅',
-  [RISK_LEVELS.LOW]: '🟢',
-  [RISK_LEVELS.MEDIUM]: '🟡',
-  [RISK_LEVELS.HIGH]: '🔴',
-  [RISK_LEVELS.CRITICAL]: '🚨'
+  low: '🟢',
+  medium: '🟡',
+  high: '🟠',
+  critical: '🔴'
 };
-
-/**
- * 获取风险等级对应的颜色函数
- * @param {string} riskLevel - 风险等级
- * @returns {Function} chalk颜色函数
- */
-export function getRiskColor(riskLevel) {
-  const ci = isCI();
-  
-  if (ci) {
-    // CI环境中禁用颜色
-    return (text) => text;
-  }
-  
-  switch (riskLevel) {
-    case RISK_LEVELS.SAFE:
-      return chalk.green;
-    case RISK_LEVELS.LOW:
-      return chalk.blue;
-    case RISK_LEVELS.MEDIUM:
-      return chalk.yellow;
-    case RISK_LEVELS.HIGH:
-      return chalk.red;
-    case RISK_LEVELS.CRITICAL:
-      return chalk.red.bold;
-    default:
-      return chalk.gray;
-  }
-}
 
 /**
  * 计算整体风险等级
  * @param {Object} result - 分析结果
  * @returns {string} 风险等级
  */
-export function calculateOverallRisk(result) {
-  if (!result.success || !result.data) {
-    return RISK_LEVELS.MEDIUM;
+function calculateOverallRisk(result) {
+  if (!result.success || !result.data) return 'low';
+  
+  const { analysisResults } = result.data;
+  let riskScore = 0;
+  
+  // 检查安全评分
+  if (analysisResults?.securityAudit?.success) {
+    const secScore = analysisResults.securityAudit.data.securityScore;
+    if (secScore < 50) riskScore += 3;
+    else if (secScore < 70) riskScore += 2;
+    else if (secScore < 85) riskScore += 1;
   }
   
-  const { report, analysisResults } = result.data;
+  // 检查性能评分
+  if (analysisResults?.performanceAnalysis?.success) {
+    const perfScore = analysisResults.performanceAnalysis.data.performanceScore;
+    if (perfScore < 50) riskScore += 2;
+    else if (perfScore < 70) riskScore += 1;
+  }
+  
+  // 检查规范评分
+  if (analysisResults?.standardsCheck?.success) {
+    const stdScore = analysisResults.standardsCheck.data.standardsScore;
+    if (stdScore < 50) riskScore += 1;
+  }
   
   // 检查安全一票否决
-  if (report?.securityVeto) {
-    return RISK_LEVELS.CRITICAL;
+  if (result.data?.report?.securityVeto) {
+    return 'critical';
   }
   
-  // 检查安全审计结果
-  if (analysisResults?.securityAudit?.success) {
-    const securityData = analysisResults.securityAudit.data;
-    const riskLevel = securityData.riskLevel?.toLowerCase();
-    
-    if (riskLevel === '严重' || riskLevel === 'critical') {
-      return RISK_LEVELS.CRITICAL;
-    }
-    if (riskLevel === '高' || riskLevel === 'high') {
-      return RISK_LEVELS.HIGH;
-    }
-    
-    // 根据安全评分判断
-    const securityScore = securityData.securityScore;
-    if (typeof securityScore === 'number') {
-      if (securityScore < 40) return RISK_LEVELS.CRITICAL;
-      if (securityScore < 60) return RISK_LEVELS.HIGH;
-    }
+  // 根据总分确定风险等级
+  if (riskScore >= 5) return 'critical';
+  if (riskScore >= 3) return 'high';
+  if (riskScore >= 1) return 'medium';
+  return 'low';
+}
+
+/**
+ * 获取风险等级对应的颜色
+ * @param {string} riskLevel - 风险等级
+ * @returns {Function} chalk颜色函数
+ */
+function getRiskColor(riskLevel) {
+  switch (riskLevel) {
+    case 'critical': return chalk.red.bold;
+    case 'high': return chalk.red;
+    case 'medium': return chalk.yellow;
+    case 'low': return chalk.green;
+    default: return chalk.gray;
   }
-  
-  // 根据总体评分判断
-  const overallScore = report?.overallAssessment?.score;
-  if (typeof overallScore === 'number') {
-    if (overallScore >= 85) return RISK_LEVELS.SAFE;
-    if (overallScore >= 70) return RISK_LEVELS.LOW;
-    if (overallScore >= 50) return RISK_LEVELS.MEDIUM;
-    if (overallScore >= 30) return RISK_LEVELS.HIGH;
-    return RISK_LEVELS.CRITICAL;
-  }
-  
-  return RISK_LEVELS.MEDIUM;
 }
 
 /**
@@ -133,9 +82,8 @@ export function displayKeyMetrics(result) {
   if (!result.success || !result.data) return;
   
   const { report, analysisResults } = result.data;
-  const ci = isCI();
   
-  console.log(chalk.blue.bold('\n📊 关键指标:'));
+  console.log(chalk.blue.bold('\n📊 数据统计:'));
   console.log('─'.repeat(60));
   
   // 总体评分
@@ -144,7 +92,7 @@ export function displayKeyMetrics(result) {
     const scoreColor = overallScore >= 70 ? chalk.green : 
                        overallScore >= 50 ? chalk.yellow : 
                        chalk.red;
-    console.log(`   总体评分: ${ci ? overallScore : scoreColor(overallScore)}/100`);
+    console.log(`   总体评分: ${scoreColor(overallScore)}/100`);
   }
   
   // 性能指标
@@ -168,7 +116,7 @@ export function displayKeyMetrics(result) {
       const secColor = secScore >= 70 ? chalk.green : 
                        secScore >= 50 ? chalk.yellow : 
                        chalk.red;
-      console.log(`   安全评分: ${ci ? secScore : secColor(secScore)}/100 (风险: ${secData.riskLevel || '未知'})`);
+      console.log(`   安全评分: ${secColor(secScore)}/100 (风险: ${secData.riskLevel || '未知'})`);
     }
     const vulnerabilities = secData.vulnerabilities?.length || 0;
     if (vulnerabilities > 0) {
@@ -211,8 +159,6 @@ export function displayKeyMetrics(result) {
  * @param {Object} config - 配置选项
  */
 export function displayEnhancedSummary(result, config = {}) {
-  const ci = isCI();
-  
   console.log(chalk.green.bold('\n✓ 分析完成!'));
   console.log('\n' + '='.repeat(60));
   
@@ -252,35 +198,6 @@ export function displayEnhancedSummary(result, config = {}) {
     console.log('─'.repeat(60));
   }
   
-  // CI模式输出机器可读格式
-  if (ci) {
-    console.log('\n# CI 输出');
-    console.log(`::set-output name=risk_level::${riskLevel}`);
-    console.log(`::set-output name=overall_score::${result.data?.report?.overallAssessment?.score || 0}`);
-    console.log(`::set-output name=security_veto::${result.data?.report?.securityVeto || false}`);
-  }
-  
   console.log('\n' + '='.repeat(60));
   console.log(chalk.gray('\n详细分析结果请查看上方输出。'));
-}
-
-/**
- * 格式化建议列表
- * @param {Array} recommendations - 建议列表
- * @param {number} maxCount - 最大显示数量
- */
-export function formatRecommendations(recommendations, maxCount = 5) {
-  if (!recommendations || recommendations.length === 0) {
-    console.log(chalk.gray('   无'));
-    return;
-  }
-  
-  const displayed = recommendations.slice(0, maxCount);
-  displayed.forEach((rec, index) => {
-    console.log(`   ${index + 1}. ${rec}`);
-  });
-  
-  if (recommendations.length > maxCount) {
-    console.log(chalk.gray(`   ... 还有 ${recommendations.length - maxCount} 条建议`));
-  }
 }

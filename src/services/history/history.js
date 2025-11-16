@@ -259,7 +259,10 @@ function getDatabaseLabel(db) {
     'oracle': 'Oracle',
     'sqlserver': 'SQL Server',
     'clickhouse': 'ClickHouse',
-    'generic': '通用'
+    'generic': '通用',
+    'sqlite': 'SQLite',
+    'mongodb': 'MongoDB',
+    'redis': 'Redis'
   };
   return labels[db] || db || '未知';
 }

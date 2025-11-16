@@ -6,6 +6,17 @@
 
 你的任务是分析给定的SQL查询,识别潜在的性能问题,并提供具体的优化建议。
 
+## 数据库类型识别
+
+在分析性能之前,请首先识别SQL查询的数据库类型。基于SQL语法、函数和特性判断数据库类型,支持以下类型:
+- mysql: MySQL数据库
+- postgresql: PostgreSQL数据库
+- sqlserver: SQL Server数据库
+- oracle: Oracle数据库
+- clickhouse: ClickHouse数据库
+- sqlite: SQLite数据库
+- generic: 通用SQL(无法确定具体类型)
+
 请关注以下性能方面:
 1. 查询执行计划分析
 2. 索引使用情况
@@ -20,6 +31,7 @@
 请使用以下JSON格式返回结果:
 ```json
 {
+  "databaseType": "识别出的数据库类型",
   "performanceScore": "性能评分(0-100)",
   "complexityLevel": "复杂度(低/中/高)",
   "estimatedExecutionTime": "预估执行时间",

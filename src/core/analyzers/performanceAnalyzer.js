@@ -55,7 +55,8 @@ ${contextInfo}`)
       
       return {
         success: true,
-        data: result
+        data: result,
+        databaseType: result.databaseType || 'unknown' // 提取数据库类型
       };
     } catch (error) {
       return this.handleError('SQL性能分析', error);

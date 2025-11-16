@@ -109,6 +109,8 @@ ${contextInfo}`)
       const response = await this.getLLM().invoke(messages);
       const result = JSONCleaner.parse(response.content);
       
+      const { data, ...restResult } = result;
+      
       // 如果生成了优化建议,自动生成优化后的SQL
       let optimizedSqlData = null;
       if (result.queryRewrites && result.queryRewrites.length > 0) {
@@ -146,9 +148,10 @@ ${contextInfo}`)
       return {
         success: true,
         data: {
-          ...result,
+          ...data,
           optimizedSqlData
-        }
+        },
+        databaseType: result.databaseType || databaseType || 'unknown'
       };
     } catch (error) {
       return this.handleError('SQL优化建议生成', error);
