@@ -16,6 +16,7 @@ function register(program) {
     .option('-s, --sql <sql>', '要分析的SQL语句')
     .option('-f, --file <file>', '包含SQL语句的文件路径')
     .option('--quick', '快速分析模式，只进行基础检查，不进行深度分析和学习')
+    .option('--cicd-mode', 'CI/CD模式，启用评分阈值检查和JSON输出')
     .option('--no-learn', '禁用学习功能')
     .option('--no-performance', '禁用性能分析')
     .option('--no-security', '禁用安全审计')

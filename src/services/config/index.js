@@ -17,7 +17,20 @@ export const DEFAULT_CONFIG = {
   // 摘要显示配置
   enableAISummary: !process.env.CI,  // CI环境中禁用AI摘要
   enableColors: !process.env.CI,     // CI环境中可选禁用颜色
-  summaryOutputFormat: process.env.CI ? 'structured' : 'pretty'
+  summaryOutputFormat: process.env.CI ? 'structured' : 'pretty',
+  // CI/CD 快速模式配置
+  cicd: {
+    quickMode: true,
+    scoreThreshold: 70,        // 低于此分数阻止提交
+    blockOnCritical: true,     // 发现严重问题立即阻止
+    allowedSkipPatterns: ['test_', 'dev_'],  // 允许跳过的文件模式
+    enableJsonOutput: true,    // 启用JSON输出格式
+    quickModeWeights: {
+      security: 0.50,          // 安全权重50%
+      performance: 0.30,       // 性能权重30%
+      standards: 0.20          // 规范权重20%
+    }
+  }
 };
 
 // 配置键映射 (内部键名 -> 环境变量名)
@@ -32,7 +45,12 @@ const CONFIG_MAP = {
   apiCorsOrigin: 'API_CORS_ORIGIN',
   enableAISummary: 'ENABLE_AI_SUMMARY',
   enableColors: 'ENABLE_COLORS',
-  summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT'
+  summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT',
+  // CI/CD 配置
+  'cicd.quickMode': 'CICD_QUICK_MODE',
+  'cicd.scoreThreshold': 'CICD_SCORE_THRESHOLD',
+  'cicd.blockOnCritical': 'CICD_BLOCK_ON_CRITICAL',
+  'cicd.enableJsonOutput': 'CICD_ENABLE_JSON_OUTPUT'
 };
 
 // 配置键描述
@@ -47,7 +65,11 @@ const CONFIG_DESC = {
   apiCorsOrigin: 'CORS允许的源',
   enableAISummary: '是否启用AI摘要',
   enableColors: '是否启用颜色输出',
-  summaryOutputFormat: '摘要输出格式'
+  summaryOutputFormat: '摘要输出格式',
+  'cicd.quickMode': 'CI/CD快速模式',
+  'cicd.scoreThreshold': 'CI/CD评分阈值',
+  'cicd.blockOnCritical': 'CI/CD严重问题阻止',
+  'cicd.enableJsonOutput': 'CI/CD启用JSON输出'
 };
 
 /**
@@ -124,9 +146,25 @@ class ConfigManager {
           if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
         } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
           config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
+        } else if (key.startsWith('cicd.')) {
+          // 处理CI/CD嵌套配置
+          const cicdKey = key.substring(5); // 移除 'cicd.' 前缀
+          if (!config.cicd) config.cicd = { ...DEFAULT_CONFIG.cicd };
+          
+          if (cicdKey === 'scoreThreshold') {
+            config.cicd[cicdKey] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG.cicd[cicdKey];
+            if (isNaN(config.cicd[cicdKey])) config.cicd[cicdKey] = DEFAULT_CONFIG.cicd[cicdKey];
+          } else if (cicdKey === 'quickMode' || cicdKey === 'blockOnCritical' || cicdKey === 'enableJsonOutput') {
+            config.cicd[cicdKey] = envValue ? envValue === 'true' : DEFAULT_CONFIG.cicd[cicdKey];
+          }
         } else {
           config[key] = envValue || DEFAULT_CONFIG[key];
         }
+      }
+      
+      // 确保CI/CD配置完整
+      if (!config.cicd) {
+        config.cicd = { ...DEFAULT_CONFIG.cicd };
       }
       
       return config;

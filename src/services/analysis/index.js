@@ -97,15 +97,39 @@ class AnalysisService {
       console.log('='.repeat(60));
       console.log(chalk.gray('调用协调器进行快速分析...'));
       
+      // 获取配置管理器
+      const configManager = this.configManager;
+      const config = await configManager.getConfig();
+      
+      // 如果是CI/CD模式，设置环境变量
+      if (analysisOptions.cicdMode) {
+        process.env.CICD_MODE = 'true';
+        if (config.cicd?.enableJsonOutput) {
+          process.env.CI = 'true'; // 触发JSON输出
+        }
+      }
+      
       const result = await coordinator.quickAnalysis({
         sqlQuery,
-        options: analysisOptions
+        options: {
+          ...analysisOptions,
+          cicd: config.cicd
+        }
       });
       
       console.log('='.repeat(60));
       
       if (!result.success) {
         throw new Error(result.error);
+      }
+      
+      // CI/CD模式：如果检查失败，设置退出码
+      if (analysisOptions.cicdMode && result.data?.analysisResults?.quickAnalysis?.data?.cicdMetadata) {
+        const metadata = result.data.analysisResults.quickAnalysis.data.cicdMetadata;
+        if (!metadata.passed) {
+          console.error(chalk.red(`\n❌ CI/CD检查失败: 评分 ${metadata.scoreThreshold ? result.data.analysisResults.quickAnalysis.data.quickScore + '/' + metadata.scoreThreshold : '不足'}`));
+          process.exitCode = 1;
+        }
       }
       
       return result;

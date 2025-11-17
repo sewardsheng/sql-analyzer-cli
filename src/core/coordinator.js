@@ -83,7 +83,10 @@ class SqlAnalysisCoordinator {
       // 执行快速分析
       console.log("🔍 执行快速基础分析...");
       const quickResult = await this.tools.quickAnalyzer.func({
-        sqlQuery
+        sqlQuery,
+        options: {
+          cicd: this.config.cicd
+        }
       });
       
       if (!quickResult.success) {

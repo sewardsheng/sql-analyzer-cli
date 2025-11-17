@@ -671,6 +671,15 @@ function displayQuickSummary(result) {
     return;
   }
   
+  // 检查是否为CI/CD模式
+  const isCICDMode = process.env.CI || process.env.CICD_MODE || quickData.cicdMetadata;
+  
+  if (isCICDMode && quickData.cicdMetadata?.enableJsonOutput) {
+    // CI/CD模式：输出JSON格式
+    displayCICDJsonResult(quickData);
+    return;
+  }
+  
   // 显示快速评分
   const quickScore = quickData.quickScore || 0;
   const scoreColor = quickScore >= 70 ? chalk.green :
@@ -679,6 +688,19 @@ function displayQuickSummary(result) {
   
   console.log(scoreColor.bold(`\n⚡ 快速评分: ${quickScore}/100`));
   console.log(chalk.blue(`🗄️  数据库类型: ${quickData.databaseType || '未知'}`));
+  
+  // 显示CI/CD元数据
+  if (quickData.cicdMetadata) {
+    const metadata = quickData.cicdMetadata;
+    const statusColor = metadata.passed ? chalk.green : chalk.red;
+    const statusText = metadata.passed ? '通过' : '失败';
+    console.log(statusColor.bold(`🚦 CI/CD检查状态: ${statusText}`));
+    console.log(chalk.gray(`📊 评分阈值: ${metadata.scoreThreshold}/100`));
+    
+    if (metadata.hasBlocking) {
+      console.log(chalk.red.bold(`🚫 发现阻塞性问题`));
+    }
+  }
   
   // 显示关键问题
   if (quickData.criticalIssues && quickData.criticalIssues.length > 0) {
@@ -706,4 +728,30 @@ function displayQuickSummary(result) {
   }
   
   console.log(chalk.gray('\n快速分析完成。如需详细分析，请使用完整模式。'));
+}
+
+/**
+ * 显示CI/CD友好的JSON结果
+ * @param {Object} quickData - 快速分析数据
+ */
+function displayCICDJsonResult(quickData) {
+  const metadata = quickData.cicdMetadata || {};
+  const result = {
+    status: metadata.passed ? 'pass' : 'fail',
+    score: quickData.quickScore || 0,
+    scoreThreshold: metadata.scoreThreshold || 70,
+    criticalIssues: quickData.criticalIssues || [],
+    summary: metadata.passed ? 'SQL检查通过' : 'SQL检查未通过',
+    databaseType: quickData.databaseType || 'unknown',
+    hasBlocking: metadata.hasBlocking || false,
+    ciMetadata: {
+      checkTime: metadata.checkTime || new Date().toISOString(),
+      analyzerVersion: metadata.analyzerVersion || '1.0.0',
+      weightedScore: quickData.weightedScore || quickData.quickScore || 0
+    },
+    suggestions: quickData.quickSuggestions || []
+  };
+  
+  // 输出JSON格式结果
+  console.log(JSON.stringify(result, null, 2));
 }
