@@ -12,6 +12,8 @@ import { learnDocuments } from '../../knowledge/learn.js';
 import { resetVectorStore } from '../../../core/vectorStore.js';
 import { cleanupRules } from '../../knowledge/cleanup.js';
 import { evaluateRules } from '../../knowledge/evaluate.js';
+import { showRulesStatus } from '../../knowledge/status.js';
+import { approveRule } from '../../knowledge/approve.js';
 
 /**
  * 学习管理视图状态
@@ -25,7 +27,9 @@ const VIEWS = {
   CLEANING: 'cleaning',
   EVALUATING: 'evaluating',
   RESULT: 'result',
-  CONFIRM_RESET: 'confirm_reset'
+  CONFIRM_RESET: 'confirm_reset',
+  STATUS: 'status',
+  APPROVE_CONFIG: 'approve_config'
 };
 
 /**
@@ -35,6 +39,9 @@ export default function LearnManager({ onBack }) {
   const [view, setView] = useState(VIEWS.MENU);
   const [rulesDir, setRulesDir] = useState('./rules');
   const [scoreThreshold, setScoreThreshold] = useState('60');
+  const [priorityApproved, setPriorityApproved] = useState(false);
+  const [autoMove, setAutoMove] = useState(true);
+  const [approveFilePath, setApproveFilePath] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,7 +53,7 @@ export default function LearnManager({ onBack }) {
         onBack();
       } else if (view === VIEWS.RESULT) {
         setView(VIEWS.MENU);
-      } else if (view === VIEWS.LOAD_CONFIG || view === VIEWS.CLEANUP_CONFIG || view === VIEWS.CONFIRM_RESET) {
+      } else if (view === VIEWS.LOAD_CONFIG || view === VIEWS.CLEANUP_CONFIG || view === VIEWS.CONFIRM_RESET || view === VIEWS.APPROVE_CONFIG) {
         setMessage('');
         setView(VIEWS.MENU);
       }
@@ -61,7 +68,10 @@ export default function LearnManager({ onBack }) {
       setView(VIEWS.LOADING);
       setIsLoading(true);
       
-      await learnDocuments({ rulesDir });
+      await learnDocuments({
+        rulesDir,
+        priorityApproved
+      });
       
       setMessage('✓ 文档已成功加载到知识库');
       setIsLoading(false);
@@ -109,6 +119,7 @@ export default function LearnManager({ onBack }) {
       await cleanupRules({
         score: scoreThreshold,
         backup: true,
+        autoMove,
         rulesDir: './rules/learning-rules'
       });
       
@@ -133,6 +144,7 @@ export default function LearnManager({ onBack }) {
       await evaluateRules({
         report: true,
         all: true,
+        autoMove,
         rulesDir: './rules/learning-rules'
       });
       
@@ -147,6 +159,50 @@ export default function LearnManager({ onBack }) {
   };
 
   /**
+   * 显示规则库状态
+   */
+  const handleShowStatus = async () => {
+    try {
+      setView(VIEWS.LOADING);
+      setIsLoading(true);
+      
+      await showRulesStatus({
+        rulesDir: './rules/learning-rules'
+      });
+      
+      setMessage('✓ 状态显示完成');
+      setIsLoading(false);
+      setView(VIEWS.RESULT);
+    } catch (error) {
+      setMessage(`✗ 状态显示失败: ${error.message}`);
+      setIsLoading(false);
+      setView(VIEWS.RESULT);
+    }
+  };
+
+  /**
+   * 手动认可规则
+   */
+  const handleApproveRule = async () => {
+    try {
+      setView(VIEWS.LOADING);
+      setIsLoading(true);
+      
+      await approveRule(approveFilePath, {
+        rulesDir: './rules/learning-rules'
+      });
+      
+      setMessage('✓ 规则认可完成');
+      setIsLoading(false);
+      setView(VIEWS.RESULT);
+    } catch (error) {
+      setMessage(`✗ 规则认可失败: ${error.message}`);
+      setIsLoading(false);
+      setView(VIEWS.RESULT);
+    }
+  };
+
+  /**
    * 渲染主菜单
    */
   const renderMenu = () => {
@@ -155,6 +211,8 @@ export default function LearnManager({ onBack }) {
       { label: '🔄 重置知识库', value: 'reset' },
       { label: '🧹 清理低质量规则', value: 'cleanup' },
       { label: '📊 评估规则质量', value: 'evaluate' },
+      { label: '📈 显示规则库状态', value: 'status' },
+      { label: '✅ 手动认可规则', value: 'approve' },
       { label: '◀️  返回主菜单', value: 'back' }
     ];
 
@@ -176,6 +234,10 @@ export default function LearnManager({ onBack }) {
               setView(VIEWS.CLEANUP_CONFIG);
             } else if (item.value === 'evaluate') {
               handleEvaluate();
+            } else if (item.value === 'status') {
+              handleShowStatus();
+            } else if (item.value === 'approve') {
+              setView(VIEWS.APPROVE_CONFIG);
             }
           }}
         />
@@ -207,8 +269,11 @@ export default function LearnManager({ onBack }) {
             placeholder="./rules"
           />
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>Enter 开始加载 | ESC 取消</Text>
+        <Box marginBottom={1}>
+          <Text color="gray">优先加载已认可规则: {priorityApproved ? '✓' : '✗'}</Text>
+        </Box>
+        <Box marginBottom={1}>
+          <Text dimColor>Tab 切换优先加载 | Enter 开始加载 | ESC 取消</Text>
         </Box>
       </Box>
     );
@@ -235,11 +300,11 @@ export default function LearnManager({ onBack }) {
             placeholder="60"
           />
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>低于此分数的规则将被清理</Text>
+        <Box marginBottom={1}>
+          <Text color="gray">自动分类: {autoMove ? '✓' : '✗'}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text dimColor>Enter 开始清理 | ESC 取消</Text>
+          <Text dimColor>Tab 切换自动分类 | Enter 开始清理 | ESC 取消</Text>
         </Box>
       </Box>
     );
@@ -278,6 +343,34 @@ export default function LearnManager({ onBack }) {
   };
 
   /**
+   * 渲染认可配置
+   */
+  const renderApproveConfig = () => {
+    return (
+      <Box flexDirection="column" paddingY={1}>
+        <Box marginBottom={1}>
+          <Text bold color="cyan">手动认可规则</Text>
+        </Box>
+        <Box marginBottom={1}>
+          <Text color="gray">规则文件路径:</Text>
+        </Box>
+        <Box marginBottom={1}>
+          <Text color="gray">{'> '}</Text>
+          <TextInput
+            value={approveFilePath}
+            onChange={setApproveFilePath}
+            onSubmit={() => handleApproveRule()}
+            placeholder="rules/learning-rules/issues/2025-11/rule-file.md"
+          />
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>Enter 开始认可 | ESC 取消</Text>
+        </Box>
+      </Box>
+    );
+  };
+
+  /**
    * 渲染加载中
    */
   const renderLoading = (action) => {
@@ -309,6 +402,17 @@ export default function LearnManager({ onBack }) {
     );
   };
 
+  // 键盘快捷键扩展
+  useInput((input, key) => {
+    if (key.tab) {
+      if (view === VIEWS.LOAD_CONFIG) {
+        setPriorityApproved(!priorityApproved);
+      } else if (view === VIEWS.CLEANUP_CONFIG) {
+        setAutoMove(!autoMove);
+      }
+    }
+  });
+
   // 根据当前视图渲染内容
   switch (view) {
     case VIEWS.MENU:
@@ -319,14 +423,18 @@ export default function LearnManager({ onBack }) {
       return renderCleanupConfig();
     case VIEWS.CONFIRM_RESET:
       return renderConfirmReset();
+    case VIEWS.APPROVE_CONFIG:
+      return renderApproveConfig();
     case VIEWS.LOADING:
-      return renderLoading('正在加载文档');
+      return renderLoading('正在处理');
     case VIEWS.RESETTING:
       return renderLoading('正在重置知识库');
     case VIEWS.CLEANING:
       return renderLoading('正在清理规则');
     case VIEWS.EVALUATING:
       return renderLoading('正在评估规则');
+    case VIEWS.STATUS:
+      return renderLoading('正在显示状态');
     case VIEWS.RESULT:
       return renderResult();
     default:
