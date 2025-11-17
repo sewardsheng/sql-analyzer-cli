@@ -204,9 +204,15 @@ class ReportGenerator {
   buildPerformanceSection(integratedResults) {
     if (!integratedResults.performanceAnalysis?.success) return null;
     
+    const perfData = integratedResults.performanceAnalysis.data;
     return {
-      score: integratedResults.performanceAnalysis.data.performanceScore,
-      bottlenecks: integratedResults.performanceAnalysis.data.bottlenecks?.map(b => b.description) || [],
+      score: perfData.performanceScore,
+      complexity: perfData.complexityLevel,
+      // 只保留前3个瓶颈的简短描述，减少重复
+      topBottlenecks: perfData.bottlenecks?.slice(0, 3).map(b => ({
+        type: b.type,
+        severity: b.severity
+      })) || [],
       optimizationPotential: integratedResults.optimizationSuggestions?.data?.optimizationPotential || '未知'
     };
   }
@@ -217,10 +223,15 @@ class ReportGenerator {
   buildSecuritySection(integratedResults) {
     if (!integratedResults.securityAudit?.success) return null;
     
+    const secData = integratedResults.securityAudit.data;
     return {
-      score: integratedResults.securityAudit.data.securityScore,
-      riskLevel: integratedResults.securityAudit.data.riskLevel,
-      vulnerabilities: integratedResults.securityAudit.data.vulnerabilities?.map(v => v.description) || []
+      score: secData.securityScore,
+      riskLevel: secData.riskLevel,
+      // 只保留前3个漏洞的简短描述，减少重复
+      topVulnerabilities: secData.vulnerabilities?.slice(0, 3).map(v => ({
+        type: v.type,
+        severity: v.severity
+      })) || []
     };
   }
 
@@ -230,10 +241,15 @@ class ReportGenerator {
   buildStandardsSection(integratedResults) {
     if (!integratedResults.standardsCheck?.success) return null;
     
+    const stdData = integratedResults.standardsCheck.data;
     return {
-      score: integratedResults.standardsCheck.data.standardsScore,
-      complianceLevel: integratedResults.standardsCheck.data.complianceLevel,
-      violations: integratedResults.standardsCheck.data.violations?.map(v => v.description) || []
+      score: stdData.standardsScore,
+      complianceLevel: stdData.complianceLevel,
+      // 只保留前3个违规的简短描述，减少重复
+      topViolations: stdData.violations?.slice(0, 3).map(v => ({
+        type: v.type,
+        severity: v.severity
+      })) || []
     };
   }
 
@@ -243,9 +259,14 @@ class ReportGenerator {
   buildOptimizationSection(integratedResults) {
     if (!integratedResults.optimizationSuggestions?.success) return null;
     
+    const optData = integratedResults.optimizationSuggestions.data;
     return {
-      priority: integratedResults.optimizationSuggestions.data.optimizationPotential,
-      suggestions: integratedResults.optimizationSuggestions.data.optimizationSuggestions || []
+      optimizationPotential: optData.optimizationPotential,
+      // 只保留前3个建议的简短描述，减少重复
+      topSuggestions: optData.optimizationSuggestions?.slice(0, 3).map(s => ({
+        category: s.category,
+        description: s.description
+      })) || []
     };
   }
 

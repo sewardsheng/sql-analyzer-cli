@@ -222,7 +222,6 @@ class SqlAnalysisCoordinator {
       data: {
         originalQuery: sqlQuery,
         normalizedQuery: sqlQuery,
-        databaseType,
         analysisResults: integratedResults,
         report,
         // 添加各个子代理的详细结果，以便在UI中显示

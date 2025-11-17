@@ -44,11 +44,8 @@ ${sqlQuery}`)
     try {
       const result = await this.invokeLLMAndParse(messages);
       
-      return {
-        success: true,
-        data: result,
-        databaseType: result.databaseType || 'unknown'
-      };
+      // 使用基类的 formatResponse 方法，避免重复添加 databaseType
+      return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL性能分析', error);
     }

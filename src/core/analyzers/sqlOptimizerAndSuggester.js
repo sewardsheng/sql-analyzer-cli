@@ -145,14 +145,15 @@ ${contextInfo}`)
         }
       }
       
-      return {
-        success: true,
-        data: {
-          ...data,
-          optimizedSqlData
-        },
-        databaseType: result.databaseType || databaseType || 'unknown'
+      // 构建结果对象，包含 databaseType 在 data 中以便基类处理
+      const finalResult = {
+        ...data,
+        optimizedSqlData,
+        databaseType: databaseType // 保留传入的 databaseType
       };
+      
+      // 使用基类的 formatResponse 方法，避免重复添加 databaseType
+      return this.formatResponse(finalResult);
     } catch (error) {
       return this.handleError('SQL优化建议生成', error);
     }

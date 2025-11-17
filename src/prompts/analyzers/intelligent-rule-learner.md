@@ -26,7 +26,6 @@
 请使用以下JSON格式返回结果:
 ```json
 {
-  "databaseType": "识别出的数据库类型",
   "relevantRules": [
     {
       "category": "规则类别",

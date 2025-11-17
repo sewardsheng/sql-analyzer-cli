@@ -91,13 +91,84 @@ class BaseAnalyzer {
    * @returns {Object} 标准化的响应对象
    */
   formatResponse(result, databaseType = null) {
-    return {
+    // 标准化分数字段为数字类型
+    const normalizedResult = this.normalizeScoreFields(result);
+    
+    const response = {
       success: true,
       data: {
-        ...result,
-        databaseType: result.databaseType || databaseType || 'unknown'
+        ...normalizedResult
       }
     };
+    
+    // 只有在结果中明确包含 databaseType 时才添加到外层（仅限性能分析器）
+    // 避免在 performanceAnalysis 和 optimizationSuggestions 的外层重复添加
+    if (normalizedResult.databaseType && !this.shouldSkipDatabaseType(normalizedResult)) {
+      response.databaseType = normalizedResult.databaseType;
+    }
+    
+    return response;
+  }
+
+  /**
+   * 标准化分数字段为数字类型
+   * @param {Object} result - 分析结果对象
+   * @returns {Object} 标准化后的结果对象
+   */
+  normalizeScoreFields(result) {
+    const normalized = { ...result };
+    
+    // 定义需要标准化的分数字段
+    const scoreFields = [
+      'securityScore',
+      'performanceScore',
+      'standardsScore',
+      'overallScore'
+    ];
+    
+    scoreFields.forEach(field => {
+      if (normalized[field] !== undefined) {
+        // 如果是字符串，尝试转换为数字
+        if (typeof normalized[field] === 'string') {
+          const numValue = parseFloat(normalized[field]);
+          if (!isNaN(numValue)) {
+            normalized[field] = numValue;
+          }
+        }
+        // 如果已经是数字，确保是有效的
+        else if (typeof normalized[field] === 'number') {
+          if (isNaN(normalized[field])) {
+            normalized[field] = 0;
+          }
+        }
+        // 其他类型（如null、undefined）保持原样或设为默认值
+        else {
+          normalized[field] = 0;
+        }
+      }
+    });
+    
+    return normalized;
+  }
+
+  /**
+   * 判断是否应该跳过添加 databaseType 到外层
+   * @param {Object} result - 分析结果对象
+   * @returns {boolean} 是否跳过
+   */
+  shouldSkipDatabaseType(result) {
+    // 如果是性能分析或优化建议的结果，不在外层重复添加 databaseType
+    // 因为这些结果会被嵌套在 analysisResults 中，已经有 databaseType 了
+    const skipTypes = ['performanceAnalysis', 'optimizationSuggestions'];
+    
+    // 检查结果中是否包含这些类型的标识
+    for (const type of skipTypes) {
+      if (result.type === type || result.analyzerType === type) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
