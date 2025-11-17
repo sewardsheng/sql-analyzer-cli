@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
+import { createInkSQLDisplayData } from '../../../utils/sqlHighlight.js';
 
 /**
  * 获取严重级别颜色
@@ -28,6 +29,7 @@ function getSeverityIcon(severity) {
   if (severityLower === 'low' || severityLower === '低') return '🟢';
   return '⚪';
 }
+
 
 /**
  * 计算风险等级
@@ -267,8 +269,25 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
           <Box marginTop={1}>
             <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
           </Box>
-          <Box paddingLeft={0} marginY={0}>
-            <Text>{report.optimizedSql.optimizedSql}</Text>
+          <Box
+            flexDirection="column"
+            borderStyle="single"
+            borderColor="gray"
+            paddingX={1}
+            paddingY={1}
+            marginY={1}
+          >
+            {(() => {
+              const displayData = createInkSQLDisplayData(
+                report.optimizedSql.optimizedSql,
+                result.data?.databaseType || 'generic'
+              );
+              return displayData.map((item, index) => (
+                <Box key={index}>
+                  <Text>{item.content}</Text>
+                </Box>
+              ));
+            })()}
           </Box>
           <Box marginTop={0}>
             <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>

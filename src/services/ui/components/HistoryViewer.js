@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import { getHistoryService } from '../../history/historyService.js';
+import { createInkSQLDisplayData } from '../../../utils/sqlHighlight.js';
 
 const historyService = getHistoryService();
 
@@ -55,14 +56,24 @@ export default function HistoryViewer({ onBack }) {
     loadHistoryList();
   }, []);
 
-  const loadHistoryList = () => {
-    const list = historyService.getAllHistory();
-    setHistoryList(list);
+  const loadHistoryList = async () => {
+    try {
+      const list = await historyService.getAllHistory();
+      setHistoryList(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('加载历史记录失败:', error);
+      setHistoryList([]);
+    }
   };
 
-  const loadStats = () => {
-    const statsData = historyService.getHistoryStats();
-    setStats(statsData);
+  const loadStats = async () => {
+    try {
+      const statsData = await historyService.getHistoryStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('加载统计信息失败:', error);
+      setStats(null);
+    }
   };
 
   // 键盘快捷键
@@ -112,18 +123,22 @@ export default function HistoryViewer({ onBack }) {
         </Box>
         <SelectInput
           items={items}
-          onSelect={(item) => {
+          onSelect={async (item) => {
             if (item.value === 'back') {
               onBack();
             } else if (item.value === 'stats') {
-              loadStats();
+              await loadStats();
               setView(VIEWS.STATS);
             } else if (item.value === 'clear') {
               setView(VIEWS.CONFIRM_CLEAR);
             } else if (item.value !== 'separator') {
-              const record = historyService.getHistoryById(item.value);
-              setSelectedRecord(record);
-              setView(VIEWS.DETAIL);
+              try {
+                const record = await historyService.getHistoryById(item.value);
+                setSelectedRecord(record);
+                setView(VIEWS.DETAIL);
+              } catch (error) {
+                console.error('获取历史记录详情失败:', error);
+              }
             }
           }}
         />
@@ -194,8 +209,25 @@ export default function HistoryViewer({ onBack }) {
         <Box marginBottom={1}>
           <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
         </Box>
-        <Box marginBottom={0}>
-          <Text>{selectedRecord.sql}</Text>
+        <Box
+          flexDirection="column"
+          borderStyle="single"
+          borderColor="gray"
+          paddingX={1}
+          paddingY={1}
+          marginY={1}
+        >
+          {(() => {
+            const displayData = createInkSQLDisplayData(
+              selectedRecord.sql,
+              selectedRecord.databaseType || 'generic'
+            );
+            return displayData.map((item, index) => (
+              <Box key={index}>
+                <Text>{item.content}</Text>
+              </Box>
+            ));
+          })()}
         </Box>
         <Box marginBottom={1}>
           <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>
@@ -261,8 +293,25 @@ export default function HistoryViewer({ onBack }) {
             <Box marginTop={0}>
               <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
             </Box>
-            <Box marginY={0}>
-              <Text>{report.optimizedSql.optimizedSql}</Text>
+            <Box
+              flexDirection="column"
+              borderStyle="single"
+              borderColor="gray"
+              paddingX={1}
+              paddingY={1}
+              marginY={1}
+            >
+              {(() => {
+                const displayData = createInkSQLDisplayData(
+                  report.optimizedSql.optimizedSql,
+                  selectedRecord.databaseType || 'generic'
+                );
+                return displayData.map((item, index) => (
+                  <Box key={index}>
+                    <Text>{item.content}</Text>
+                  </Box>
+                ));
+              })()}
             </Box>
             <Box marginTop={0}>
               <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>
@@ -360,11 +409,15 @@ export default function HistoryViewer({ onBack }) {
         </Box>
         <SelectInput
           items={items}
-          onSelect={(item) => {
+          onSelect={async (item) => {
             if (item.value === 'confirm') {
-              historyService.deleteHistory(recordToDelete);
-              loadHistoryList();
-              setRecordToDelete(null);
+              try {
+                await historyService.deleteHistory(recordToDelete);
+                await loadHistoryList();
+                setRecordToDelete(null);
+              } catch (error) {
+                console.error('删除历史记录失败:', error);
+              }
             }
             setView(VIEWS.LIST);
           }}
@@ -393,10 +446,14 @@ export default function HistoryViewer({ onBack }) {
         </Box>
         <SelectInput
           items={items}
-          onSelect={(item) => {
+          onSelect={async (item) => {
             if (item.value === 'confirm') {
-              historyService.clearAllHistory();
-              loadHistoryList();
+              try {
+                await historyService.clearAllHistory();
+                await loadHistoryList();
+              } catch (error) {
+                console.error('清空历史记录失败:', error);
+              }
             }
             setView(VIEWS.LIST);
           }}

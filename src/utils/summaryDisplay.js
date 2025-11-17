@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { createTerminalSQLDisplay } from './sqlHighlight.js';
 
 // 风险等级定义
 const RISK_LEVEL_CN = {
@@ -268,7 +269,13 @@ export function displayEnhancedSummary(result, config = {}) {
     const optimizedData = result.data.report.optimizedSql;
     console.log(chalk.blue.bold('\n✨ 优化后的SQL:'));
     console.log('─'.repeat(60));
-    console.log(chalk.cyan(optimizedData.optimizedSql));
+    
+    // 使用SQL语法高亮显示
+    const highlightedSQL = createTerminalSQLDisplay(
+      optimizedData.optimizedSql,
+      result.data?.databaseType || 'generic'
+    );
+    console.log(highlightedSQL);
     
     if (optimizedData.changes && optimizedData.changes.length > 0) {
       console.log(chalk.yellow.bold('\n📝 优化说明:'));
