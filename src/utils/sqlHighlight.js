@@ -69,9 +69,15 @@ export function formatSQLForDisplay(sql) {
   // 将SQL按行分割，并移除多余的空白
   const lines = sql.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
+  // 如果只有一行且是复杂SQL，进行智能分割
+  if (lines.length === 1 && isComplexSQL(lines[0])) {
+    return formatComplexSQL(lines[0]);
+  }
+  
   // 重新组织SQL，确保适当的缩进和换行
   let formattedSQL = '';
   let indentLevel = 0;
+  let needsExtraNewline = false;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -82,34 +88,128 @@ export function formatSQLForDisplay(sql) {
       indentLevel = Math.max(0, indentLevel - 1);
     }
     
-    // 添加当前行
+    // 添加当前行（避免连续空行）
     if (formattedSQL.length > 0) {
-      formattedSQL += '\n';
+      // 检查前一行是否已经添加了额外换行
+      if (!needsExtraNewline) {
+        formattedSQL += '\n';
+      } else {
+        needsExtraNewline = false;
+      }
     }
     formattedSQL += '  '.repeat(indentLevel) + line;
     
     // 增加缩进的关键字
     if (upperLine.includes('(') && !upperLine.includes(')')) {
       indentLevel++;
-    } else if (upperLine.startsWith('SELECT') || upperLine.startsWith('FROM') ||
-               upperLine.startsWith('WHERE') || upperLine.startsWith('GROUP BY') ||
-               upperLine.startsWith('ORDER BY') || upperLine.startsWith('HAVING') ||
-               upperLine.startsWith('LIMIT') || upperLine.startsWith('OFFSET') ||
-               upperLine.startsWith('WITH') || upperLine.startsWith('CASE') ||
-               upperLine.startsWith('WHEN') || upperLine.startsWith('THEN')) {
-      // 这些关键字通常需要换行
-      if (i < lines.length - 1) {
-        formattedSQL += '\n';
-      }
     }
     
+    // 判断是否需要在当前行后添加额外换行
+    const needsNewlineAfter = (
+      upperLine.startsWith('SELECT') || upperLine.startsWith('FROM') ||
+      upperLine.startsWith('WHERE') || upperLine.startsWith('GROUP BY') ||
+      upperLine.startsWith('ORDER BY') || upperLine.startsWith('HAVING') ||
+      upperLine.startsWith('LIMIT') || upperLine.startsWith('OFFSET') ||
+      upperLine.startsWith('WITH') || upperLine.startsWith('CASE') ||
+      upperLine.startsWith('WHEN') || upperLine.startsWith('THEN')
+    ) && i < lines.length - 1;
+    
     // 处理逗号后的换行
-    if (line.endsWith(',') && i < lines.length - 1) {
+    const endsWithComma = line.endsWith(',') && i < lines.length - 1;
+    
+    if (needsNewlineAfter || endsWithComma) {
       formattedSQL += '\n';
+      needsExtraNewline = true;
     }
   }
   
-  return formattedSQL;
+  // 移除末尾的多余换行
+  return formattedSQL.trim();
+}
+
+/**
+ * 判断是否为复杂SQL
+ * @param {string} sql - SQL语句
+ * @returns {boolean} 是否为复杂SQL
+ */
+function isComplexSQL(sql) {
+  const upperSQL = sql.toUpperCase();
+  const complexityIndicators = [
+    'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
+    'CASE WHEN', 'SUBSTRING', 'EXISTS', 'IN (', 'GROUP BY', 'ORDER BY',
+    'HAVING', 'UNION', 'WITH', 'OVER ('
+  ];
+  
+  return complexityIndicators.some(indicator => upperSQL.includes(indicator)) && sql.length > 80;
+}
+
+/**
+ * 格式化复杂SQL
+ * @param {string} sql - 单行复杂SQL
+ * @returns {string} 格式化后的SQL
+ */
+function formatComplexSQL(sql) {
+  let formatted = sql;
+  
+  // 在主要关键字前添加换行
+  const mainKeywords = [
+    { pattern: /\bFROM\b/gi, replacement: '\nFROM' },
+    { pattern: /\bJOIN\b/gi, replacement: '\nJOIN' },
+    { pattern: /\bLEFT JOIN\b/gi, replacement: '\nLEFT JOIN' },
+    { pattern: /\bRIGHT JOIN\b/gi, replacement: '\nRIGHT JOIN' },
+    { pattern: /\bINNER JOIN\b/gi, replacement: '\nINNER JOIN' },
+    { pattern: /\bWHERE\b/gi, replacement: '\nWHERE' },
+    { pattern: /\bGROUP BY\b/gi, replacement: '\nGROUP BY' },
+    { pattern: /\bORDER BY\b/gi, replacement: '\nORDER BY' },
+    { pattern: /\bHAVING\b/gi, replacement: '\nHAVING' },
+    { pattern: /\bLIMIT\b/gi, replacement: '\nLIMIT' },
+    { pattern: /\bOFFSET\b/gi, replacement: '\nOFFSET' }
+  ];
+  
+  mainKeywords.forEach(({ pattern, replacement }) => {
+    formatted = formatted.replace(pattern, replacement);
+  });
+  
+  // 处理CASE语句
+  formatted = formatted.replace(/\bCASE\b/gi, '\nCASE');
+  formatted = formatted.replace(/\bWHEN\b/gi, '\n  WHEN');
+  formatted = formatted.replace(/\bTHEN\b/gi, ' THEN');
+  formatted = formatted.replace(/\bELSE\b/gi, '\n  ELSE');
+  formatted = formatted.replace(/\bEND\b/gi, '\nEND');
+  
+  // 处理IN子查询
+  formatted = formatted.replace(/\bIN\s*\(/gi, 'IN (');
+  
+  // 清理多余空格和换行
+  const lines = formatted.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  // 重新组合，添加适当的缩进
+  let result = '';
+  let indentLevel = 0;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const upperLine = line.toUpperCase();
+    
+    // 减少缩进
+    if (upperLine.startsWith(')') || upperLine.startsWith('END') || upperLine.startsWith('ELSE')) {
+      indentLevel = Math.max(0, indentLevel - 1);
+    }
+    
+    if (result.length > 0) {
+      result += '\n';
+    }
+    result += '  '.repeat(indentLevel) + line;
+    
+    // 增加缩进
+    if (upperLine.includes('(') && !upperLine.includes(')')) {
+      indentLevel++;
+    } else if (upperLine.startsWith('CASE') || upperLine.startsWith('WHEN') || upperLine.startsWith('ELSE')) {
+      if (upperLine.startsWith('CASE')) indentLevel++;
+    }
+  }
+  
+  return result.trim();
 }
 
 /**

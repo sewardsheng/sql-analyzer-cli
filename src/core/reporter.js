@@ -15,6 +15,11 @@ class ReportGenerator {
   generateReport(input) {
     const { sqlQuery, parsedSQL, databaseType, integratedResults } = input;
     
+    // 检查是否为快速分析模式
+    if (integratedResults.quickAnalysis) {
+      return this.generateQuickReport(sqlQuery, parsedSQL, databaseType, integratedResults.quickAnalysis);
+    }
+    
     // 安全审计一票否决机制
     const securityVeto = this.checkSecurityVeto(integratedResults.securityAudit);
     
@@ -41,6 +46,72 @@ class ReportGenerator {
         recommendations: recommendations.slice(0, 10)
       }
     };
+  }
+
+  /**
+   * 生成快速分析报告
+   * @param {string} sqlQuery - SQL查询
+   * @param {string} parsedSQL - 解析后的SQL
+   * @param {string} databaseType - 数据库类型
+   * @param {Object} quickAnalysis - 快速分析结果
+   * @returns {Object} 快速分析报告
+   */
+  generateQuickReport(sqlQuery, parsedSQL, databaseType, quickAnalysis) {
+    const quickData = quickAnalysis.data || quickAnalysis;
+    const quickScore = quickData.quickScore || 0;
+    
+    // 生成快速分析摘要
+    const summary = `SQL快速分析完成，快速评分: ${quickScore}/100`;
+    
+    // 收集快速建议
+    const recommendations = this.collectQuickRecommendations(quickData);
+    
+    return {
+      summary,
+      quickAnalysis: {
+        score: quickScore,
+        databaseType: quickData.databaseType || databaseType,
+        criticalIssues: quickData.criticalIssues || [],
+        quickSuggestions: quickData.quickSuggestions || []
+      },
+      queryOverview: {
+        originalQuery: sqlQuery,
+        normalizedQuery: parsedSQL,
+        databaseType: quickData.databaseType || databaseType,
+        complexity: '快速分析'
+      },
+      overallAssessment: {
+        score: quickScore,
+        recommendations: recommendations.slice(0, 5)
+      }
+    };
+  }
+
+  /**
+   * 收集快速分析建议
+   * @param {Object} quickData - 快速分析数据
+   * @returns {Array} 建议列表
+   */
+  collectQuickRecommendations(quickData) {
+    const recommendations = [];
+    
+    // 收集快速建议
+    if (quickData.quickSuggestions) {
+      quickData.quickSuggestions.forEach(s => {
+        recommendations.push(`[快速] ${s.description}`);
+      });
+    }
+    
+    // 收集关键问题建议
+    if (quickData.criticalIssues) {
+      quickData.criticalIssues.forEach(issue => {
+        if (issue.severity === '高') {
+          recommendations.push(`[关键] ${issue.description}`);
+        }
+      });
+    }
+    
+    return recommendations;
   }
 
   /**
@@ -285,6 +356,12 @@ class ReportGenerator {
    * @param {Object} integratedResults - 整合的分析结果
    */
   printSummary(integratedResults) {
+    // 检查是否为快速分析模式
+    if (integratedResults.quickAnalysis) {
+      this.printQuickSummary(integratedResults.quickAnalysis);
+      return;
+    }
+    
     console.log("📋 分析结果摘要:");
     console.log('='.repeat(60));
     
@@ -353,6 +430,48 @@ class ReportGenerator {
       } else {
         console.log(`   状态: 失败 - ${integratedResults.ruleLearning.error}`);
       }
+    }
+    
+    console.log('\n' + '='.repeat(60));
+  }
+
+  /**
+   * 打印快速分析结果摘要到控制台
+   * @param {Object} quickAnalysis - 快速分析结果
+   */
+  printQuickSummary(quickAnalysis) {
+    const quickData = quickAnalysis.data || quickAnalysis;
+    
+    console.log("⚡ 快速分析结果:");
+    console.log('='.repeat(60));
+    
+    // 快速评分
+    console.log(`\n📊 快速评分: ${quickData.quickScore || '未知'}/100`);
+    console.log(`🗄️  数据库类型: ${quickData.databaseType || '未知'}`);
+    
+    // 关键问题
+    if (quickData.criticalIssues && quickData.criticalIssues.length > 0) {
+      console.log("\n⚠️  关键问题:");
+      quickData.criticalIssues.forEach((issue, index) => {
+        const severityIcon = issue.severity === '高' ? '🔴' : issue.severity === '中' ? '🟡' : '🟢';
+        console.log(`   ${index + 1}. ${severityIcon} [${issue.type}] ${issue.description}`);
+        if (issue.location) {
+          console.log(`      位置: ${issue.location}`);
+        }
+      });
+    } else {
+      console.log("\n✅ 未发现关键问题");
+    }
+    
+    // 快速建议
+    if (quickData.quickSuggestions && quickData.quickSuggestions.length > 0) {
+      console.log("\n💡 快速建议:");
+      quickData.quickSuggestions.forEach((suggestion, index) => {
+        console.log(`   ${index + 1}. [${suggestion.category}] ${suggestion.description}`);
+        if (suggestion.example && suggestion.example !== '保持当前写法') {
+          console.log(`      示例: ${suggestion.example}`);
+        }
+      });
     }
     
     console.log('\n' + '='.repeat(60));

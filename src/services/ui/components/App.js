@@ -92,7 +92,7 @@ export default function App({ config, file, database }) {
       setSqlContent(content);
       setProgress(20);
 
-      // 执行分析
+      // 执行多维度分析
       setCurrentAnalyzer('执行多维度分析');
       setProgress(30);
       
@@ -127,7 +127,7 @@ export default function App({ config, file, database }) {
       setSqlContent(sql);
       setProgress(20);
 
-      // 执行分析
+      // 执行多维度分析
       setCurrentAnalyzer('执行多维度分析');
       setProgress(30);
       

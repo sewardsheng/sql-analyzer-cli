@@ -19,10 +19,10 @@ function register(program) {
     .description('加载rules目录中的文档到知识库')
     .option('-r, --rules-dir <dir>', 'rules目录路径', './rules')
     .option('--priority-approved', '优先加载approved目录中的规则', false)
-    .option('--api-key <key>', 'OpenAI API密钥')
-    .option('--base-url <url>', 'API基础URL')
-    .option('--model <model>', '使用的模型名称')
-    .option('--embedding-model <model>', '嵌入模型名称')
+    .option('--api-key <key>', 'OpenAI API密钥 (覆盖配置文件设置)')
+    .option('--base-url <url>', 'API基础URL (覆盖配置文件设置)')
+    .option('--model <model>', '使用的模型名称 (覆盖配置文件设置)')
+    .option('--embedding-model <model>', '嵌入模型名称 (覆盖配置文件设置)')
     .action(async (options) => {
       try {
         const { getKnowledgeDisplay } = await import('../../services/knowledge/knowledgeDisplay.js');
@@ -69,7 +69,7 @@ function register(program) {
     .description('评估并清理所有低质量规则')
     .option('--score <score>', '质量分数阈值(0-100)，低于此分数的规则将被清理', '60')
     .option('--backup', '备份低质量规则到归档目录')
-    .option('--no-auto-move', '禁用自动分类，使用传统删除方式')
+    .option('--no-auto-move', '禁用自动分类，仅评估不移动文件')
     .option('--rules-dir <dir>', '要清理的规则目录', './rules/learning-rules')
     .action(async (options) => {
       try {

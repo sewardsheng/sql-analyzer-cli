@@ -167,7 +167,9 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
     <Box flexDirection="column" paddingY={1}>
       {/* 标题 */}
       <Box marginBottom={1}>
-        <Text bold color="cyan">✓ 分析完成</Text>
+        <Text bold color="cyan">
+          ✓ 分析完成
+        </Text>
       </Box>
 
       {/* 风险等级 */}
@@ -227,7 +229,9 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
       {/* 问题列表 */}
       {allIssues.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold marginBottom={1}>发现的问题 (共 {allIssues.length} 个):</Text>
+          <Text bold marginBottom={1}>
+            发现的问题 (共 {allIssues.length} 个):
+          </Text>
           <Box
             flexDirection="column"
             borderStyle="round"
@@ -300,7 +304,9 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
 
       {/* 操作提示 */}
       <Box flexDirection="column" marginTop={1}>
-        <Text dimColor>按 ESC 返回菜单</Text>
+        <Text dimColor>
+          按 ESC 返回菜单
+        </Text>
       </Box>
     </Box>
   );

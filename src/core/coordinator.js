@@ -4,11 +4,13 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
+import chalk from 'chalk';
 import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
 import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
 import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
 import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
 import { createIntelligentRuleLearnerTool } from './analyzers/intelligentRuleLearner.js';
+import { createQuickAnalyzerTool } from './analyzers/quickAnalyzer.js';
 import ReportGenerator from './reporter.js';
 
 /**
@@ -52,10 +54,75 @@ class SqlAnalysisCoordinator {
       securityAuditor: createSecurityAuditorTool(this.config),
       standardsChecker: createCodingStandardsCheckerTool(this.config),
       optimizer: createSqlOptimizerAndSuggesterTool(this.config),
-      ruleLearner: createIntelligentRuleLearnerTool(this.config)
+      ruleLearner: createIntelligentRuleLearnerTool(this.config),
+      quickAnalyzer: createQuickAnalyzerTool(this.config)
     };
     
     this.initialized = true;
+  }
+
+  /**
+   * 快速分析SQL查询
+   * @param {Object} input - 输入参数
+   * @param {string} input.sqlQuery - SQL查询语句
+   * @param {Object} input.options - 分析选项
+   * @returns {Promise<Object>} 快速分析结果
+   */
+  async quickAnalysis(input) {
+    // 记录分析开始时间
+    const analysisStartTime = Date.now();
+    
+    await this.initialize();
+    
+    const { sqlQuery, options = {} } = input;
+    
+    console.log(`\n⚡ 快速分析模式启动...\n`);
+    console.log('='.repeat(60));
+    
+    try {
+      // 执行快速分析
+      console.log("🔍 执行快速基础分析...");
+      const quickResult = await this.tools.quickAnalyzer.func({
+        sqlQuery
+      });
+      
+      if (!quickResult.success) {
+        throw new Error(quickResult.error);
+      }
+      
+      console.log("\n✅ 快速分析完成\n");
+      
+      // 计算并显示分析用时
+      const analysisEndTime = Date.now();
+      const analysisDuration = (analysisEndTime - analysisStartTime) / 1000;
+      console.log(`⏱️  快速分析用时: ${analysisDuration.toFixed(2)} 秒\n`);
+      console.log('='.repeat(60));
+      
+      // 构建快速分析结果对象
+      const result = {
+        success: true,
+        databaseType: quickResult.databaseType || 'unknown',
+        data: {
+          originalQuery: sqlQuery,
+          normalizedQuery: sqlQuery,
+          analysisResults: {
+            quickAnalysis: quickResult
+          },
+          report: {
+            summary: `SQL快速分析完成，快速评分: ${quickResult.quickScore || '未知'}/100`,
+            quickAnalysis: quickResult
+          },
+          detailedResults: {
+            quickAnalysis: quickResult
+          }
+        }
+      };
+      
+      return result;
+    } catch (error) {
+      console.error(chalk.red(`快速分析失败: ${error.message}`));
+      throw error;
+    }
   }
 
   /**

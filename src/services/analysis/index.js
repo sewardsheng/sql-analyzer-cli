@@ -91,22 +91,42 @@ class AnalysisService {
   async executeCoreAnalysis(sqlQuery, analysisOptions) {
     const coordinator = await this.getCoordinator();
     
-    console.log(chalk.blue('\n开始执行多维度SQL分析...\n'));
-    console.log('='.repeat(60));
-    console.log(chalk.gray('调用协调器进行分析...'));
-    
-    const result = await coordinator.coordinateAnalysis({
-      sqlQuery,
-      options: analysisOptions
-    });
-    
-    console.log('='.repeat(60));
-    
-    if (!result.success) {
-      throw new Error(result.error);
+    // 检查是否为快速模式
+    if (analysisOptions.quick) {
+      console.log(chalk.blue('\n开始执行快速SQL分析...\n'));
+      console.log('='.repeat(60));
+      console.log(chalk.gray('调用协调器进行快速分析...'));
+      
+      const result = await coordinator.quickAnalysis({
+        sqlQuery,
+        options: analysisOptions
+      });
+      
+      console.log('='.repeat(60));
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      return result;
+    } else {
+      console.log(chalk.blue('\n开始执行多维度SQL分析...\n'));
+      console.log('='.repeat(60));
+      console.log(chalk.gray('调用协调器进行分析...'));
+      
+      const result = await coordinator.coordinateAnalysis({
+        sqlQuery,
+        options: analysisOptions
+      });
+      
+      console.log('='.repeat(60));
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      return result;
     }
-    
-    return result;
   }
 
   /**
