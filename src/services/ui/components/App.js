@@ -331,8 +331,8 @@ export default function App({ config, file, database }) {
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Header />
-      <Box marginTop={1}>
+      {state === STATES.MENU && <Header />}
+      <Box marginTop={state === STATES.MENU ? 1 : 0}>
         {renderContent()}
       </Box>
     </Box>

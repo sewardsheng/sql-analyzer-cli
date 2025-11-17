@@ -34,7 +34,7 @@ class JSONCleaner {
       }
     });
     
-    // 处理文件路径中的特殊字符（如 @/test_mongodb.sql）
+    // 处理文件路径中的特殊字符（如 @/test_mysql.sql）
     // 在JSON字符串值中，@ 本身不需要转义，但需要确保路径作为完整字符串处理
     processed = processed.replace(/(@[\w/.-]+\.sql)/gi, (match) => {
       // 确保路径被正确引用

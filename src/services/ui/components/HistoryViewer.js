@@ -38,20 +38,7 @@ function getTypeLabel(type) {
 /**
  * 获取数据库类型标签
  */
-function getDatabaseLabel(db) {
-  const labels = {
-    'mysql': 'MySQL',
-    'postgresql': 'PostgreSQL',
-    'oracle': 'Oracle',
-    'sqlserver': 'SQL Server',
-    'clickhouse': 'ClickHouse',
-    'generic': '通用',
-    'sqlite': 'SQLite',
-    'mongodb': 'MongoDB',
-    'redis': 'Redis'
-  };
-  return labels[db] || db || '未知';
-}
+import { getDatabaseLabel } from '../../../config/databases.js';
 
 /**
  * 历史记录查看器组件

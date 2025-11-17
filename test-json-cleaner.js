@@ -38,10 +38,10 @@ const testCases = [
   {
     name: '文件路径带@符号',
     input: `{
-      "file": "@/test_mongodb.sql",
-      "type": "MongoDB"
+      "file": "@/test_mysql.sql",
+      "type": "MySQL"
     }`,
-    expected: { file: '@/test_mongodb.sql', type: 'MongoDB' }
+    expected: { file: '@/test_mysql.sql', type: 'MySQL' }
   },
   {
     name: 'SQL注释符号',

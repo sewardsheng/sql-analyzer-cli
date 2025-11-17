@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import HistoryService from './historyService.js';
 import Table from 'cli-table3';
 import readline from 'readline';
+import { getDatabaseLabel } from '../../config/databases.js';
 
 // 创建历史记录服务实例
 const historyService = new HistoryService();
@@ -246,25 +247,6 @@ function getTypeLabel(type) {
   return labels[type] || type;
 }
 
-/**
- * 获取数据库类型的显示标签
- * @param {string} db - 数据库类型
- * @returns {string} 显示标签
- */
-function getDatabaseLabel(db) {
-  const labels = {
-    'mysql': 'MySQL',
-    'postgresql': 'PostgreSQL',
-    'oracle': 'Oracle',
-    'sqlserver': 'SQL Server',
-    'clickhouse': 'ClickHouse',
-    'generic': '通用',
-    'sqlite': 'SQLite',
-    'mongodb': 'MongoDB',
-    'redis': 'Redis'
-  };
-  return labels[db] || db || '未知';
-}
 
 export {
   listHistory,

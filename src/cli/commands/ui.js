@@ -15,7 +15,6 @@ function register(program) {
     .command('ui')
     .description('启动可视化终端界面')
     .option('-f, --file <path>', 'SQL文件路径')
-    .option('-d, --database <type>', '数据库类型 (mysql, postgresql, oracle, sqlserver)')
     .action(async (options) => {
       try {
         logInfo('启动UI命令');
@@ -30,7 +29,6 @@ function register(program) {
         await startUI({
           config,
           file: options.file,
-          database: options.database || config.database || 'mysql'
         });
         
       } catch (error) {
