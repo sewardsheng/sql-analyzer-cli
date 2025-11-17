@@ -24,6 +24,7 @@ async function evaluateRules(options = {}) {
 
     const rulesDir = options.rulesDir || './rules/learning-rules';
     const issuesDir = path.join(rulesDir, 'issues');
+    const autoMove = options.autoMove !== false; // 默认启用自动移动
 
     // 检查目录是否存在
     try {
@@ -88,8 +89,8 @@ async function evaluateRules(options = {}) {
           });
 
           // 根据分数显示不同颜色
-          const scoreColor = score >= 80 ? chalk.green : 
-                           score >= 60 ? chalk.yellow : 
+          const scoreColor = score >= 80 ? chalk.green :
+                           score >= 60 ? chalk.yellow :
                            chalk.red;
           
           spinner.succeed(`${path.basename(filePath)}: ${scoreColor(score + '/100')} (${evaluation.data.qualityLevel})`);
@@ -101,6 +102,11 @@ async function evaluateRules(options = {}) {
         spinner.fail(`${path.basename(filePath)}: 评估出错`);
         console.log(chalk.red(`  错误: ${error.message}`));
       }
+    }
+
+    // 自动移动文件到相应目录
+    if (autoMove && evaluatedCount > 0) {
+      await autoMoveFiles(evaluationResults, learner, rulesDir);
     }
 
     // 显示总体统计
@@ -140,6 +146,55 @@ async function evaluateRules(options = {}) {
   } catch (error) {
     console.error(chalk.red('评估规则时发生错误:'), error.message);
     throw error;
+  }
+}
+
+/**
+ * 自动移动文件到相应目录
+ * @param {Array} evaluationResults - 评估结果数组
+ * @param {Object} learner - 规则学习器实例
+ * @param {string} rulesDir - 规则目录
+ */
+async function autoMoveFiles(evaluationResults, learner, rulesDir) {
+  const moveSpinner = ora('正在自动分类规则文件...').start();
+  
+  try {
+    const filesToMove = evaluationResults.map(result => ({
+      path: result.path,
+      score: result.score
+    }));
+
+    const moveResults = await learner.batchMoveRules(filesToMove, 60);
+    
+    moveSpinner.succeed('规则文件分类完成');
+    
+    // 显示移动结果
+    if (moveResults.approved.length > 0) {
+      console.log(chalk.green(`\n✅ 已移动 ${moveResults.approved.length} 个高质量规则到 approved/ 目录:`));
+      moveResults.approved.forEach(item => {
+        console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
+      });
+    }
+    
+    if (moveResults.archived.length > 0) {
+      console.log(chalk.yellow(`\n📦 已移动 ${moveResults.archived.length} 个低质量规则到 archived/ 目录:`));
+      moveResults.archived.forEach(item => {
+        console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
+      });
+    }
+    
+    if (moveResults.failed.length > 0) {
+      console.log(chalk.red(`\n❌ ${moveResults.failed.length} 个文件移动失败:`));
+      moveResults.failed.forEach(item => {
+        console.log(chalk.red(`  • ${path.basename(item.path)}: ${item.error}`));
+      });
+    }
+    
+    console.log(chalk.blue(`\n💡 提示: 高质量规则已移动到 approved/ 目录，下次评估将跳过这些文件`));
+    
+  } catch (error) {
+    moveSpinner.fail('自动分类失败');
+    console.log(chalk.red(`错误: ${error.message}`));
   }
 }
 

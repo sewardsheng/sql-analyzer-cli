@@ -26,6 +26,7 @@ async function learnDocuments(options = {}) {
     const model = options.model || config.model;
     const embeddingModel = options.embeddingModel || config.embeddingModel;
     const rulesDir = options.rulesDir || './rules';
+    const priorityApproved = options.priorityApproved || false;
     
     // 检查API密钥
     if (!apiKey) {
@@ -79,7 +80,15 @@ async function learnDocuments(options = {}) {
     const spinner = ora('正在加载文档到知识库...').start();
     
     try {
-      const result = await loadDocumentsFromRulesDirectory(rulesDir);
+      let result;
+      
+      if (priorityApproved) {
+        // 优先加载 approved 目录
+        result = await loadDocumentsWithPriority(rulesDir);
+      } else {
+        // 传统加载方式
+        result = await loadDocumentsFromRulesDirectory(rulesDir);
+      }
       
       if (result.documentCount === 0) {
         spinner.warn('没有找到支持的文档文件');
@@ -91,6 +100,17 @@ async function learnDocuments(options = {}) {
       // 显示加载的文件类型
       if (result.fileTypes.length > 0) {
         console.log(chalk.green(`已处理的文件类型: ${result.fileTypes.join(', ')}`));
+      }
+      
+      // 显示加载优先级信息
+      if (priorityApproved && result.loadOrder) {
+        console.log(chalk.blue(`\n📋 加载优先级:`));
+        result.loadOrder.forEach((item, index) => {
+          const icon = item.type === 'approved' ? '✅' :
+                      item.type === 'issues' ? '⏳' : '📦';
+          console.log(chalk.white(`  ${index + 1}. ${icon} ${item.type} (${item.count} 个文件)`));
+        });
+        console.log('');
       }
       
       // 确保向量存储已保存到磁盘
@@ -306,6 +326,169 @@ function getFileIcon(ext) {
   };
   
   return icons[ext.toLowerCase()] || '📄';
+}
+
+/**
+ * 按优先级加载文档
+ * @param {string} rulesDir - 规则目录路径
+ * @returns {Promise<Object>} 加载结果
+ */
+async function loadDocumentsWithPriority(rulesDir) {
+  const learningRulesDir = path.join(rulesDir, 'learning-rules');
+  const loadOrder = [];
+  let totalDocumentCount = 0;
+  const allFileTypes = new Set();
+  const allLoadedFiles = [];
+
+  // 定义加载优先级（排除 archived 目录）
+  const priorityDirs = [
+    { name: 'approved', label: '已认可规则' },
+    { name: 'issues', label: '待评估规则' }
+  ];
+
+  for (const dirInfo of priorityDirs) {
+    const dirPath = path.join(learningRulesDir, dirInfo.name);
+    
+    try {
+      await fs.access(dirPath);
+      
+      // 获取该目录下的所有文件
+      const files = await getAllMarkdownFiles(dirPath);
+      
+      if (files.length > 0) {
+        console.log(chalk.blue(`正在加载 ${dirInfo.label} (${files.length} 个文件)...`));
+        
+        // 临时创建一个只包含当前目录的规则目录
+        const tempDir = await createTempDirectory(files);
+        
+        try {
+          const result = await loadDocumentsFromRulesDirectory(tempDir);
+          
+          if (result.documentCount > 0) {
+            totalDocumentCount += result.documentCount;
+            result.fileTypes.forEach(type => allFileTypes.add(type));
+            allLoadedFiles.push(...(result.loadedFiles || []));
+            
+            loadOrder.push({
+              type: dirInfo.name,
+              count: files.length,
+              documents: result.documentCount
+            });
+          }
+        } finally {
+          // 清理临时目录
+          await cleanupTempDirectory(tempDir);
+        }
+      }
+    } catch (error) {
+      // 目录不存在，跳过
+      console.log(chalk.gray(`跳过 ${dirInfo.label}: 目录不存在`));
+    }
+  }
+
+  // 加载其他规则目录（非 learning-rules）
+  try {
+    const otherDirs = await fs.readdir(rulesDir);
+    
+    for (const dir of otherDirs) {
+      if (dir !== 'learning-rules') {
+        const dirPath = path.join(rulesDir, dir);
+        const stat = await fs.stat(dirPath);
+        
+        if (stat.isDirectory()) {
+          const result = await loadDocumentsFromRulesDirectory(dirPath);
+          
+          if (result.documentCount > 0) {
+            totalDocumentCount += result.documentCount;
+            result.fileTypes.forEach(type => allFileTypes.add(type));
+            allLoadedFiles.push(...(result.loadedFiles || []));
+            
+            loadOrder.push({
+              type: dir,
+              count: result.documentCount,
+              documents: result.documentCount
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.log(chalk.yellow('加载其他规则目录时出错:', error.message));
+  }
+
+  // 显示排除 archived 目录的提示
+  if (loadOrder.length > 0) {
+    console.log(chalk.blue(`\n📋 加载说明:`));
+    console.log(chalk.gray(`  • archived/ 目录中的低质量规则已被排除，不会加载到知识库`));
+    console.log(chalk.gray(`  • 只加载 approved/ 和 issues/ 目录中的高质量规则`));
+  }
+
+  return {
+    documentCount: totalDocumentCount,
+    fileTypes: Array.from(allFileTypes),
+    loadedFiles: allLoadedFiles,
+    loadOrder: loadOrder
+  };
+}
+
+/**
+ * 获取目录下所有 Markdown 文件
+ * @param {string} dirPath - 目录路径
+ * @returns {Promise<Array>} 文件路径数组
+ */
+async function getAllMarkdownFiles(dirPath) {
+  const files = [];
+  
+  try {
+    const items = await fs.readdir(dirPath);
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const stat = await fs.stat(itemPath);
+      
+      if (stat.isDirectory()) {
+        // 递归获取子目录中的文件
+        const subFiles = await getAllMarkdownFiles(itemPath);
+        files.push(...subFiles);
+      } else if (item.endsWith('.md')) {
+        files.push(itemPath);
+      }
+    }
+  } catch (error) {
+    console.error(`读取目录 ${dirPath} 时出错:`, error);
+  }
+  
+  return files;
+}
+
+/**
+ * 创建临时目录并复制文件
+ * @param {Array} files - 文件路径数组
+ * @returns {Promise<string>} 临时目录路径
+ */
+async function createTempDirectory(files) {
+  const tempDir = path.join(process.cwd(), '.temp-rules-' + Date.now());
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  for (const filePath of files) {
+    const fileName = path.basename(filePath);
+    const tempPath = path.join(tempDir, fileName);
+    await fs.copyFile(filePath, tempPath);
+  }
+  
+  return tempDir;
+}
+
+/**
+ * 清理临时目录
+ * @param {string} tempDir - 临时目录路径
+ */
+async function cleanupTempDirectory(tempDir) {
+  try {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  } catch (error) {
+    console.warn('清理临时目录时出错:', error.message);
+  }
 }
 
 export {

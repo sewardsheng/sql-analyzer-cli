@@ -16,8 +16,14 @@ import path from 'path';
 class IntelligentRuleLearner extends BaseAnalyzer {
   constructor(config = {}) {
     super(config);
-    this.baseRulesDirectory = config.rulesDirectory ||
-      path.join(process.cwd(), 'rules', 'learning-rules', 'issues');
+    
+    // 确保配置对象存在
+    config = config || {};
+    
+    // 设置基础目录
+    const baseDir = config.rulesDirectory || path.join(process.cwd(), 'rules', 'learning-rules');
+    this.baseLearningRulesDirectory = baseDir;
+    this.baseRulesDirectory = path.join(baseDir, 'issues');
   }
 
   /**
@@ -32,14 +38,23 @@ class IntelligentRuleLearner extends BaseAnalyzer {
 
   /**
    * 确保规则目录存在，创建年-月份目录结构
+   * @param {string} type - 目录类型: 'issues', 'approved', 'archived'
    */
-  async ensureRulesDirectory() {
+  async ensureRulesDirectory(type = 'issues') {
     try {
       const now = new Date();
       const year = now.getFullYear().toString();
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
       
-      this.rulesDirectory = path.join(this.baseRulesDirectory, `${year}-${month}`);
+      if (type === 'archived') {
+        // archived 目录使用日期格式 YYYY-MM-DD
+        const day = now.getDate().toString().padStart(2, '0');
+        this.rulesDirectory = path.join(this.baseLearningRulesDirectory, 'archived', `${year}-${month}-${day}`);
+      } else {
+        // issues 和 approved 目录使用年-月格式
+        this.rulesDirectory = path.join(this.baseLearningRulesDirectory, type, `${year}-${month}`);
+      }
+      
       await fs.mkdir(this.rulesDirectory, { recursive: true });
     } catch (error) {
       console.error("创建规则目录失败:", error);
@@ -595,6 +610,121 @@ class IntelligentRuleLearner extends BaseAnalyzer {
     } catch (error) {
       return this.handleError('规则质量评估', error);
     }
+  }
+
+  /**
+   * 将规则文件移动到指定目录
+   * @param {string} sourcePath - 源文件路径
+   * @param {string} targetType - 目标类型: 'approved', 'archived'
+   * @returns {Promise<string>} 新文件路径
+   */
+  async moveRuleFile(sourcePath, targetType) {
+    try {
+      // 验证输入参数
+      if (!sourcePath || typeof sourcePath !== 'string') {
+        throw new Error('源文件路径无效');
+      }
+      
+      if (!targetType || typeof targetType !== 'string') {
+        throw new Error('目标类型无效');
+      }
+      
+      // 确保目标目录存在
+      await this.ensureRulesDirectory(targetType);
+      
+      const fileName = path.basename(sourcePath);
+      const targetPath = path.join(this.rulesDirectory, fileName);
+      
+      // 移动文件
+      await fs.rename(sourcePath, targetPath);
+      
+      console.log(`✅ 规则文件已移动: ${path.basename(sourcePath)} → ${targetType}/`);
+      return targetPath;
+    } catch (error) {
+      console.error("移动规则文件失败:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 批量移动规则文件
+   * @param {Array} files - 文件信息数组 [{path, score}]
+   * @param {number} threshold - 分数阈值
+   * @returns {Promise<Object>} 移动结果统计
+   */
+  async batchMoveRules(files, threshold = 60) {
+    const results = {
+      approved: [],
+      archived: [],
+      failed: []
+    };
+
+    for (const file of files) {
+      try {
+        if (file.score >= threshold) {
+          const newPath = await this.moveRuleFile(file.path, 'approved');
+          results.approved.push({
+            originalPath: file.path,
+            newPath: newPath,
+            score: file.score
+          });
+        } else {
+          const newPath = await this.moveRuleFile(file.path, 'archived');
+          results.archived.push({
+            originalPath: file.path,
+            newPath: newPath,
+            score: file.score
+          });
+        }
+      } catch (error) {
+        results.failed.push({
+          path: file.path,
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * 获取指定类型的规则文件列表
+   * @param {string} type - 目录类型: 'issues', 'approved', 'archived'
+   * @returns {Promise<Array>} 文件路径数组
+   */
+  async getRuleFilesByType(type = 'issues') {
+    const files = [];
+    
+    try {
+      const typeDir = path.join(this.baseLearningRulesDirectory, type);
+      
+      // 检查目录是否存在
+      try {
+        await fs.access(typeDir);
+      } catch (error) {
+        return files; // 目录不存在，返回空数组
+      }
+      
+      const timeDirs = await fs.readdir(typeDir);
+      
+      for (const timeDir of timeDirs) {
+        const timeDirPath = path.join(typeDir, timeDir);
+        const stat = await fs.stat(timeDirPath);
+        
+        if (stat.isDirectory()) {
+          const dirFiles = await fs.readdir(timeDirPath);
+          for (const file of dirFiles) {
+            if (file.endsWith('.md')) {
+              files.push(path.join(timeDirPath, file));
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`读取${type}规则文件时出错:`, error);
+    }
+    
+    return files;
   }
 }
 

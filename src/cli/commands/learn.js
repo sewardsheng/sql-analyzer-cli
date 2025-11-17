@@ -18,6 +18,7 @@ function register(program) {
     .command('load')
     .description('加载rules目录中的文档到知识库')
     .option('-r, --rules-dir <dir>', 'rules目录路径', './rules')
+    .option('--priority-approved', '优先加载approved目录中的规则', false)
     .option('--api-key <key>', 'OpenAI API密钥')
     .option('--base-url <url>', 'API基础URL')
     .option('--model <model>', '使用的模型名称')
@@ -65,6 +66,7 @@ function register(program) {
     .description('评估并清理所有低质量规则')
     .option('--score <score>', '质量分数阈值(0-100)，低于此分数的规则将被清理', '60')
     .option('--backup', '备份低质量规则到归档目录')
+    .option('--no-auto-move', '禁用自动分类，使用传统删除方式')
     .option('--rules-dir <dir>', '要清理的规则目录', './rules/learning-rules')
     .action(async (options) => {
       try {
@@ -82,6 +84,7 @@ function register(program) {
     .command('evaluate')
     .description('评估所有规则文件的质量')
     .option('--report', '生成详细评估报告')
+    .option('--no-auto-move', '禁用自动分类，仅评估不移动文件')
     .option('--rules-dir <dir>', '规则目录', './rules/learning-rules')
     .action(async (options) => {
       try {
@@ -91,6 +94,38 @@ function register(program) {
         process.exit(0);
       } catch (error) {
         console.error('评估规则时发生错误:', error.message);
+        process.exit(1);
+      }
+    });
+
+  // 子命令：approve - 手动认可规则文件
+  learnCommand
+    .command('approve <file>')
+    .description('手动将规则文件移动到approved目录')
+    .option('--rules-dir <dir>', '规则目录', './rules/learning-rules')
+    .action(async (file, options) => {
+      try {
+        const { approveRule } = await import('../../services/knowledge/approve.js');
+        await approveRule(file, options);
+        process.exit(0);
+      } catch (error) {
+        console.error('认可规则时发生错误:', error.message);
+        process.exit(1);
+      }
+    });
+
+  // 子命令：status - 显示规则库状态
+  learnCommand
+    .command('status')
+    .description('显示规则库状态和统计信息')
+    .option('--rules-dir <dir>', '规则目录', './rules/learning-rules')
+    .action(async (options) => {
+      try {
+        const { showRulesStatus } = await import('../../services/knowledge/status.js');
+        await showRulesStatus(options);
+        process.exit(0);
+      } catch (error) {
+        console.error('显示状态时发生错误:', error.message);
         process.exit(1);
       }
     });
