@@ -158,32 +158,130 @@ export default function HistoryViewer({ onBack }) {
       { label: '◀️  返回列表', value: 'back' }
     ];
 
+    // 提取分析结果数据
+    const result = selectedRecord.result;
+    const analysisResults = result?.data?.analysisResults || {};
+    const report = result?.data?.report || {};
+    
+    // 提取评分信息
+    const scores = {
+      overall: report?.overallAssessment?.score,
+      security: analysisResults?.securityAudit?.data?.securityScore,
+      performance: analysisResults?.performanceAnalysis?.data?.performanceScore,
+      standards: analysisResults?.standardsCheck?.data?.standardsScore
+    };
+
+    // 统计问题数量
+    const allIssues = [];
+    if (analysisResults?.securityAudit?.data?.vulnerabilities) {
+      allIssues.push(...analysisResults.securityAudit.data.vulnerabilities);
+    }
+    if (analysisResults?.performanceAnalysis?.data?.bottlenecks) {
+      allIssues.push(...analysisResults.performanceAnalysis.data.bottlenecks);
+    }
+    if (analysisResults?.standardsCheck?.data?.violations) {
+      allIssues.push(...analysisResults.standardsCheck.data.violations);
+    }
+
     return (
       <Box flexDirection="column" paddingY={1}>
         <Box marginBottom={1}>
           <Text bold color="cyan">━━━━ 历史记录详情 ━━━━</Text>
         </Box>
         
+        {/* 基本信息 */}
         <Box flexDirection="column" marginBottom={1}>
           <Text color="gray">ID: <Text color="white">{selectedRecord.id}</Text></Text>
           <Text color="gray">时间: <Text color="white">{new Date(selectedRecord.timestamp).toLocaleString('zh-CN')}</Text></Text>
           <Text color="gray">数据库: <Text color="blue">{getDatabaseLabel(selectedRecord.databaseType)}</Text></Text>
           <Text color="gray">类型: <Text color="magenta">{getTypeLabel(selectedRecord.type)}</Text></Text>
+          {selectedRecord.parentId && (
+            <Text color="gray">父记录: <Text color="yellow">{selectedRecord.parentId}</Text></Text>
+          )}
         </Box>
 
+        {/* SQL语句 */}
         <Box marginBottom={1}>
           <Text bold color="cyan">SQL语句:</Text>
         </Box>
-        <Box marginBottom={1} paddingLeft={2}>
+        <Box marginBottom={1}>
+          <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
+        </Box>
+        <Box marginBottom={0}>
           <Text>{selectedRecord.sql}</Text>
         </Box>
-
         <Box marginBottom={1}>
-          <Text bold color="cyan">分析结果摘要:</Text>
+          <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>
+        </Box>
+
+        {/* 分析结果状态 */}
+        <Box marginBottom={1}>
+          <Text bold color="cyan">分析结果:</Text>
         </Box>
         <Box marginBottom={1} paddingLeft={2}>
-          <Text color="gray">{selectedRecord.result.success ? '✓ 分析成功' : '✗ 分析失败'}</Text>
+          <Text color={selectedRecord.result.success ? 'green' : 'red'}>
+            {selectedRecord.result.success ? '✓ 分析成功' : '✗ 分析失败'}
+          </Text>
+          {!selectedRecord.result.success && selectedRecord.result.error && (
+            <Text color="red">错误: {selectedRecord.result.error}</Text>
+          )}
         </Box>
+
+        {/* 评分信息 */}
+        {selectedRecord.result.success && Object.values(scores).some(s => typeof s === 'number') && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">评分信息:</Text>
+            <Box paddingLeft={2} flexDirection="column">
+              {typeof scores.overall === 'number' && (
+                <Text>总体评分: <Text bold color={scores.overall >= 70 ? 'green' : scores.overall >= 50 ? 'yellow' : 'red'}>{scores.overall}/100</Text></Text>
+              )}
+              {typeof scores.security === 'number' && (
+                <Text>安全评分: <Text bold color={scores.security >= 70 ? 'green' : scores.security >= 50 ? 'yellow' : 'red'}>{scores.security}/100</Text></Text>
+              )}
+              {typeof scores.performance === 'number' && (
+                <Text>性能评分: <Text bold color={scores.performance >= 70 ? 'green' : scores.performance >= 50 ? 'yellow' : 'red'}>{scores.performance}/100</Text></Text>
+              )}
+              {typeof scores.standards === 'number' && (
+                <Text>规范评分: <Text bold color={scores.standards >= 70 ? 'green' : scores.standards >= 50 ? 'yellow' : 'red'}>{scores.standards}/100</Text></Text>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* 问题统计 */}
+        {selectedRecord.result.success && allIssues.length > 0 && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">发现问题 (共 {allIssues.length} 个):</Text>
+            <Box paddingLeft={2} flexDirection="column" marginTop={1}>
+              {allIssues.map((issue, index) => (
+                <Box key={index} flexDirection="column" marginBottom={index < allIssues.length - 1 ? 1 : 0}>
+                  <Text>
+                    <Text color={issue.severity === 'high' || issue.severity === '高' || issue.severity === 'critical' || issue.severity === '严重' ? 'red' : issue.severity === 'medium' || issue.severity === '中' ? 'yellow' : 'green'}>
+                      • [{issue.category || issue.type || '未知'}]
+                    </Text>
+                    <Text color="gray"> {issue.description?.substring(0, 60) || issue.type || '未知问题'}{issue.description?.length > 60 ? '...' : ''}</Text>
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {/* 优化建议 */}
+        {selectedRecord.result.success && report?.optimizedSql?.optimizedSql && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Text bold color="cyan">优化后的SQL:</Text>
+            <Box marginTop={0}>
+              <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
+            </Box>
+            <Box marginY={0}>
+              <Text>{report.optimizedSql.optimizedSql}</Text>
+            </Box>
+            <Box marginTop={0}>
+              <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>
+            </Box>
+          </Box>
+        )}
 
         <SelectInput
           items={items}

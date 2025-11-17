@@ -95,23 +95,10 @@ function register(program) {
       }
     });
 
-  // 默认行为：加载文档（保持向后兼容）
-  learnCommand
-    .option('-r, --rules-dir <dir>', 'rules目录路径', './rules')
-    .option('--api-key <key>', 'OpenAI API密钥')
-    .option('--base-url <url>', 'API基础URL')
-    .option('--model <model>', '使用的模型名称')
-    .option('--embedding-model <model>', '嵌入模型名称')
-    .action(async (options) => {
-      try {
-        const { learnDocuments } = await import('../../services/knowledge/learn.js');
-        await learnDocuments(options);
-        process.exit(0);
-      } catch (error) {
-        console.error('学习过程中发生错误:', error.message);
-        process.exit(1);
-      }
-    });
+  // 当不带子命令调用时，显示帮助信息
+  learnCommand.action(() => {
+    learnCommand.help();
+  });
 }
 
 export default {

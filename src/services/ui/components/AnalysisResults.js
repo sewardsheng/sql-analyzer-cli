@@ -225,7 +225,7 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
       {/* 问题列表 */}
       {allIssues.length > 0 ? (
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold marginBottom={1}>发现的问题:</Text>
+          <Text bold marginBottom={1}>发现的问题 (共 {allIssues.length} 个):</Text>
           <Box
             flexDirection="column"
             borderStyle="round"
@@ -233,8 +233,8 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
             paddingX={2}
             paddingY={1}
           >
-            {allIssues.slice(0, 8).map((issue, index) => (
-              <Box key={index} flexDirection="column" marginBottom={index < allIssues.slice(0, 8).length - 1 ? 1 : 0}>
+            {allIssues.map((issue, index) => (
+              <Box key={index} flexDirection="column" marginBottom={index < allIssues.length - 1 ? 1 : 0}>
                 <Box>
                   <Text>{getSeverityIcon(issue.severity)} </Text>
                   <Text color={getSeverityColor(issue.severity)} bold>
@@ -252,9 +252,6 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
                 )}
               </Box>
             ))}
-            {allIssues.length > 8 && (
-              <Text dimColor>... 还有 {allIssues.length - 8} 个问题</Text>
-            )}
           </Box>
         </Box>
       ) : (
@@ -267,14 +264,17 @@ export default function AnalysisResults({ result, onViewSQL, onBack }) {
       {report?.optimizedSql?.optimizedSql && (
         <Box flexDirection="column" marginBottom={1}>
           <Text bold color="cyan">✨ 优化后的SQL:</Text>
-          <Box
-            borderStyle="round"
-            borderColor="gray"
-            paddingX={2}
-            paddingY={1}
-            marginTop={1}
-          >
+          <Box marginTop={1}>
+            <Text dimColor>━━━━━━━━━━━ 开始 ━━━━━━━━━━━</Text>
+          </Box>
+          <Box paddingLeft={0} marginY={0}>
             <Text>{report.optimizedSql.optimizedSql}</Text>
+          </Box>
+          <Box marginTop={0}>
+            <Text dimColor>━━━━━━━━━━━ 结束 ━━━━━━━━━━━</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text dimColor>💡 提示: 请在终端中选择上方SQL文本并复制</Text>
           </Box>
         </Box>
       )}
