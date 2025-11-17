@@ -4,72 +4,29 @@
  */
 
 import chalk from 'chalk';
-import { formatSuccessResponse, formatErrorResponse } from '../../../utils/apiResponseFormatter.js';
+import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
+import { getKnowledgeService } from '../../knowledge/knowledgeService.js';
 
 /**
  * 注册知识库相关路由
  * @param {Object} app - Hono应用实例
  */
 export function registerKnowledgeRoutes(app) {
+  const knowledgeService = getKnowledgeService();
+
   /**
    * GET /api/knowledge - 获取知识库状态
    * 返回知识库的初始化状态和统计信息
    */
   app.get('/api/knowledge', async (c) => {
     try {
-      const { isVectorStoreInitialized, isVectorStorePersisted } = await import('../../../core/vectorStore.js');
-      const fs = await import('fs');
-      const path = await import('path');
+      const result = await knowledgeService.getKnowledgeStatus();
       
-      const isInitialized = isVectorStoreInitialized();
-      const isPersisted = isVectorStorePersisted();
-      
-      const status = {
-        initialized: isInitialized,
-        persisted: isPersisted,
-        documents: null,
-        statistics: null
-      };
-      
-      // 如果知识库已初始化，获取详细信息
-      if (isInitialized && isPersisted) {
-        try {
-          const VECTOR_STORE_PATH = path.join(process.cwd(), '.vector-store');
-          const docsPath = path.join(VECTOR_STORE_PATH, 'documents.json');
-          
-          if (fs.existsSync(docsPath)) {
-            const serializedDocs = JSON.parse(fs.readFileSync(docsPath, 'utf8'));
-            
-            // 统计文档信息
-            const sourceFiles = new Set();
-            const fileTypes = new Map();
-            
-            serializedDocs.forEach(doc => {
-              if (doc.metadata && doc.metadata.source) {
-                sourceFiles.add(doc.metadata.source);
-                const ext = path.extname(doc.metadata.source).substring(1);
-                if (ext) {
-                  fileTypes.set(ext, (fileTypes.get(ext) || 0) + 1);
-                }
-              }
-            });
-            
-            status.documents = {
-              total: serializedDocs.length,
-              files: Array.from(sourceFiles),
-              fileCount: sourceFiles.size
-            };
-            
-            status.statistics = {
-              byFileType: Object.fromEntries(fileTypes)
-            };
-          }
-        } catch (error) {
-          console.warn('获取知识库详细信息失败:', error.message);
-        }
+      if (!result.success) {
+        return c.json(formatErrorResponse('获取知识库状态失败', result.error), 500);
       }
       
-      return c.json(formatSuccessResponse(status, '获取知识库状态成功'));
+      return c.json(formatSuccessResponse(result.data, '获取知识库状态成功'));
     } catch (error) {
       console.error(chalk.red(`[API] 获取知识库状态失败: ${error.message}`));
       
@@ -95,10 +52,8 @@ export function registerKnowledgeRoutes(app) {
         return c.json(formatErrorResponse('请求体必须包含 "query" 字段，且为字符串类型'), 400);
       }
       
-      const { retrieveKnowledge } = await import('../../../core/knowledgeBase.js');
       const k = body.k || 4;
-      
-      const result = await retrieveKnowledge(body.query, k);
+      const result = await knowledgeService.searchKnowledge(body.query, k);
       
       if (!result.success) {
         return c.json(formatErrorResponse(result.error), 503);
@@ -126,25 +81,37 @@ export function registerKnowledgeRoutes(app) {
    * Request Body:
    * {
    *   "rulesDir": "./rules",  // 可选，默认为./rules
-   *   "reset": false          // 可选，是否重置知识库
+   *   "reset": false,         // 可选，是否重置知识库
+   *   "apiKey": "...",        // 可选，API密钥
+   *   "baseURL": "...",       // 可选，API基础URL
+   *   "model": "...",         // 可选，模型名称
+   *   "embeddingModel": "...", // 可选，嵌入模型
+   *   "priorityApproved": false // 可选，优先级批准
    * }
    */
   app.post('/api/knowledge/learn', async (c) => {
     try {
       const body = await c.req.json();
       
-      const { learnDocuments } = await import('../../knowledge/learn.js');
-      
       const options = {
         rulesDir: body.rulesDir || './rules',
-        reset: body.reset || false
+        reset: body.reset || false,
+        apiKey: body.apiKey,
+        baseURL: body.baseURL,
+        model: body.model,
+        embeddingModel: body.embeddingModel,
+        priorityApproved: body.priorityApproved || false
       };
       
       console.log(chalk.blue(`[API] 开始学习文档，目录: ${options.rulesDir}`));
       
       // 在后台执行学习任务
-      learnDocuments(options).then(() => {
-        console.log(chalk.green('[API] 文档学习完成'));
+      knowledgeService.learnDocuments(options).then((result) => {
+        if (result.success) {
+          console.log(chalk.green('[API] 文档学习完成'));
+        } else {
+          console.error(chalk.red('[API] 文档学习失败:'), result.error);
+        }
       }).catch(error => {
         console.error(chalk.red('[API] 文档学习失败:'), error.message);
       });
@@ -163,23 +130,61 @@ export function registerKnowledgeRoutes(app) {
    */
   app.post('/api/knowledge/reset', async (c) => {
     try {
-      const { resetVectorStore } = await import('../../../core/vectorStore.js');
-      
       console.log(chalk.blue('[API] 正在重置知识库...'));
       
-      const success = await resetVectorStore();
+      const result = await knowledgeService.resetKnowledge();
       
-      if (success) {
+      if (result.success) {
         console.log(chalk.green('[API] 知识库已重置'));
         return c.json(formatSuccessResponse(null, '知识库已重置'));
       } else {
         console.log(chalk.red('[API] 重置知识库失败'));
-        return c.json(formatErrorResponse('重置知识库失败'), 500);
+        return c.json(formatErrorResponse('重置知识库失败', result.error), 500);
       }
     } catch (error) {
       console.error(chalk.red(`[API] 重置知识库失败: ${error.message}`));
       
       return c.json(formatErrorResponse('重置知识库失败', error.message), 500);
+    }
+  });
+  
+  /**
+   * GET /api/knowledge/export - 导出知识库
+   * 导出知识库中的文档数据
+   *
+   * Query Parameters:
+   * - format: 导出格式 (json|csv)，默认为json
+   * - includeContent: 是否包含文档内容 (true|false)，默认为false
+   */
+  app.get('/api/knowledge/export', async (c) => {
+    try {
+      const format = c.req.query('format') || 'json';
+      const includeContent = c.req.query('includeContent') === 'true';
+      
+      const options = {
+        format,
+        includeContent
+      };
+      
+      console.log(chalk.blue(`[API] 导出知识库，格式: ${format}`));
+      
+      const result = await knowledgeService.exportKnowledge(options);
+      
+      if (!result.success) {
+        return c.json(formatErrorResponse('导出知识库失败', result.error), 500);
+      }
+      
+      if (format === 'csv') {
+        c.header('Content-Type', 'text/csv');
+        c.header('Content-Disposition', 'attachment; filename="knowledge.csv"');
+        return c.text(result.data);
+      } else {
+        return c.json(formatSuccessResponse(result.data, '导出知识库成功'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`[API] 导出知识库失败: ${error.message}`));
+      
+      return c.json(formatErrorResponse('导出知识库失败', error.message), 500);
     }
   });
   

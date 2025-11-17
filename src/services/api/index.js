@@ -6,8 +6,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { createCoordinator } from '../../core/coordinator.js';
-import { readConfig } from '../config/index.js';
+import { getAnalysisService } from '../../services/analysis/index.js';
+import { getConfigManager } from '../config/index.js';
 import chalk from 'chalk';
 
 // 导入路由模块
@@ -27,7 +27,8 @@ import { registerStatusRoutes } from './routes/status.js';
  * @param {string} options.corsOrigin - CORS允许的源
  */
 export async function createApiServer(options = {}) {
-  const config = await readConfig();
+  const configManager = getConfigManager();
+  const config = await configManager.getConfig();
   
   // 合并配置
   const serverConfig = {
@@ -63,8 +64,8 @@ export async function createApiServer(options = {}) {
   registerInitRoutes(app);
   registerStatusRoutes(app);
   
-  // 创建SQL分析协调器
-  const coordinator = createCoordinator(config);
+  // 获取分析服务实例
+  const analysisService = getAnalysisService();
   
   // 提供静态文件服务（前端页面）
   app.get('/web', async (c) => {
@@ -113,7 +114,8 @@ export async function createApiServer(options = {}) {
     const startTime = Date.now();
     
     try {
-      // 检查协调器是否已初始化
+      // 检查分析服务是否可用
+      const coordinator = await analysisService.getCoordinator();
       await coordinator.initialize();
       
       const responseTime = Date.now() - startTime;

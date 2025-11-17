@@ -4,7 +4,7 @@
  */
 
 import chalk from 'chalk';
-import { formatSuccessResponse, formatErrorResponse } from '../../../utils/apiResponseFormatter.js';
+import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
 
 /**
  * 注册配置管理相关路由

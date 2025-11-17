@@ -10,8 +10,9 @@ setupGlobalErrorHandlers();
 logInfo(`SQL分析器CLI启动，命令: ${process.argv.join(' ')}`);
 
 // 预加载配置以提升性能
-import { readConfig } from './services/config/index.js';
-await readConfig(); // 预热配置缓存
+import { getConfigManager } from './services/config/index.js';
+const configManager = getConfigManager();
+await configManager.getConfig(); // 预热配置缓存
 logInfo('配置已预加载到缓存');
 
 // 导入命令注册器

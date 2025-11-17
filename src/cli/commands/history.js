@@ -19,8 +19,9 @@ function register(program) {
     .description('显示所有历史记录列表')
     .action(async () => {
       try {
-        const { listHistory } = await import('../../services/history/history.js');
-        listHistory();
+        const { getHistoryDisplay } = await import('../../services/history/index.js');
+        const historyDisplay = getHistoryDisplay();
+        await historyDisplay.listHistory();
         process.exit(0);
       } catch (error) {
         console.error('显示历史记录列表时发生错误:', error.message);
@@ -34,8 +35,9 @@ function register(program) {
     .description('显示指定ID的历史记录详情')
     .action(async (id) => {
       try {
-        const { showHistoryDetail } = await import('../../services/history/history.js');
-        showHistoryDetail(id);
+        const { getHistoryDisplay } = await import('../../services/history/index.js');
+        const historyDisplay = getHistoryDisplay();
+        await historyDisplay.showHistoryDetail(id);
         process.exit(0);
       } catch (error) {
         console.error('显示历史记录详情时发生错误:', error.message);
@@ -49,8 +51,9 @@ function register(program) {
     .description('删除指定ID的历史记录')
     .action(async (id) => {
       try {
-        const { deleteHistory } = await import('../../services/history/history.js');
-        deleteHistory(id);
+        const { getHistoryDisplay } = await import('../../services/history/index.js');
+        const historyDisplay = getHistoryDisplay();
+        await historyDisplay.deleteHistory(id);
         process.exit(0);
       } catch (error) {
         console.error('删除历史记录时发生错误:', error.message);
@@ -64,8 +67,9 @@ function register(program) {
     .description('清空所有历史记录')
     .action(async () => {
       try {
-        const { clearAllHistory } = await import('../../services/history/history.js');
-        clearAllHistory();
+        const { getHistoryDisplay } = await import('../../services/history/index.js');
+        const historyDisplay = getHistoryDisplay();
+        await historyDisplay.clearAllHistory();
         process.exit(0);
       } catch (error) {
         console.error('清空历史记录时发生错误:', error.message);
@@ -79,8 +83,9 @@ function register(program) {
     .description('显示历史记录统计信息')
     .action(async () => {
       try {
-        const { showHistoryStats } = await import('../../services/history/history.js');
-        showHistoryStats();
+        const { getHistoryDisplay } = await import('../../services/history/index.js');
+        const historyDisplay = getHistoryDisplay();
+        await historyDisplay.showHistoryStats();
         process.exit(0);
       } catch (error) {
         console.error('显示历史记录统计信息时发生错误:', error.message);

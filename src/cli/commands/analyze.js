@@ -3,7 +3,7 @@
  * 提供SQL语句分析功能
  */
 
-import { analyzeSql } from '../../services/analysis/index.js';
+import { getAnalysisService } from '../../services/analysis/index.js';
 
 /**
  * 注册analyze命令
@@ -21,7 +21,8 @@ function register(program) {
     .option('--no-standards', '禁用编码规范检查')
     .action(async (options) => {
       try {
-        await analyzeSql(options);
+        const analysisService = getAnalysisService();
+        await analysisService.analyzeSql(options);
         process.exit(0);
       } catch (error) {
         console.error('分析过程中发生错误:', error.message);

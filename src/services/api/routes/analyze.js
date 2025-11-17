@@ -3,10 +3,10 @@
  * 提供SQL分析相关的API端点
  */
 
-import { createCoordinator } from '../../../core/coordinator.js';
-import { readConfig } from '../../config/index.js';
+import { getAnalysisService } from '../../../services/analysis/index.js';
+import { getConfigManager } from '../../config/index.js';
 import chalk from 'chalk';
-import { formatAnalysisResult, formatBatchAnalysisResults, formatErrorResponse, formatSuccessResponse } from '../../../utils/apiResponseFormatter.js';
+import { formatAnalysisResult, formatBatchAnalysisResults, formatErrorResponse, formatSuccessResponse } from '../../../utils/responseHandler.js';
 
 /**
  * 注册分析相关路由
@@ -44,11 +44,10 @@ export function registerAnalyzeRoutes(app) {
       // 执行SQL分析
       console.log(chalk.blue(`\n[API] 收到分析请求: ${sqlQuery.substring(0, 50)}...`));
       
-      const config = await readConfig();
-      const coordinator = createCoordinator(config);
-      const result = await coordinator.coordinateAnalysis({
-        sqlQuery,
-        options: analysisOptions
+      const analysisService = getAnalysisService();
+      const result = await analysisService.analyzeSql({
+        sql: sqlQuery,
+        ...analysisOptions
       });
       
       const responseTime = Date.now() - startTime;
@@ -108,8 +107,7 @@ export function registerAnalyzeRoutes(app) {
       
       console.log(chalk.blue(`\n[API] 收到批量分析请求，共 ${body.sqls.length} 条SQL`));
       
-      const config = await readConfig();
-      const coordinator = createCoordinator(config);
+      const analysisService = getAnalysisService();
       
       // 并行分析所有SQL
       const analysisPromises = body.sqls.map(async (item, index) => {
@@ -122,10 +120,9 @@ export function registerAnalyzeRoutes(app) {
             };
           }
           
-          const result = await coordinator.coordinateAnalysis({
-            sqlQuery: item.sql.trim(),
-            databaseType: item.databaseType,
-            options: analysisOptions
+          const result = await analysisService.analyzeSql({
+            sql: item.sql.trim(),
+            ...analysisOptions
           });
           
           return {

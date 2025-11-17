@@ -18,7 +18,7 @@ import path from "path";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import crypto from "crypto";
-import { readConfig } from '../services/config/index.js';
+import { getConfigManager } from '../services/config/index.js';
 import { logError } from '../utils/logger.js';
 
 // 全局向量存储实例

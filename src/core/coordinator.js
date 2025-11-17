@@ -4,7 +4,6 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { readConfig } from '../services/config/index.js';
 import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
 import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
 import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
@@ -32,14 +31,18 @@ class SqlAnalysisCoordinator {
   async initialize() {
     if (this.initialized) return;
     
-    const envConfig = await readConfig();
+    // 配置应该由服务层传入，这里不再读取配置文件
+    if (!this.config.apiKey || !this.config.baseURL || !this.config.model) {
+      throw new Error('协调器初始化失败：缺少必要的配置参数 (apiKey, baseURL, model)');
+    }
+    
     this.llm = new ChatOpenAI({
-      modelName: this.config.model || envConfig.model,
+      modelName: this.config.model,
       temperature: 0.1,
       maxTokens: 99999,
       configuration: {
-        apiKey: this.config.apiKey || envConfig.apiKey,
-        baseURL: this.config.baseURL || envConfig.baseURL
+        apiKey: this.config.apiKey,
+        baseURL: this.config.baseURL
       }
     });
     

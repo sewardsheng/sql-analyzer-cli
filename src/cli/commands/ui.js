@@ -3,7 +3,7 @@
  * 使用 Ink + Chalk + CLI-Progress 构建交互式终端UI
  */
 
-import { readConfig } from '../../services/config/index.js';
+import { getConfigManager } from '../../services/config/index.js';
 import { logInfo, logError } from '../../utils/logger.js';
 
 /**
@@ -23,7 +23,8 @@ function register(program) {
         const { startUI } = await import('../../services/ui/index.js');
         
         // 读取配置
-        const config = await readConfig();
+        const configManager = getConfigManager();
+        const config = await configManager.getConfig();
         
         // 启动UI
         await startUI({

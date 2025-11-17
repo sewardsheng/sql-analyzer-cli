@@ -51,174 +51,317 @@ const CONFIG_DESC = {
 };
 
 /**
- * 解析.env文件内容
- * @param {string} content - 文件内容
- * @returns {Object} 环境变量对象
+ * 配置管理器单例类
  */
-function parseEnvContent(content) {
-  const env = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
+class ConfigManager {
+  constructor() {
+    if (ConfigManager.instance) {
+      return ConfigManager.instance;
+    }
     
-    const match = trimmed.match(/^([^=]+)=(.*)$/);
-    if (match) {
-      env[match[1].trim()] = match[2].trim();
+    this._config = null;
+    this._lastModified = null;
+    this._initialized = false;
+    ConfigManager.instance = this;
+  }
+
+  /**
+   * 解析.env文件内容
+   * @param {string} content - 文件内容
+   * @returns {Object} 环境变量对象
+   */
+  parseEnvContent(content) {
+    const env = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      
+      const match = trimmed.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        env[match[1].trim()] = match[2].trim();
+      }
+    }
+    return env;
+  }
+
+  /**
+   * 检查配置文件是否已修改
+   * @returns {Promise<boolean>} 是否已修改
+   */
+  async _isConfigModified() {
+    try {
+      const stats = await fs.stat(ENV_FILE);
+      const currentModified = stats.mtime.getTime();
+      
+      if (this._lastModified !== currentModified) {
+        this._lastModified = currentModified;
+        return true;
+      }
+      return false;
+    } catch {
+      // 文件不存在，检查是否之前也不存在
+      return this._config !== null;
     }
   }
-  return env;
-}
 
-/**
- * 读取配置
- * @returns {Promise<Object>} 配置对象
- */
-export async function readConfig() {
-  try {
-    const content = await fs.readFile(ENV_FILE, 'utf8');
-    const env = parseEnvContent(content);
-    
-    // 构建配置对象
-    const config = {};
-    for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
-      const envValue = env[envKey] || process.env[envKey];
+  /**
+   * 从文件加载配置
+   * @returns {Promise<Object>} 配置对象
+   */
+  async _loadConfigFromFile() {
+    try {
+      const content = await fs.readFile(ENV_FILE, 'utf8');
+      const env = this.parseEnvContent(content);
       
-      // 类型转换
-      if (key === 'apiPort') {
-        config[key] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG[key];
-        if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
-      } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
-        config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
-      } else {
-        config[key] = envValue || DEFAULT_CONFIG[key];
+      // 构建配置对象
+      const config = {};
+      for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
+        const envValue = env[envKey] || process.env[envKey];
+        
+        // 类型转换
+        if (key === 'apiPort') {
+          config[key] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG[key];
+          if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
+        } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
+          config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
+        } else {
+          config[key] = envValue || DEFAULT_CONFIG[key];
+        }
+      }
+      
+      return config;
+    } catch (error) {
+      // 文件不存在或读取失败,返回默认配置
+      return { ...DEFAULT_CONFIG };
+    }
+  }
+
+  /**
+   * 获取配置（带缓存）
+   * @param {boolean} forceRefresh - 是否强制刷新
+   * @returns {Promise<Object>} 配置对象
+   */
+  async getConfig(forceRefresh = false) {
+    // 如果未初始化或需要强制刷新，重新加载
+    if (!this._initialized || forceRefresh) {
+      await this._refreshConfig();
+      this._initialized = true;
+    }
+    
+    // 检查文件是否被修改
+    if (await this._isConfigModified()) {
+      await this._refreshConfig();
+    }
+    
+    return this._config;
+  }
+
+  /**
+   * 刷新配置
+   */
+  async _refreshConfig() {
+    this._config = await this._loadConfigFromFile();
+  }
+
+  /**
+   * 获取单个配置项
+   * @param {string} key - 配置键名
+   * @returns {Promise<any>} 配置值
+   */
+  async get(key) {
+    const config = await this.getConfig();
+    return config[key];
+  }
+
+  /**
+   * 设置配置项
+   * @param {string} key - 配置键名
+   * @param {any} value - 配置值
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async set(key, value) {
+    if (!CONFIG_MAP[key]) {
+      throw new Error(`无效的配置键: ${key}`);
+    }
+    
+    try {
+      // 读取现有配置
+      let env = {};
+      try {
+        const content = await fs.readFile(ENV_FILE, 'utf8');
+        env = this.parseEnvContent(content);
+      } catch {
+        // 文件不存在,使用空对象
+      }
+      
+      // 更新配置
+      const envKey = CONFIG_MAP[key];
+      env[envKey] = String(value);
+      
+      // 写入文件
+      await this._writeEnvFile(env);
+      
+      // 强制刷新缓存
+      await this.getConfig(true);
+      
+      return true;
+    } catch (error) {
+      console.error('设置配置失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 写入.env文件
+   * @param {Object} env - 环境变量对象
+   */
+  async _writeEnvFile(env) {
+    let content = '';
+    
+    // 按照配置映射的顺序写入
+    for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
+      if (env[envKey] !== undefined) {
+        content += `# ${CONFIG_DESC[key]}\n`;
+        content += `${envKey}=${env[envKey]}\n\n`;
       }
     }
     
-    return config;
-  } catch (error) {
-    // 文件不存在或读取失败,返回默认配置
-    return { ...DEFAULT_CONFIG };
+    await fs.writeFile(ENV_FILE, content, 'utf8');
+  }
+
+  /**
+   * 重置配置为默认值
+   */
+  async reset() {
+    const chalk = (await import('chalk')).default;
+    const inquirer = (await import('inquirer')).default;
+    
+    // 确认重置操作
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: '确定要重置所有配置为默认值吗？',
+        default: false
+      }
+    ]);
+    
+    if (!confirm) {
+      console.log(chalk.gray('操作已取消'));
+      return;
+    }
+    
+    const env = {};
+    for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
+      env[envKey] = String(DEFAULT_CONFIG[key]);
+    }
+    
+    await this._writeEnvFile(env);
+    
+    // 强制刷新缓存
+    await this.getConfig(true);
+    
+    console.log(chalk.green('✅ 配置已重置为默认值\n'));
+    await this.list();
+  }
+
+  /**
+   * 列出所有配置
+   */
+  async list() {
+    const config = await this.getConfig();
+    const chalk = (await import('chalk')).default;
+    
+    console.clear();
+    console.log(chalk.cyan(`
+╔═════════════════════════════════════════════════════════════╗
+║                        系统配置                             ║
+╚═════════════════════════════════════════════════════════════╝
+`));
+    
+    console.log(chalk.blue('当前配置项:'));
+    console.log(chalk.gray('─'.repeat(60)));
+    
+    for (const key of Object.keys(DEFAULT_CONFIG)) {
+      const value = config[key];
+      const displayValue = value === '' ? chalk.gray('(未设置)') : chalk.white(value);
+      const keyName = chalk.cyan(CONFIG_DESC[key] || key);
+      console.log(`${keyName.padEnd(30)}: ${displayValue}`);
+    }
+    
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log(chalk.yellow('\n💡 提示: 使用 "sql-analyzer config set <key> <value>" 修改配置\n'));
+  }
+
+  /**
+   * 清除缓存（用于测试）
+   */
+  _clearCache() {
+    this._config = null;
+    this._lastModified = null;
+    this._initialized = false;
   }
 }
 
+// 创建全局单例实例
+const configManager = new ConfigManager();
+
+// ============================================================================
+// 向后兼容的导出函数
+// ============================================================================
+
 /**
- * 获取单个配置项
+ * 读取配置（向后兼容）
+ * @returns {Promise<Object>} 配置对象
+ */
+export async function readConfig() {
+  return await configManager.getConfig();
+}
+
+/**
+ * 获取单个配置项（向后兼容）
  * @param {string} key - 配置键名
  * @returns {Promise<any>} 配置值
  */
 export async function getConfig(key) {
-  const config = await readConfig();
-  return config[key];
+  return await configManager.get(key);
 }
 
 /**
- * 设置配置项
+ * 设置配置项（向后兼容）
  * @param {string} key - 配置键名
  * @param {any} value - 配置值
  * @returns {Promise<boolean>} 是否成功
  */
 export async function setConfig(key, value) {
-  if (!CONFIG_MAP[key]) {
-    throw new Error(`无效的配置键: ${key}`);
-  }
-  
-  try {
-    // 读取现有配置
-    let env = {};
-    try {
-      const content = await fs.readFile(ENV_FILE, 'utf8');
-      env = parseEnvContent(content);
-    } catch {
-      // 文件不存在,使用空对象
-    }
-    
-    // 更新配置
-    const envKey = CONFIG_MAP[key];
-    env[envKey] = String(value);
-    
-    // 写入文件
-    await writeEnvFile(env);
-    return true;
-  } catch (error) {
-    console.error('设置配置失败:', error);
-    return false;
-  }
+  return await configManager.set(key, value);
 }
 
 /**
- * 写入.env文件
- * @param {Object} env - 环境变量对象
- */
-async function writeEnvFile(env) {
-  let content = '';
-  
-  // 按照配置映射的顺序写入
-  for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
-    if (env[envKey] !== undefined) {
-      content += `# ${CONFIG_DESC[key]}\n`;
-      content += `${envKey}=${env[envKey]}\n\n`;
-    }
-  }
-  
-  await fs.writeFile(ENV_FILE, content, 'utf8');
-}
-
-/**
- * 列出所有配置
+ * 列出所有配置（向后兼容）
  */
 export async function listConfig() {
-  const config = await readConfig();
-  const chalk = (await import('chalk')).default;
-  
-  console.clear();
-  console.log(chalk.cyan(`
-╔═════════════════════════════════════════════════════════════╗
-║                        系统配置                             ║
-╚═════════════════════════════════════════════════════════════╝
-`));
-  
-  console.log(chalk.blue('当前配置项:'));
-  console.log(chalk.gray('─'.repeat(60)));
-  
-  for (const key of Object.keys(DEFAULT_CONFIG)) {
-    const value = config[key];
-    const displayValue = value === '' ? chalk.gray('(未设置)') : chalk.white(value);
-    const keyName = chalk.cyan(CONFIG_DESC[key] || key);
-    console.log(`${keyName.padEnd(30)}: ${displayValue}`);
-  }
-  
-  console.log(chalk.gray('─'.repeat(60)));
-  console.log(chalk.yellow('\n💡 提示: 使用 "sql-analyzer config set <key> <value>" 修改配置\n'));
+  await configManager.list();
 }
 
 /**
- * 重置配置为默认值
+ * 重置配置为默认值（向后兼容）
  */
 export async function resetConfig() {
-  const chalk = (await import('chalk')).default;
-  const inquirer = (await import('inquirer')).default;
-  
-  // 确认重置操作
-  const { confirm } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'confirm',
-      message: '确定要重置所有配置为默认值吗？',
-      default: false
-    }
-  ]);
-  
-  if (!confirm) {
-    console.log(chalk.gray('操作已取消'));
-    return;
-  }
-  
-  const env = {};
-  for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
-    env[envKey] = String(DEFAULT_CONFIG[key]);
-  }
-  
-  await writeEnvFile(env);
-  console.log(chalk.green('✅ 配置已重置为默认值\n'));
-  await listConfig();
+  await configManager.reset();
 }
+
+// ============================================================================
+// 新的导出 - 直接访问单例
+// ============================================================================
+
+/**
+ * 获取配置管理器实例
+ * @returns {ConfigManager} 配置管理器实例
+ */
+export function getConfigManager() {
+  return configManager;
+}
+
+// 导出单例实例（用于高级用法）
+export { configManager };

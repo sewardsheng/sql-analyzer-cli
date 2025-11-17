@@ -1,89 +1,98 @@
 /**
- * SQL分析服务入口
- * 提供SQL分析功能的统一接口
+ * SQL分析服务
+ * 提供SQL分析功能的业务编排层
  */
 
 import { createCoordinator } from '../../core/coordinator.js';
-import { readConfig } from '../config/index.js';
-import HistoryService from '../history/historyService.js';
+import { getConfigManager } from '../config/index.js';
+import { getHistoryService } from '../history/historyService.js';
 import { displayEnhancedSummary } from '../../utils/summaryDisplay.js';
-import fs from 'fs/promises';
-import path from 'path';
+import { readSqlFromFile } from '../../utils/fileReader.js';
 import chalk from 'chalk';
 
 /**
- * 从文件读取SQL语句
- * @param {string} filePath - SQL文件路径
- * @returns {Promise<string>} SQL语句内容
+ * SQL分析服务类
  */
-async function readSqlFromFile(filePath) {
-  try {
-    const absolutePath = path.resolve(filePath);
-    const content = await fs.readFile(absolutePath, 'utf8');
-    const trimmedContent = content.trim();
-
-    if (!trimmedContent) {
-      throw new Error(`文件 ${filePath} 为空或只包含空白字符`);
-    }
-
-    return trimmedContent;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      throw new Error(`文件不存在: ${filePath}`);
-    } else if (error.code === 'EACCES') {
-      throw new Error(`没有权限读取文件: ${filePath}`);
-    } else {
-      throw new Error(`无法读取文件 ${filePath}: ${error.message}`);
-    }
+class AnalysisService {
+  constructor() {
+    this.coordinator = null;
+    this.historyService = getHistoryService();
+    this.configManager = getConfigManager();
   }
-}
 
-/**
- * 分析SQL语句
- * @param {Object} options - 分析选项
- * @param {string} [options.sql] - 要分析的SQL语句
- * @param {string} [options.file] - 包含SQL语句的文件路径
- * @param {boolean} [options.learn] - 是否启用学习功能
- * @param {boolean} [options.performance] - 是否启用性能分析
- * @param {boolean} [options.security] - 是否启用安全审计
- * @param {boolean} [options.standards] - 是否启用编码规范检查
- * @returns {Promise<Object>} 分析结果
- */
-async function analyzeSql(options) {
-  try {
-    const { sql, file, ...analysisOptions } = options;
+  /**
+   * 获取或创建协调器实例
+   * @returns {Promise<Object>} 协调器实例
+   */
+  async getCoordinator() {
+    if (!this.coordinator) {
+      const config = await this.configManager.getConfig();
+      this.coordinator = createCoordinator(config);
+    }
+    return this.coordinator;
+  }
+
+  /**
+   * 验证分析输入
+   * @param {Object} options - 分析选项
+   * @returns {Object} 验证结果
+   */
+  validateInput(options) {
+    const { sql, file } = options;
     
-    // 验证输入
     if (!sql && !file) {
       throw new Error('必须提供 --sql 或 --file 参数');
     }
     
-    // 获取SQL语句和输入类型
-    let sqlQuery;
-    let inputType; // 'command' 表示命令行输入, 'file' 表示文件输入
+    if (sql && file) {
+      throw new Error('不能同时提供 --sql 和 --file 参数');
+    }
     
+    return { valid: true };
+  }
+
+  /**
+   * 准备SQL查询和元数据
+   * @param {Object} options - 分析选项
+   * @returns {Promise<Object>} SQL查询和元数据
+   */
+  async prepareSqlQuery(options) {
+    const { sql, file } = options;
+    let sqlQuery;
+    let inputType;
+    let sourceInfo;
+
     if (sql) {
       sqlQuery = sql;
       inputType = 'command';
+      sourceInfo = '命令行输入';
       console.log(chalk.blue('\n正在分析SQL语句...'));
     } else {
       sqlQuery = await readSqlFromFile(file);
       inputType = 'file';
+      sourceInfo = `文件: ${file}`;
       console.log(chalk.blue(`\n正在从文件读取SQL: ${file}`));
       console.log(chalk.green('✓ 文件读取成功'));
     }
+
+    return {
+      sqlQuery,
+      inputType,
+      sourceInfo
+    };
+  }
+
+  /**
+   * 执行核心分析
+   * @param {string} sqlQuery - SQL查询
+   * @param {Object} analysisOptions - 分析选项
+   * @returns {Promise<Object>} 分析结果
+   */
+  async executeCoreAnalysis(sqlQuery, analysisOptions) {
+    const coordinator = await this.getCoordinator();
     
-    // 读取配置
-    const config = await readConfig();
-    
-    // 创建协调器
-    const coordinator = createCoordinator(config);
-    
-    // 执行分析
     console.log(chalk.blue('\n开始执行多维度SQL分析...\n'));
     console.log('='.repeat(60));
-    
-    // 添加错误捕获以便调试
     console.log(chalk.gray('调用协调器进行分析...'));
     
     const result = await coordinator.coordinateAnalysis({
@@ -97,28 +106,125 @@ async function analyzeSql(options) {
       throw new Error(result.error);
     }
     
-    // 保存分析结果到历史记录
+    return result;
+  }
+
+  /**
+   * 保存分析历史
+   * @param {string} sqlQuery - SQL查询
+   * @param {Object} result - 分析结果
+   * @param {string} inputType - 输入类型
+   * @returns {Promise<string|null>} 历史记录ID
+   */
+  async saveAnalysisHistory(sqlQuery, result, inputType) {
     try {
-      const historyService = new HistoryService();
-      const historyId = historyService.saveAnalysis({
+      const historyId = await this.historyService.saveAnalysis({
         sql: sqlQuery,
         result: result,
-        type: inputType // 使用实际的输入类型: 'command' 或 'file'
+        type: inputType
       });
       console.log(chalk.gray(`\n历史记录已保存: ${historyId}`));
+      return historyId;
     } catch (historyError) {
       console.warn(chalk.yellow(`警告: 保存历史记录失败: ${historyError.message}`));
+      return null;
+    }
+  }
+
+  /**
+   * 显示分析结果
+   * @param {Object} result - 分析结果
+   */
+  async displayResult(result) {
+    const config = await this.configManager.getConfig();
+    displayEnhancedSummary(result, config);
+  }
+
+  /**
+   * 分析SQL语句（主要业务流程）
+   * @param {Object} options - 分析选项
+   * @param {string} [options.sql] - 要分析的SQL语句
+   * @param {string} [options.file] - 包含SQL语句的文件路径
+   * @param {boolean} [options.learn] - 是否启用学习功能
+   * @param {boolean} [options.performance] - 是否启用性能分析
+   * @param {boolean} [options.security] - 是否启用安全审计
+   * @param {boolean} [options.standards] - 是否启用编码规范检查
+   * @returns {Promise<Object>} 分析结果
+   */
+  async analyzeSql(options) {
+    try {
+      // 1. 验证输入
+      this.validateInput(options);
+      
+      // 2. 准备SQL查询和元数据
+      const { sqlQuery, inputType, sourceInfo } = await this.prepareSqlQuery(options);
+      
+      // 3. 提取分析选项（排除sql和file）
+      const { sql, file, ...analysisOptions } = options;
+      
+      // 4. 执行核心分析
+      const result = await this.executeCoreAnalysis(sqlQuery, analysisOptions);
+      
+      // 5. 保存分析历史
+      await this.saveAnalysisHistory(sqlQuery, result, inputType);
+      
+      // 6. 显示结果
+      await this.displayResult(result);
+      
+      return result;
+    } catch (error) {
+      console.error(chalk.red(`\n✗ 分析失败: ${error.message}`));
+      throw error;
+    }
+  }
+
+  /**
+   * 批量分析SQL语句
+   * @param {Array<string>} sqlQueries - SQL查询数组
+   * @param {Object} options - 分析选项
+   * @returns {Promise<Array>} 分析结果数组
+   */
+  async analyzeBatch(sqlQueries, options = {}) {
+    const results = [];
+    
+    console.log(chalk.blue(`\n开始批量分析 ${sqlQueries.length} 个SQL语句...\n`));
+    
+    for (let i = 0; i < sqlQueries.length; i++) {
+      const sqlQuery = sqlQueries[i];
+      console.log(chalk.cyan(`\n[${i + 1}/${sqlQueries.length}] 分析第 ${i + 1} 个SQL语句...`));
+      
+      try {
+        const result = await this.analyzeSql({ sql: sqlQuery, ...options });
+        results.push({ index: i, success: true, result });
+      } catch (error) {
+        results.push({ index: i, success: false, error: error.message });
+        console.error(chalk.red(`第 ${i + 1} 个SQL分析失败: ${error.message}`));
+      }
     }
     
-    // 显示增强的结果摘要
-    displayEnhancedSummary(result, config);
-    return result;
-  } catch (error) {
-    console.error(chalk.red(`\n✗ 分析失败: ${error.message}`));
-    throw error;
+    console.log(chalk.green(`\n✅ 批量分析完成，成功: ${results.filter(r => r.success).length}，失败: ${results.filter(r => !r.success).length}\n`));
+    
+    return results;
   }
 }
 
-export {
-  analyzeSql
-};
+// 创建服务实例
+const analysisService = new AnalysisService();
+
+// ============================================================================
+// 导出服务实例
+// ============================================================================
+
+/**
+ * 获取分析服务实例
+ * @returns {AnalysisService} 分析服务实例
+ */
+export function getAnalysisService() {
+  return analysisService;
+}
+
+// 导出服务类和实例
+export { AnalysisService, analysisService };
+
+// 默认导出服务实例
+export default analysisService;

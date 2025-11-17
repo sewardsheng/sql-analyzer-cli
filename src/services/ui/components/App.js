@@ -17,7 +17,7 @@ import ConfigViewer from './ConfigViewer.js';
 import LearnManager from './LearnManager.js';
 import SearchKnowledge from './SearchKnowledge.js';
 import { readFile } from 'fs/promises';
-import { analyzeSql } from '../../../services/analysis/index.js';
+import { getAnalysisService } from '../../../services/analysis/index.js';
 
 /**
  * 应用状态
@@ -96,7 +96,8 @@ export default function App({ config, file, database }) {
       setCurrentAnalyzer('执行多维度分析');
       setProgress(30);
       
-      const result = await analyzeSql({
+      const analysisService = getAnalysisService();
+      const result = await analysisService.analyzeSql({
         file: filePath,
         learn: true,
         performance: true,
@@ -130,7 +131,8 @@ export default function App({ config, file, database }) {
       setCurrentAnalyzer('执行多维度分析');
       setProgress(30);
       
-      const result = await analyzeSql({
+      const analysisService = getAnalysisService();
+      const result = await analysisService.analyzeSql({
         sql: sql,
         learn: true,
         performance: true,

@@ -4,7 +4,7 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { readConfig } from '../../services/config/index.js';
+import { getConfigManager } from '../../services/config/index.js';
 import JSONCleaner from '../../utils/jsonCleaner.js';
 
 /**
@@ -24,7 +24,8 @@ class BaseAnalyzer {
   async initialize() {
     if (this.initialized) return;
     
-    const envConfig = await readConfig();
+    const configManager = getConfigManager();
+    const envConfig = await configManager.getConfig();
     this.llm = new ChatOpenAI({
       modelName: this.config.model || envConfig.model,
       temperature: 0.1,

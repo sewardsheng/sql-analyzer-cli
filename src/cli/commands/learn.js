@@ -25,8 +25,9 @@ function register(program) {
     .option('--embedding-model <model>', '嵌入模型名称')
     .action(async (options) => {
       try {
-        const { learnDocuments } = await import('../../services/knowledge/learn.js');
-        await learnDocuments(options);
+        const { getKnowledgeDisplay } = await import('../../services/knowledge/knowledgeDisplay.js');
+        const knowledgeDisplay = getKnowledgeDisplay();
+        await knowledgeDisplay.learnDocuments(options);
         process.exit(0);
       } catch (error) {
         console.error('加载文档时发生错误:', error.message);
@@ -40,17 +41,19 @@ function register(program) {
     .description('重置知识库')
     .action(async () => {
       try {
-        const { resetVectorStore } = await import('../../core/vectorStore.js');
+        const { getKnowledgeService } = await import('../../services/knowledge/knowledgeService.js');
         const chalk = (await import('chalk')).default;
         const ora = (await import('ora')).default;
         
         const spinner = ora('正在重置知识库...').start();
-        const success = await resetVectorStore();
+        const knowledgeService = getKnowledgeService();
+        const result = await knowledgeService.resetKnowledge();
         
-        if (success) {
+        if (result.success) {
           spinner.succeed('知识库已重置');
         } else {
           spinner.fail('重置知识库失败');
+          console.error('错误:', result.error);
           process.exit(1);
         }
         process.exit(0);

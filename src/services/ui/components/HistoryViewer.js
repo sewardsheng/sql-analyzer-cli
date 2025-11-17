@@ -6,9 +6,9 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
-import HistoryService from '../../history/historyService.js';
+import { getHistoryService } from '../../history/historyService.js';
 
-const historyService = new HistoryService();
+const historyService = getHistoryService();
 
 /**
  * 历史记录视图状态
