@@ -15,20 +15,17 @@ export const DEFAULT_CONFIG = {
   apiCorsEnabled: true,
   apiCorsOrigin: '*',
   // 摘要显示配置
-  enableAISummary: !process.env.CI,  // CI环境中禁用AI摘要
-  enableColors: !process.env.CI,     // CI环境中可选禁用颜色
-  summaryOutputFormat: process.env.CI ? 'structured' : 'pretty',
-  // CI/CD 快速模式配置
-  cicd: {
-    quickMode: true,
-    scoreThreshold: 70,        // 低于此分数阻止提交
-    blockOnCritical: true,     // 发现严重问题立即阻止
-    allowedSkipPatterns: ['test_', 'dev_'],  // 允许跳过的文件模式
-    enableJsonOutput: true,    // 启用JSON输出格式
-    quickModeWeights: {
-      security: 0.50,          // 安全权重50%
-      performance: 0.30,       // 性能权重30%
-      standards: 0.20          // 规范权重20%
+  enableAISummary: true,
+  enableColors: true,
+  summaryOutputFormat: 'pretty',
+  // Headless 模式配置
+  headless: {
+    defaultFormat: 'summary',     // 默认输出格式
+    defaultThreshold: 70,         // 默认评分阈值
+    scoreWeights: {
+      security: 0.50,             // 安全权重50%
+      performance: 0.30,          // 性能权重30%
+      standards: 0.20             // 规范权重20%
     }
   }
 };
@@ -46,11 +43,9 @@ const CONFIG_MAP = {
   enableAISummary: 'ENABLE_AI_SUMMARY',
   enableColors: 'ENABLE_COLORS',
   summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT',
-  // CI/CD 配置
-  'cicd.quickMode': 'CICD_QUICK_MODE',
-  'cicd.scoreThreshold': 'CICD_SCORE_THRESHOLD',
-  'cicd.blockOnCritical': 'CICD_BLOCK_ON_CRITICAL',
-  'cicd.enableJsonOutput': 'CICD_ENABLE_JSON_OUTPUT'
+  // Headless 模式配置
+  'headless.defaultFormat': 'HEADLESS_DEFAULT_FORMAT',
+  'headless.defaultThreshold': 'HEADLESS_DEFAULT_THRESHOLD'
 };
 
 // 配置键描述
@@ -66,10 +61,8 @@ const CONFIG_DESC = {
   enableAISummary: '是否启用AI摘要',
   enableColors: '是否启用颜色输出',
   summaryOutputFormat: '摘要输出格式',
-  'cicd.quickMode': 'CI/CD快速模式',
-  'cicd.scoreThreshold': 'CI/CD评分阈值',
-  'cicd.blockOnCritical': 'CI/CD严重问题阻止',
-  'cicd.enableJsonOutput': 'CI/CD启用JSON输出'
+  'headless.defaultFormat': 'Headless默认输出格式',
+  'headless.defaultThreshold': 'Headless默认评分阈值'
 };
 
 /**
@@ -146,25 +139,25 @@ class ConfigManager {
           if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
         } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
           config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
-        } else if (key.startsWith('cicd.')) {
-          // 处理CI/CD嵌套配置
-          const cicdKey = key.substring(5); // 移除 'cicd.' 前缀
-          if (!config.cicd) config.cicd = { ...DEFAULT_CONFIG.cicd };
+        } else if (key.startsWith('headless.')) {
+          // 处理 Headless 嵌套配置
+          const headlessKey = key.substring(9); // 移除 'headless.' 前缀
+          if (!config.headless) config.headless = { ...DEFAULT_CONFIG.headless };
           
-          if (cicdKey === 'scoreThreshold') {
-            config.cicd[cicdKey] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG.cicd[cicdKey];
-            if (isNaN(config.cicd[cicdKey])) config.cicd[cicdKey] = DEFAULT_CONFIG.cicd[cicdKey];
-          } else if (cicdKey === 'quickMode' || cicdKey === 'blockOnCritical' || cicdKey === 'enableJsonOutput') {
-            config.cicd[cicdKey] = envValue ? envValue === 'true' : DEFAULT_CONFIG.cicd[cicdKey];
+          if (headlessKey === 'defaultThreshold') {
+            config.headless[headlessKey] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG.headless[headlessKey];
+            if (isNaN(config.headless[headlessKey])) config.headless[headlessKey] = DEFAULT_CONFIG.headless[headlessKey];
+          } else {
+            config.headless[headlessKey] = envValue || DEFAULT_CONFIG.headless[headlessKey];
           }
         } else {
           config[key] = envValue || DEFAULT_CONFIG[key];
         }
       }
       
-      // 确保CI/CD配置完整
-      if (!config.cicd) {
-        config.cicd = { ...DEFAULT_CONFIG.cicd };
+      // 确保 Headless 配置完整
+      if (!config.headless) {
+        config.headless = { ...DEFAULT_CONFIG.headless };
       }
       
       return config;

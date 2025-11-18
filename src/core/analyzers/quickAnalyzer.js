@@ -64,23 +64,23 @@ ${sqlQuery}`)
   applyEnterpriseScoring(result, options) {
     const quickData = result.data || result;
     
-    // 获取CI/CD配置
-    const cicdConfig = options.cicd || {
-      quickModeWeights: { security: 0.50, performance: 0.30, standards: 0.20 },
-      scoreThreshold: 70,
+    // 获取 Headless 配置
+    const headlessConfig = options.headless || {
+      scoreWeights: { security: 0.50, performance: 0.30, standards: 0.20 },
+      defaultThreshold: 70,
       blockOnCritical: true
     };
     
     // 计算加权评分
-    const weightedScore = this.calculateWeightedScore(quickData, cicdConfig.quickModeWeights);
+    const weightedScore = this.calculateWeightedScore(quickData, headlessConfig.scoreWeights);
     
     // 检查关键问题
     const criticalIssues = this.checkCriticalIssues(quickData);
     
     // 应用一票否决机制
-    const finalScore = this.applyVetoMechanism(weightedScore, criticalIssues, cicdConfig);
+    const finalScore = this.applyVetoMechanism(weightedScore, criticalIssues, headlessConfig);
     
-    // 生成CI/CD友好的结果
+    // 生成分析结果
     return {
       ...result,
       data: {
@@ -88,9 +88,9 @@ ${sqlQuery}`)
         quickScore: finalScore,
         weightedScore,
         criticalIssues,
-        cicdMetadata: {
-          scoreThreshold: cicdConfig.scoreThreshold,
-          passed: finalScore >= cicdConfig.scoreThreshold && !criticalIssues.hasBlocking,
+        analysisMetadata: {
+          threshold: options.threshold || headlessConfig.defaultThreshold,
+          passed: finalScore >= (options.threshold || headlessConfig.defaultThreshold) && !criticalIssues.hasBlocking,
           hasBlocking: criticalIssues.hasBlocking,
           checkTime: new Date().toISOString(),
           analyzerVersion: '1.0.0'
@@ -187,11 +187,11 @@ ${sqlQuery}`)
    * 应用一票否决机制
    * @param {number} score - 基础评分
    * @param {Object} criticalIssues - 关键问题信息
-   * @param {Object} cicdConfig - CI/CD配置
+   * @param {Object} headlessConfig - Headless 配置
    * @returns {number} 最终评分
    */
-  applyVetoMechanism(score, criticalIssues, cicdConfig) {
-    if (!cicdConfig.blockOnCritical) {
+  applyVetoMechanism(score, criticalIssues, headlessConfig) {
+    if (!headlessConfig.blockOnCritical) {
       return score;
     }
     

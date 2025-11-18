@@ -76,16 +76,24 @@ class SqlAnalysisCoordinator {
     
     const { sqlQuery, options = {} } = input;
     
-    console.log(`\n⚡ 快速分析模式启动...\n`);
-    console.log('='.repeat(60));
+    // Headless 或 quiet 模式下不输出进度信息
+    const isQuiet = options.headless || options.quiet;
+    
+    if (!isQuiet) {
+      console.log(`\n⚡ 快速分析模式启动...\n`);
+      console.log('='.repeat(60));
+    }
     
     try {
       // 执行快速分析
-      console.log("🔍 执行快速基础分析...");
+      if (!isQuiet) {
+        console.log("🔍 执行快速基础分析...");
+      }
+      
       const quickResult = await this.tools.quickAnalyzer.func({
         sqlQuery,
         options: {
-          cicd: this.config.cicd
+          headless: this.config.headless
         }
       });
       
@@ -93,13 +101,15 @@ class SqlAnalysisCoordinator {
         throw new Error(quickResult.error);
       }
       
-      console.log("\n✅ 快速分析完成\n");
-      
-      // 计算并显示分析用时
-      const analysisEndTime = Date.now();
-      const analysisDuration = (analysisEndTime - analysisStartTime) / 1000;
-      console.log(`⏱️  快速分析用时: ${analysisDuration.toFixed(2)} 秒\n`);
-      console.log('='.repeat(60));
+      if (!isQuiet) {
+        console.log("\n✅ 快速分析完成\n");
+        
+        // 计算并显示分析用时
+        const analysisEndTime = Date.now();
+        const analysisDuration = (analysisEndTime - analysisStartTime) / 1000;
+        console.log(`⏱️  快速分析用时: ${analysisDuration.toFixed(2)} 秒\n`);
+        console.log('='.repeat(60));
+      }
       
       // 构建快速分析结果对象
       const result = {

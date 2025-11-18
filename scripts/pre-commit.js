@@ -4,7 +4,7 @@
  * SQL Analyzer Pre-commit Hook
  * 
  * 这个钩子会在提交前自动扫描所有修改的SQL文件
- * 使用sql-analyzer CLI工具进行分析，如果发现问题则阻止提交
+ * 使用 headless 模式进行快速分析，如果发现问题则阻止提交
  */
 
 const { execSync } = require('child_process');
@@ -27,11 +27,12 @@ const config = {
   localAnalyzerPath: 'bun bin/cli.js',
   // 分析维度（数据库类型将由LLM自动推理，无需手动指定）
   analysisDimensions: ['performance', 'security', 'standards'],
-  // CI/CD模式配置
-  cicdMode: true,
-  scoreThreshold: 70,  // 评分阈值
-  blockOnCritical: true,  // 严重问题阻止提交
-  enableJsonOutput: process.env.CI || false  // CI环境自动启用JSON输出
+  // Headless 模式配置
+  headless: true,
+  format: 'json',           // JSON格式便于解析
+  scoreThreshold: 70,       // 评分阈值
+  exitCode: true,           // 启用退出码
+  quiet: true               // 静默模式
 };
 
 /**
@@ -82,12 +83,14 @@ function analyzeSqlFile(filePath) {
     // 注意: 数据库类型将由LLM自动推理，无需手动指定
     let command = `${config.analyzerPath} analyze -f "${filePath}" --quick`;
     
-    // CI/CD模式配置
-    if (config.cicdMode) {
-      command += ` --cicd-mode`;
-      if (config.enableJsonOutput) {
-        process.env.CICD_MODE = 'true';
-      }
+    // Headless 模式配置
+    if (config.headless) {
+      command += ` --headless`;
+      command += ` --format ${config.format}`;
+      command += ` --threshold ${config.scoreThreshold}`;
+      if (config.exitCode) command += ` --exit-code`;
+      if (config.quiet) command += ` --quiet`;
+      command += ` --pipe`; // 使用管道模式获取输出
     }
     
     let useLocalCommand = false;
@@ -97,7 +100,7 @@ function analyzeSqlFile(filePath) {
       execSync('which sql-analyzer', { stdio: 'ignore' });
     } catch (error) {
       // 全局命令不可用，使用本地命令
-      command = `${config.localAnalyzerPath} analyze -f "${filePath}"`;
+      command = `${config.localAnalyzerPath} analyze -f "${filePath}" --quick --headless --format ${config.format} --threshold ${config.scoreThreshold} --exit-code --quiet --pipe`;
       useLocalCommand = true;
       if (config.verbose) {
         console.log(chalk.yellow(`全局sql-analyzer命令不可用，使用本地命令`));
@@ -107,12 +110,12 @@ function analyzeSqlFile(filePath) {
     // 执行SQL分析
     const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
     
-    if (config.verbose) {
+    if (config.verbose && !config.quiet) {
       console.log(output);
     }
     
-    // CI/CD模式：解析JSON输出并检查评分
-    if (config.cicdMode && config.enableJsonOutput) {
+    // Headless 模式：解析JSON输出
+    if (config.headless && config.format === 'json') {
       try {
         const result = JSON.parse(output);
         return {
@@ -120,19 +123,41 @@ function analyzeSqlFile(filePath) {
           output,
           useLocalCommand,
           score: result.score,
-          passed: result.passed,
-          hasBlocking: result.hasBlocking,
-          criticalIssues: result.criticalIssues
+          passed: result.status === 'pass',
+          criticalIssues: result.criticalIssues || [],
+          suggestions: result.suggestions || []
         };
       } catch (parseError) {
-        // JSON解析失败，回退到传统检查
-        return { success: true, output, useLocalCommand };
+        console.error(chalk.red('JSON解析失败:'), parseError.message);
+        return { success: false, output, useLocalCommand, error: 'JSON解析失败' };
       }
     }
     
     return { success: true, output, useLocalCommand };
   } catch (error) {
-    // 分析失败
+    // 分析失败（可能是退出码非0）
+    if (error.status === 1 && config.headless) {
+      // Headless 模式下，退出码1表示未达到阈值
+      try {
+        const result = JSON.parse(error.stdout || '{}');
+        return {
+          success: false,
+          output: error.stdout,
+          error: error.message,
+          score: result.score,
+          passed: false,
+          criticalIssues: result.criticalIssues || [],
+          suggestions: result.suggestions || []
+        };
+      } catch {
+        return { 
+          success: false, 
+          output: error.stdout || error.message,
+          error: error.stderr || error.message
+        };
+      }
+    }
+    
     return { 
       success: false, 
       output: error.stdout || error.message,
@@ -145,7 +170,7 @@ function analyzeSqlFile(filePath) {
  * 主函数
  */
 function main() {
-  console.log(chalk.blue('🔍 SQL Analyzer Pre-commit Hook'));
+  console.log(chalk.blue('🔍 SQL Analyzer Pre-commit Hook (Headless 模式)'));
   
   // 检查是否跳过
   if (shouldSkipCheck()) {
@@ -166,7 +191,6 @@ function main() {
   
   // 分析结果
   let hasErrors = false;
-  let hasBlockingIssues = false;
   let hasScoreFailures = false;
   const results = [];
   
@@ -186,25 +210,25 @@ function main() {
     
     if (!result.success) {
       hasErrors = true;
-      console.log(chalk.red(`❌ ${file}: 分析失败`));
-      if (result.error) {
-        console.log(chalk.red(`   错误: ${result.error}`));
-      }
-    } else {
-      // CI/CD模式：检查评分和阻塞性问题
-      if (config.cicdMode) {
-        if (result.hasBlocking) {
-          hasBlockingIssues = true;
-          console.log(chalk.red(`🚫 ${file}: 发现阻塞性问题`));
-        } else if (result.score < config.scoreThreshold) {
-          hasScoreFailures = true;
-          console.log(chalk.yellow(`⚠️  ${file}: 评分不足 (${result.score}/${config.scoreThreshold})`));
-        } else {
-          console.log(chalk.green(`✅ ${file}: 分析通过 (评分: ${result.score})`));
+      if (result.score !== undefined && result.score < config.scoreThreshold) {
+        hasScoreFailures = true;
+        console.log(chalk.yellow(`⚠️  ${file}: 评分不足 (${result.score}/${config.scoreThreshold})`));
+        
+        // 显示关键问题
+        if (result.criticalIssues && result.criticalIssues.length > 0) {
+          console.log(chalk.red(`   关键问题 (${result.criticalIssues.length} 个):`));
+          result.criticalIssues.slice(0, 2).forEach(issue => {
+            console.log(`     - ${issue.description || issue.type}`);
+          });
         }
       } else {
-        console.log(chalk.green(`✅ ${file}: 分析通过`));
+        console.log(chalk.red(`❌ ${file}: 分析失败`));
+        if (result.error) {
+          console.log(chalk.red(`   错误: ${result.error}`));
+        }
       }
+    } else {
+      console.log(chalk.green(`✅ ${file}: 分析通过 (评分: ${result.score || 'N/A'})`));
     }
   }
   
@@ -227,33 +251,23 @@ function main() {
   
   console.log(`通过: ${passed}, 失败: ${failed}`);
   
-  // CI/CD模式的详细汇总
-  if (config.cicdMode) {
-    const blockingFiles = results.filter(r => r.hasBlocking);
-    const scoreFailedFiles = results.filter(r => r.score < config.scoreThreshold && r.success);
-    
-    if (blockingFiles.length > 0) {
-      console.log(chalk.red(`\n🚫 发现阻塞性问题的文件 (${blockingFiles.length} 个):`));
-      blockingFiles.forEach(({ file, criticalIssues }) => {
-        console.log(`   - ${file}`);
-        if (criticalIssues && criticalIssues.length > 0) {
-          criticalIssues.slice(0, 2).forEach(issue => {
-            console.log(`     * ${issue.description}`);
-          });
-        }
-      });
-    }
+  // Headless 模式的详细汇总
+  if (config.headless) {
+    const scoreFailedFiles = results.filter(r => r.score < config.scoreThreshold && !r.success);
     
     if (scoreFailedFiles.length > 0) {
       console.log(chalk.yellow(`\n⚠️  评分不足的文件 (${scoreFailedFiles.length} 个):`));
-      scoreFailedFiles.forEach(({ file, score }) => {
+      scoreFailedFiles.forEach(({ file, score, criticalIssues }) => {
         console.log(`   - ${file}: ${score}/${config.scoreThreshold}`);
+        if (criticalIssues && criticalIssues.length > 0) {
+          console.log(`     问题数: ${criticalIssues.length}`);
+        }
       });
     }
   }
   
   // 判断是否阻止提交
-  const shouldBlock = hasErrors || (config.cicdMode && (hasBlockingIssues || hasScoreFailures));
+  const shouldBlock = hasErrors || (config.headless && hasScoreFailures);
   
   if (shouldBlock) {
     console.log('\n' + chalk.red('❌ SQL分析发现问题，提交已被阻止'));
@@ -261,8 +275,8 @@ function main() {
     console.log('  1. 修复上述问题后再次尝试提交');
     console.log('  2. 或者在提交消息中包含 [skip-sql-check] 跳过检查');
     
-    if (config.cicdMode) {
-      console.log('  3. CI/CD模式要求: 评分 >= ' + config.scoreThreshold + ' 且无阻塞性问题');
+    if (config.headless) {
+      console.log(`  3. Headless 模式要求: 评分 >= ${config.scoreThreshold}`);
     }
     
     process.exit(1);
