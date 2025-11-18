@@ -37,7 +37,6 @@ const commandFiles = [
   'learn',     // 知识库学习命令
   'status',    // 状态查询命令
   'history',   // 历史记录命令
-  'init',      // 初始化命令
   'api',       // API服务器命令
   'search',    // 知识库搜索命令
   'ui'         // 可视化终端界面命令

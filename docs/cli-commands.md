@@ -295,13 +295,6 @@ sql-analyzer history clear
 sql-analyzer status
 ```
 
-### init - 初始化环境
-
-**初始化环境配置文件**
-```bash
-sql-analyzer init
-```
-
 ### api - API服务器
 
 **启动API服务器**
@@ -331,39 +324,6 @@ sql-analyzer ui
 **指定SQL文件**
 ```bash
 sql-analyzer ui --file ./test.sql
-```
-
-### health - 系统健康检查
-
-**执行完整健康检查**
-```bash
-sql-analyzer health
-```
-
-**显示详细输出**
-```bash
-sql-analyzer health --verbose
-```
-
-**以JSON格式输出结果**
-```bash
-sql-analyzer health --json
-```
-
-**将结果保存到文件**
-```bash
-sql-analyzer health --output ./health-report.json
-```
-
-**执行特定类型的检查**
-```bash
-sql-analyzer health --check core-modules
-sql-analyzer health --check configuration
-sql-analyzer health --check rules
-sql-analyzer health --check prompts
-sql-analyzer health --check dependencies
-sql-analyzer health --check memory
-sql-analyzer health --check disk-space
 ```
 
 ## 常见错误
@@ -453,15 +413,6 @@ sql-analyzer search "SELECT 优化"
 | `--host <host>` | `-h` | API服务器主机 | 0.0.0.0 |
 | `--cors [origin]` | - | 启用CORS并指定允许的源 | "*" |
 
-### health 命令选项
-
-| 选项 | 缩写 | 说明 | 默认值 |
-|------|------|------|--------|
-| `--verbose` | `-v` | 显示详细输出 | false |
-| `--json` | `-j` | 以JSON格式输出结果 | false |
-| `--output <file>` | `-o` | 将结果保存到文件 | - |
-| `--check <type>` | - | 只执行特定类型的检查 | - |
-
 ### search 命令选项
 
 | 选项 | 缩写 | 说明 | 默认值 |
@@ -520,7 +471,6 @@ sql-analyzer search "SELECT 优化"
 |--------|------|
 | 0 | 命令成功执行 |
 | 1 | 命令执行失败或出现错误 |
-| 2 | 健康检查显示系统状态为degraded |
 
 ## 最佳实践
 
@@ -549,12 +499,26 @@ sql-analyzer analyze --file ./query.sql \
 ```
 
 ### 4. 批量分析
+
+#### Unix/Linux/Mac 版本
+
 ```bash
 # 使用脚本批量处理
 for file in ./sql/*.sql; do
   echo "Analyzing $file"
   sql-analyzer analyze --file "$file" --quick --headless
 done
+```
+
+#### Windows PowerShell 版本
+
+```powershell
+# 使用 PowerShell 批量处理
+Get-ChildItem -Path "./sql" -Filter "*.sql" | ForEach-Object {
+  $file = $_
+  Write-Host "Analyzing $($file.FullName)"
+  & sql-analyzer analyze --file "$($file.FullName)" --quick --headless
+}
 ```
 
 ### 5. 知识库管理
@@ -567,16 +531,6 @@ sql-analyzer learn evaluate --report
 
 # 清理低质量规则
 sql-analyzer learn cleanup --score 70 --backup
-```
-
-### 6. 系统维护
-```bash
-# 执行健康检查
-sql-analyzer health --verbose
-
-# 检查特定组件
-sql-analyzer health --check configuration
-sql-analyzer health --check memory
 ```
 
 ## 环境变量
@@ -625,9 +579,8 @@ LOG_LEVEL=info
 
 ### 问题：API服务器无法启动
 **解决方案：**
-1. 使用 `sql-analyzer health --check dependencies` 检查依赖
-2. 检查端口是否被占用
-3. 使用 `--port` 指定其他端口
+1. 检查端口是否被占用
+2. 使用 `--port` 指定其他端口
 
 ## 更多信息
 

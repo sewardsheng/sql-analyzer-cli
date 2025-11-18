@@ -20,20 +20,20 @@ git clone <repository-url>
 cd sql-analyzer-cli
 
 # 安装依赖
-npm install
+bun install
 
 # 运行健康检查
-npm run health
+bun run health
 
 # 启动API服务
-npm run api
+bun run api
 ```
 
 ### 生产环境部署
 
 ```bash
 # 使用增强部署脚本
-node scripts/deploy.js
+bun run scripts/deploy.js
 ```
 
 ## 增强部署脚本
@@ -54,17 +54,17 @@ node scripts/deploy.js
 
 ```bash
 # 执行完整部署流程
-node scripts/deploy.js
+bun run scripts/deploy.js
 
-# 或者通过npm脚本
-npm run deploy
+# 或者通过bun脚本
+bun run deploy
 ```
 
 ### 部署阶段
 
 #### Phase 1: 环境检查
 - Node.js版本验证 (需要v14+)
-- npm版本检查
+- Bun版本检查
 - 可用内存检查
 - 磁盘空间验证
 
@@ -104,38 +104,38 @@ npm run deploy
 
 ```bash
 # 执行所有健康检查
-sql-analyzer health
+bun run src/index.js health
 
 # 显示详细输出
-sql-analyzer health --verbose
+bun run src/index.js health --verbose
 
 # JSON格式输出
-sql-analyzer health --json
+bun run src/index.js health --json
 
 # 保存结果到文件
-sql-analyzer health --output health-report.json
+bun run src/index.js health --output health-report.json
 ```
 
 #### 特定检查类型
 
 ```bash
 # 检查核心模块
-sql-analyzer health --check core-modules
+bun run src/index.js health --check core-modules
 
 # 检查配置文件
-sql-analyzer health --check configuration
+bun run src/index.js health --check configuration
 
 # 检查规则文件
-sql-analyzer health --check rules
+bun run src/index.js health --check rules
 
 # 检查依赖包
-sql-analyzer health --check dependencies
+bun run src/index.js health --check dependencies
 
 # 检查内存使用
-sql-analyzer health --check memory
+bun run src/index.js health --check memory
 
 # 检查磁盘空间
-sql-analyzer health --check disk-space
+bun run src/index.js health --check disk-space
 ```
 
 ### API健康检查
@@ -202,12 +202,12 @@ nvm use 18
 #### 2. 依赖包缺失
 
 ```
-❌ node_modules目录不存在，需要运行npm install
+❌ node_modules目录不存在，需要运行bun install
 ```
 
 **解决方案：**
 ```bash
-npm install
+bun install
 ```
 
 #### 3. 配置文件缺失
@@ -219,7 +219,7 @@ npm install
 **解决方案：**
 ```bash
 # 恢复备份或重新初始化项目
-node scripts/deploy.js --rollback
+bun run scripts/deploy.js --rollback
 ```
 
 #### 4. 内存不足
@@ -249,7 +249,7 @@ rm -f *.log
 
 # 清理node_modules并重新安装
 rm -rf node_modules
-npm install
+bun install
 ```
 
 ### API服务问题
@@ -261,10 +261,10 @@ npm install
 netstat -an | grep :3000
 
 # 检查配置
-sql-analyzer config show
+bun run src/index.js config show
 
 # 查看详细日志
-sql-analyzer api --verbose
+bun run src/index.js api --verbose
 ```
 
 #### 健康检查失败
@@ -299,7 +299,7 @@ curl http://localhost:3000/api/health
 ls -la .backup/
 
 # 手动回滚到指定备份
-node scripts/deploy.js --rollback backup-2025-11-18T12-00-00-000Z
+bun run scripts/deploy.js --rollback backup-2025-11-18T12-00-00-000Z
 ```
 
 ### 备份管理
@@ -309,7 +309,7 @@ node scripts/deploy.js --rollback backup-2025-11-18T12-00-00-000Z
 cat .backup/backup-2025-11-18T12-00-00-000Z/backup-info.json
 
 # 清理旧备份（保留最近5个）
-node scripts/deploy.js --cleanup
+bun run scripts/deploy.js --cleanup
 
 # 删除所有备份
 rm -rf .backup/
@@ -323,10 +323,10 @@ rm -rf .backup/
 
 ```bash
 # 每日健康检查
-0 9 * * * cd /path/to/sql-analyzer-cli && npm run health >> /var/log/health.log 2>&1
+0 9 * * * cd /path/to/sql-analyzer-cli && bun run health >> /var/log/health.log 2>&1
 
 # 每周完整部署检查
-0 2 * * 0 cd /path/to/sql-analyzer-cli && npm run deploy >> /var/log/deploy.log 2>&1
+0 2 * * 0 cd /path/to/sql-analyzer-cli && bun run deploy >> /var/log/deploy.log 2>&1
 ```
 
 ### 日志监控

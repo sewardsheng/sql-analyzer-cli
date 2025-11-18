@@ -28,13 +28,13 @@ Headless 模式是一种无界面、程序化友好的分析模式，特别适�
 
 ```bash
 # 基本 headless 分析（使用快速模式）
-sql-analyzer analyze -f query.sql --quick --headless
+bun run src/index.js analyze -f query.sql --quick --headless
 
 # 指定输出格式
-sql-analyzer analyze -f query.sql --quick --headless --format json
+bun run src/index.js analyze -f query.sql --quick --headless --format json
 
 # 设置评分阈值和退出码
-sql-analyzer analyze -f query.sql --quick --headless --threshold 80 --exit-code
+bun run src/index.js analyze -f query.sql --quick --headless --threshold 80 --exit-code
 ```
 
 ### 2. 配置文件
@@ -76,7 +76,7 @@ HEADLESS_DEFAULT_THRESHOLD=70        # 默认评分阈值
 简洁的一行摘要，适合人类阅读：
 
 ```bash
-sql-analyzer analyze -f query.sql --quick --headless
+bun run src/index.js analyze -f query.sql --quick --headless
 ```
 
 输出：
@@ -89,7 +89,7 @@ sql-analyzer analyze -f query.sql --quick --headless
 结构化的键值对文本，易于脚本解析：
 
 ```bash
-sql-analyzer analyze -f query.sql --quick --headless --format structured
+bun run src/index.js analyze -f query.sql --quick --headless --format structured
 ```
 
 输出：
@@ -107,7 +107,7 @@ CRITICAL_ISSUES: 0
 完整的 JSON 输出，适合程序化处理：
 
 ```bash
-sql-analyzer analyze -f query.sql --quick --headless --format json
+bun run src/index.js analyze -f query.sql --quick --headless --format json
 ```
 
 输出：
@@ -128,6 +128,34 @@ sql-analyzer analyze -f query.sql --quick --headless --format json
   "timestamp": "2024-01-01T12:00:00.000Z"
 }
 ```
+
+### 静默模式
+
+静默模式最小化输出，只显示最基本的结果，适合自动化脚本和日志分析：
+
+```bash
+bun run src/index.js analyze -f query.sql --quick --headless --quiet
+```
+
+输出：
+```
+PASS: 85/70
+```
+
+与其他输出格式结合：
+
+```bash
+# 静默模式 + JSON 输出
+bun run src/index.js analyze -f query.sql --quick --headless --format json --quiet
+
+# 静默模式 + 结构化输出
+bun run src/index.js analyze -f query.sql --quick --headless --format structured --quiet
+```
+
+静默模式在 CI/CD 环境中的优势：
+- 减少日志噪音
+- 只关注关键信息（状态和评分）
+- 便于自动化工具解析和处理
 
 ## 🔧 使用场景
 
@@ -163,7 +191,7 @@ jobs:
           echo "Checking $file..."
           bun run src/index.js analyze -f "$file" \
             --quick --headless --format json \
-            --threshold 75 --exit-code
+            --threshold 75 --exit-code --quiet
         done
 ```
 
@@ -180,7 +208,7 @@ sql_check:
     - |
       find . -name "*.sql" | while read file; do
         bun run src/index.js analyze -f "$file" \
-          --quick --headless --exit-code
+          --quick --headless --exit-code --quiet
       done
   only:
     - merge_requests
@@ -217,6 +245,8 @@ git commit -m "feat: add feature [skip-sql-check]"
 
 批量分析脚本示例：
 
+#### Unix/Linux/Mac 版本
+
 ```bash
 #!/bin/bash
 
@@ -231,7 +261,7 @@ for file in sql/*.sql; do
   filename=$(basename "$file" .sql)
   echo "Analyzing $file..."
   
-  sql-analyzer analyze -f "$file" \
+  bun run src/index.js analyze -f "$file" \
     --quick --headless --format json \
     --output-file "sql_reports/${filename}_report.json" \
     --threshold 80 --exit-code
@@ -244,23 +274,171 @@ for file in sql/*.sql; do
 done
 ```
 
+#### Windows PowerShell 版本
+
+```powershell
+# 设置配置
+$env:HEADLESS_DEFAULT_THRESHOLD = "80"
+
+# 创建结果目录
+New-Item -ItemType Directory -Force -Path "sql_reports"
+
+# 批量分析
+Get-ChildItem -Path "sql" -Filter "*.sql" | ForEach-Object {
+  $file = $_
+  $filename = $file.BaseName
+  Write-Host "Analyzing $($file.FullName)..."
+  
+  & bun run src/index.js analyze -f "$($file.FullName)" `
+    --quick --headless --format json `
+    --output-file "sql_reports/${filename}_report.json" `
+    --threshold 80 --exit-code
+  
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "✓ $($file.Name) passed"
+  } else {
+    Write-Host "✗ $($file.Name) failed"
+  }
+}
+```
+
 ### 场景 4：管道处理
 
 将结果传递给其他工具：
 
+#### Unix/Linux/Mac 版本
+
 ```bash
 # 使用 jq 过滤 JSON 结果
-sql-analyzer analyze -f query.sql --quick --headless --format json --pipe | \
+bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | \
   jq '.criticalIssues[] | select(.severity == "高")'
 
 # 生成报告
-sql-analyzer analyze -f query.sql --quick --headless --format json --pipe | \
+bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | \
   python generate_report.py
 
 # 发送到监控系统
-sql-analyzer analyze -f query.sql --quick --headless --format json --pipe | \
+bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | \
   curl -X POST -H "Content-Type: application/json" \
        -d @- https://monitoring.example.com/api/sql-metrics
+```
+
+#### Windows PowerShell 版本
+
+```powershell
+# 使用 PowerShell 过滤 JSON 结果
+$result = bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | ConvertFrom-Json
+$result.criticalIssues | Where-Object { $_.severity -eq "高" } | ForEach-Object {
+  Write-Output "$($_.type): $($_.description)"
+}
+
+# 生成报告
+$result = bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | ConvertFrom-Json
+python generate_report.py $result
+
+# 发送到监控系统
+$result = bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe | ConvertFrom-Json
+$body = $result | ConvertTo-Json -Depth 10
+Invoke-RestMethod -Uri "https://monitoring.example.com/api/sql-metrics" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+### 场景 5：静默模式应用
+
+静默模式在自动化流程中特别有用，以下是几个实际应用场景：
+
+#### CI/CD 日志优化
+
+在持续集成环境中，使用静默模式可以减少日志噪音，只保留关键信息：
+
+```bash
+# 批量分析多个SQL文件，只输出失败项
+find . -name "*.sql" | while read file; do
+  result=$(bun run src/index.js analyze -f "$file" --quick --headless --quiet --exit-code)
+  if [ $? -ne 0 ]; then
+    echo "SQL检查失败: $file - $result"
+  fi
+done
+```
+
+#### 定时任务输出
+
+在定时任务（cron job）中，静默模式可以避免不必要的邮件通知：
+
+```bash
+# 每日SQL质量检查，只在有问题时发送邮件
+0 8 * * * /path/to/check_sql.sh | grep -q "FAIL" && mail -s "SQL质量问题" admin@example.com
+```
+
+check_sql.sh 内容：
+```bash
+#!/bin/bash
+has_failed=false
+for file in /path/to/sql/*.sql; do
+  result=$(bun run src/index.js analyze -f "$file" --quick --headless --quiet --threshold 80 --exit-code)
+  if [ $? -ne 0 ]; then
+    echo "FAIL: $file - $result"
+    has_failed=true
+  fi
+done
+
+if [ "$has_failed" = false ]; then
+  echo "所有SQL文件检查通过"
+fi
+```
+
+#### 监控系统集成
+
+将静默模式结果集成到监控系统：
+
+```bash
+# 将结果发送到监控系统
+result=$(bun run src/index.js analyze -f query.sql --quick --headless --quiet --format json)
+score=$(echo $result | jq -r '.score')
+status=$(echo $result | jq -r '.status')
+
+# 发送指标到监控系统
+curl -X POST -H "Content-Type: application/json" \
+  -d "{\"metric\":\"sql_quality_score\",\"value\":$score,\"tags\":{\"file\":\"query.sql\",\"status\":\"$status\"}}" \
+  https://monitoring.example.com/api/metrics
+```
+
+#### 自动化报告生成
+
+静默模式结合脚本可以生成简洁的报告：
+
+```bash
+#!/bin/bash
+# 生成SQL质量报告
+
+echo "SQL质量报告 - $(date)" > report.txt
+echo "========================" >> report.txt
+
+total=0
+passed=0
+failed=0
+
+for file in sql/*.sql; do
+  total=$((total + 1))
+  result=$(bun run src/index.js analyze -f "$file" --quick --headless --quiet --exit-code)
+  if [ $? -eq 0 ]; then
+    passed=$((passed + 1))
+  else
+    failed=$((failed + 1))
+    echo "失败: $file - $result" >> report.txt
+  fi
+done
+
+echo "" >> report.txt
+echo "总计: $total" >> report.txt
+echo "通过: $passed" >> report.txt
+echo "失败: $failed" >> report.txt
+echo "通过率: $((passed * 100 / total))%" >> report.txt
+
+# 发送报告
+mail -s "SQL质量报告" team@example.com < report.txt
 ```
 
 ## 🎯 评分规则
@@ -322,7 +500,7 @@ import { execSync } from 'child_process';
 
 // 执行分析
 const result = JSON.parse(
-  execSync('sql-analyzer analyze -f query.sql --quick --headless --format json --pipe')
+  execSync('bun run src/index.js analyze -f query.sql --quick --headless --format json --pipe')
 );
 
 // 处理结果
@@ -346,7 +524,7 @@ import json
 
 # 执行分析
 result = subprocess.run(
-    ['sql-analyzer', 'analyze', '-f', 'query.sql', 
+    ['bun', 'run', 'src/index.js', 'analyze', '-f', 'query.sql', 
      '--quick', '--headless', '--format', 'json', '--pipe'],
     capture_output=True, text=True
 )
@@ -366,14 +544,42 @@ if data['status'] == 'fail':
 
 利用多核 CPU 提高批量分析速度：
 
+#### Unix/Linux/Mac 版本
+
 ```bash
 # GNU Parallel 示例
 find . -name "*.sql" | parallel -j 4 \
-  'sql-analyzer analyze -f {} --quick --headless --exit-code'
+  'bun run src/index.js analyze -f {} --quick --headless --exit-code'
 
 # xargs 示例
 find . -name "*.sql" | xargs -P 4 -I {} \
-  sql-analyzer analyze -f {} --quick --headless --exit-code
+  bun run src/index.js analyze -f {} --quick --headless --exit-code
+```
+
+#### Windows PowerShell 版本
+
+```powershell
+# 使用 PowerShell 并行处理
+$files = Get-ChildItem -Recurse -Filter "*.sql"
+$files | ForEach-Object -Parallel {
+  $file = $_
+  & bun run src/index.js analyze -f "$($file.FullName)" --quick --headless --exit-code
+} -ThrottleLimit 4
+
+# 或者使用 Start-Job 并行处理
+$jobs = @()
+$files = Get-ChildItem -Recurse -Filter "*.sql"
+
+foreach ($file in $files) {
+  $jobs += Start-Job -ScriptBlock {
+    param($filePath, $bunPath)
+    & $bunPath run src/index.js analyze -f $filePath --quick --headless --exit-code
+  } -ArgumentList $file.FullName, "bun"
+}
+
+# 等待所有作业完成并获取结果
+$jobs | Wait-Job | Receive-Job
+$jobs | Remove-Job
 ```
 
 ## 🧪 测试和验证
@@ -389,7 +595,7 @@ test('SQL should pass quality check', () => {
   const sql = 'SELECT id, name FROM users WHERE id = ? LIMIT 10';
   
   const result = JSON.parse(
-    execSync(`sql-analyzer analyze --sql "${sql}" --quick --headless --format json --pipe`)
+    execSync(`bun run src/index.js analyze --sql "${sql}" --quick --headless --format json --pipe`)
   );
   
   expect(result.status).toBe('pass');
@@ -442,14 +648,14 @@ HEADLESS_DEFAULT_THRESHOLD=80 bun run test/test_headless.js
 
 检查是否使用了 `--exit-code` 参数：
 ```bash
-sql-analyzer analyze -f query.sql --quick --headless --exit-code
+bun run src/index.js analyze -f query.sql --quick --headless --exit-code
 ```
 
 **2. JSON 格式解析失败**
 
 确保使用了正确的格式参数：
 ```bash
-sql-analyzer analyze -f query.sql --quick --headless --format json
+bun run src/index.js analyze -f query.sql --quick --headless --format json
 ```
 
 **3. 阈值未生效**
@@ -457,7 +663,7 @@ sql-analyzer analyze -f query.sql --quick --headless --format json
 检查配置优先级（命令行 > 环境变量 > 配置文件）：
 ```bash
 # 命令行优先级最高
-sql-analyzer analyze -f query.sql --quick --headless --threshold 80 --exit-code
+bun run src/index.js analyze -f query.sql --quick --headless --threshold 80 --exit-code
 ```
 
 **4. 输出到文件失败**
@@ -465,7 +671,7 @@ sql-analyzer analyze -f query.sql --quick --headless --threshold 80 --exit-code
 确保目录存在且有写入权限：
 ```bash
 mkdir -p reports
-sql-analyzer analyze -f query.sql --quick --headless --output-file reports/result.json
+bun run src/index.js analyze -f query.sql --quick --headless --output-file reports/result.json
 ```
 
 ### 调试模式
@@ -477,7 +683,7 @@ sql-analyzer analyze -f query.sql --quick --headless --output-file reports/resul
 export DEBUG=true
 
 # 运行分析（不使用 --quiet）
-sql-analyzer analyze -f query.sql --quick --headless
+bun run src/index.js analyze -f query.sql --quick --headless
 ```
 
 ### 获取帮助
@@ -485,7 +691,7 @@ sql-analyzer analyze -f query.sql --quick --headless
 查看完整的命令帮助：
 
 ```bash
-sql-analyzer analyze --help
+bun run src/index.js analyze --help
 ```
 
 ## 🔗 相关文档
