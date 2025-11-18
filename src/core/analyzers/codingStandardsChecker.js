@@ -23,14 +23,11 @@ class CodingStandardsChecker extends BaseAnalyzer {
     
     const { sqlQuery } = input;
     
-    // 使用提示词模板
+    // 使用专用的编码规范检查提示词模板
     const { systemPrompt } = await buildPrompt(
-      'coding-standards-checker.md',
+      'coding-standards-check.md',
       {},
-      {
-        category: 'analyzers',
-        section: '编码规范检查'
-      }
+      { category: 'analyzers' }
     );
 
     const messages = [
@@ -46,43 +43,6 @@ ${sqlQuery}`)
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL编码规范检查', error);
-    }
-  }
-
-  /**
-   * 格式化SQL代码
-   * @param {Object} input - 输入参数
-   * @param {string} input.sqlQuery - SQL查询语句
-   * @returns {Promise<Object>} 格式化结果
-   */
-  async formatSql(input) {
-    await this.initialize();
-    
-    const { sqlQuery } = input;
-    
-    // 使用提示词模板
-    const { systemPrompt } = await buildPrompt(
-      'coding-standards-checker.md',
-      {},
-      {
-        category: 'analyzers',
-        section: 'SQL代码格式化'
-      }
-    );
-
-    const messages = [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(`请格式化以下SQL代码：
-
-SQL查询:
-${sqlQuery}`)
-    ];
-
-    try {
-      const result = await this.invokeLLMAndParse(messages);
-      return this.formatResponse(result);
-    } catch (error) {
-      return this.handleError('SQL代码格式化', error);
     }
   }
 }

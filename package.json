@@ -10,7 +10,15 @@
   "scripts": {
     "dev": "bun run src/index.js",
     "prod": "bun run dist/index.js",
-    "build": "bun build ./src/index.js --outdir ./dist --target node"
+    "build": "bun build ./src/index.js --outdir ./dist --target node",
+    "deploy": "node scripts/deploy.js",
+    "health": "bun run src/index.js health",
+    "api": "bun run src/index.js api",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:deployment": "node test/test-deployment.js",
+    "lint": "echo 'Linting not configured yet'",
+    "pre-commit": "node scripts/pre-commit.js"
   },
   "keywords": [
     "sql",

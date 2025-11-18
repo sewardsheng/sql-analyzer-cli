@@ -195,52 +195,161 @@ class ReportGenerator {
   }
 
   /**
-   * 收集所有建议
+   * 收集所有建议并按优先级排序
    * @param {Object} integratedResults - 整合的分析结果
-   * @returns {Array} 建议列表
+   * @returns {Array} 按优先级排序的建议列表
    */
   collectRecommendations(integratedResults) {
     const recommendations = [];
     
-    // 性能建议
+    // 从性能分析提取优化建议
     if (integratedResults.performanceAnalysis?.success) {
-      const bottlenecks = integratedResults.performanceAnalysis.data.bottlenecks || [];
-      bottlenecks.forEach(b => {
-        if (b.recommendations) {
-          recommendations.push(...b.recommendations.map(r => `[性能] ${r}`));
-        }
+      const perfData = integratedResults.performanceAnalysis.data;
+      
+      // 瓶颈相关建议
+      (perfData.bottlenecks || []).forEach(b => {
+        recommendations.push({
+          category: '性能',
+          severity: b.severity || '中',
+          type: b.type,
+          description: b.description,
+          impact: b.impact,
+          suggestion: `优化${b.type}: ${b.description}`,
+          effort: this.estimateEffort(b.severity)
+        });
+      });
+      
+      // 索引建议
+      (perfData.indexRecommendations || []).forEach(idx => {
+        recommendations.push({
+          category: '性能',
+          severity: '中',
+          type: '索引优化',
+          description: `在${idx.table}表的${idx.columns.join(', ')}列创建${idx.indexType}索引`,
+          impact: idx.reason,
+          suggestion: `CREATE ${idx.indexType} INDEX idx_${idx.table}_${idx.columns.join('_')} ON ${idx.table}(${idx.columns.join(', ')})`,
+          effort: '中'
+        });
+      });
+      
+      // 直接的优化建议
+      (perfData.optimizationSuggestions || []).forEach(opt => {
+        recommendations.push({
+          category: '性能',
+          severity: '中',
+          type: opt.category || '查询优化',
+          description: opt.description,
+          impact: opt.expectedImprovement,
+          suggestion: opt.example || opt.description,
+          effort: '低'
+        });
       });
     }
     
-    // 安全建议
+    // 从安全审计提取修复建议
     if (integratedResults.securityAudit?.success) {
-      const vulnerabilities = integratedResults.securityAudit.data.vulnerabilities || [];
-      vulnerabilities.forEach(v => {
-        if (v.recommendations) {
-          recommendations.push(...v.recommendations.map(r => `[安全] ${r}`));
-        }
+      const secData = integratedResults.securityAudit.data;
+      
+      // 漏洞修复建议
+      (secData.vulnerabilities || []).forEach(v => {
+        recommendations.push({
+          category: '安全',
+          severity: v.severity || '高',
+          type: v.type,
+          description: v.description,
+          impact: v.impact,
+          suggestion: `修复${v.type}漏洞`,
+          effort: this.estimateEffort(v.severity)
+        });
+      });
+      
+      // 安全修复建议
+      (secData.recommendations || []).forEach(rec => {
+        recommendations.push({
+          category: '安全',
+          severity: rec.priority === '高' ? '高' : '中',
+          type: rec.category || '安全修复',
+          description: rec.description,
+          impact: '提升安全性',
+          suggestion: rec.example || rec.description,
+          effort: rec.priority === '高' ? '低' : '中'
+        });
       });
     }
     
-    // 规范建议
+    // 从编码规范提取改进建议
     if (integratedResults.standardsCheck?.success) {
-      const violations = integratedResults.standardsCheck.data.violations || [];
-      violations.forEach(v => {
-        if (v.recommendations) {
-          recommendations.push(...v.recommendations.map(r => `[规范] ${r}`));
-        }
+      const stdData = integratedResults.standardsCheck.data;
+      
+      // 违规修复建议
+      (stdData.violations || []).forEach(v => {
+        recommendations.push({
+          category: '规范',
+          severity: v.severity || '低',
+          type: v.type,
+          description: v.description,
+          impact: v.impact || '提升代码可读性',
+          suggestion: v.suggestion || `修复${v.type}违规`,
+          effort: '低'
+        });
+      });
+      
+      // 最佳实践建议
+      (stdData.bestPractices || []).forEach(bp => {
+        recommendations.push({
+          category: '规范',
+          severity: '低',
+          type: '最佳实践',
+          description: bp.description || bp,
+          impact: '提升代码质量',
+          suggestion: bp.example || bp.description || bp,
+          effort: '低'
+        });
       });
     }
     
-    // 优化建议
-    if (integratedResults.optimizationSuggestions?.success) {
-      const suggestions = integratedResults.optimizationSuggestions.data.optimizationSuggestions || [];
-      suggestions.forEach(s => {
-        recommendations.push(`[优化] ${s.description}`);
-      });
-    }
+    // 按优先级排序
+    return this.prioritizeRecommendations(recommendations);
+  }
+  
+  /**
+   * 按优先级排序建议
+   * @param {Array} recommendations - 建议列表
+   * @returns {Array} 排序后的建议列表
+   */
+  prioritizeRecommendations(recommendations) {
+    const severityWeight = { '高': 3, 'high': 3, '中': 2, 'medium': 2, '低': 1, 'low': 1 };
+    const effortWeight = { '低': 3, 'low': 3, '中': 2, 'medium': 2, '高': 1, 'high': 1 };
+    const categoryWeight = { '安全': 3, '性能': 2, '规范': 1 };
     
-    return recommendations;
+    return recommendations
+      .map(rec => ({
+        ...rec,
+        priority: (
+          (severityWeight[rec.severity] || 1) * 0.5 +
+          (effortWeight[rec.effort] || 1) * 0.3 +
+          (categoryWeight[rec.category] || 1) * 0.2
+        )
+      }))
+      .sort((a, b) => b.priority - a.priority)
+      .map(rec => `[${rec.category}] ${rec.description}`);
+  }
+  
+  /**
+   * 估算修复工作量
+   * @param {string} severity - 严重程度
+   * @returns {string} 工作量评估
+   */
+  estimateEffort(severity) {
+    const severityMap = {
+      '高': '低',  // 高优先级问题通常有明确解决方案,工作量反而低
+      'high': '低',
+      '中': '中',
+      'medium': '中',
+      '低': '低',
+      'low': '低'
+    };
+    return severityMap[severity] || '中';
   }
 
   /**
@@ -325,30 +434,333 @@ class ReportGenerator {
   }
 
   /**
-   * 构建优化建议部分
+   * 构建优化建议部分(从前3个分析器整合)
    */
   buildOptimizationSection(integratedResults) {
-    if (!integratedResults.optimizationSuggestions?.success) return null;
+    // 整合所有优化建议
+    const allSuggestions = this.mergeOptimizationSuggestions(integratedResults);
     
-    const optData = integratedResults.optimizationSuggestions.data;
+    if (allSuggestions.length === 0) return null;
+    
+    // 生成实施计划
+    const implementationPlan = this.generateImplementationPlan(allSuggestions);
+    
+    // 生成查询重写(如果适用)
+    const queryRewrites = this.generateQueryRewrites(integratedResults);
+    
     return {
-      optimizationPotential: optData.optimizationPotential,
-      // 只保留前3个建议的简短描述，减少重复
-      topSuggestions: optData.optimizationSuggestions?.slice(0, 3).map(s => ({
+      optimizationPotential: this.assessOptimizationPotential(integratedResults),
+      priorityIssues: allSuggestions.slice(0, 5).map(s => ({
         category: s.category,
+        type: s.type,
+        severity: s.severity,
+        description: s.description,
+        impact: s.impact,
+        effort: s.effort
+      })),
+      implementationPlan: implementationPlan,
+      queryRewrites: queryRewrites,
+      topSuggestions: allSuggestions.slice(0, 3).map(s => ({
+        category: s.category,
+        type: s.type,
         description: s.description
-      })) || []
+      }))
     };
+  }
+  
+  /**
+   * 整合所有优化建议
+   * @param {Object} integratedResults - 整合的分析结果
+   * @returns {Array} 优化建议列表
+   */
+  mergeOptimizationSuggestions(integratedResults) {
+    const suggestions = [];
+    
+    // 从性能分析提取
+    if (integratedResults.performanceAnalysis?.success) {
+      const perfData = integratedResults.performanceAnalysis.data;
+      
+      (perfData.bottlenecks || []).forEach(b => {
+        suggestions.push({
+          category: '性能',
+          type: b.type,
+          severity: b.severity,
+          description: b.description,
+          impact: b.impact,
+          effort: this.estimateEffort(b.severity)
+        });
+      });
+      
+      (perfData.optimizationSuggestions || []).forEach(opt => {
+        suggestions.push({
+          category: '性能',
+          type: opt.category || '查询优化',
+          severity: '中',
+          description: opt.description,
+          impact: opt.expectedImprovement,
+          effort: '低'
+        });
+      });
+      
+      (perfData.indexRecommendations || []).forEach(idx => {
+        suggestions.push({
+          category: '性能',
+          type: '索引优化',
+          severity: '中',
+          description: `在${idx.table}表的${idx.columns.join(', ')}列创建${idx.indexType}索引`,
+          impact: idx.reason,
+          effort: '中'
+        });
+      });
+    }
+    
+    // 从安全审计提取
+    if (integratedResults.securityAudit?.success) {
+      const secData = integratedResults.securityAudit.data;
+      
+      (secData.vulnerabilities || []).forEach(v => {
+        suggestions.push({
+          category: '安全',
+          type: v.type,
+          severity: v.severity,
+          description: v.description,
+          impact: v.impact,
+          effort: this.estimateEffort(v.severity)
+        });
+      });
+      
+      (secData.recommendations || []).forEach(rec => {
+        suggestions.push({
+          category: '安全',
+          type: rec.category || '安全修复',
+          severity: rec.priority === '高' ? '高' : '中',
+          description: rec.description,
+          impact: '提升安全性',
+          effort: rec.priority === '高' ? '低' : '中'
+        });
+      });
+    }
+    
+    // 从编码规范提取
+    if (integratedResults.standardsCheck?.success) {
+      const stdData = integratedResults.standardsCheck.data;
+      
+      (stdData.violations || []).forEach(v => {
+        suggestions.push({
+          category: '规范',
+          type: v.type,
+          severity: v.severity || '低',
+          description: v.description,
+          impact: v.impact || '提升代码质量',
+          effort: '低'
+        });
+      });
+    }
+    
+    return this.prioritizeSuggestions(suggestions);
+  }
+  
+  /**
+   * 按优先级排序建议(用于优化建议部分)
+   * @param {Array} suggestions - 建议列表
+   * @returns {Array} 排序后的建议
+   */
+  prioritizeSuggestions(suggestions) {
+    const severityWeight = { '高': 3, 'high': 3, '中': 2, 'medium': 2, '低': 1, 'low': 1 };
+    const effortWeight = { '低': 3, 'low': 3, '中': 2, 'medium': 2, '高': 1, 'high': 1 };
+    const categoryWeight = { '安全': 3, '性能': 2, '规范': 1 };
+    
+    return suggestions
+      .map(s => ({
+        ...s,
+        priority: (
+          (severityWeight[s.severity] || 1) * 0.5 +
+          (effortWeight[s.effort] || 1) * 0.3 +
+          (categoryWeight[s.category] || 1) * 0.2
+        )
+      }))
+      .sort((a, b) => b.priority - a.priority);
+  }
+  
+  /**
+   * 生成实施计划
+   * @param {Array} suggestions - 优化建议
+   * @returns {Array} 实施步骤
+   */
+  generateImplementationPlan(suggestions) {
+    const plan = [];
+    
+    // 按类别分组
+    const grouped = {
+      '安全': suggestions.filter(s => s.category === '安全'),
+      '性能': suggestions.filter(s => s.category === '性能'),
+      '规范': suggestions.filter(s => s.category === '规范')
+    };
+    
+    let stepNumber = 1;
+    
+    // 优先处理安全问题
+    if (grouped['安全'].length > 0) {
+      plan.push({
+        step: stepNumber++,
+        phase: '紧急修复',
+        description: '修复安全漏洞',
+        tasks: grouped['安全'].slice(0, 3).map(s => s.description),
+        dependencies: []
+      });
+    }
+    
+    // 性能优化
+    if (grouped['性能'].length > 0) {
+      const perfTasks = grouped['性能'].slice(0, 3);
+      
+      // 索引优化(如果有)
+      const indexTasks = perfTasks.filter(s => s.type?.includes('索引'));
+      if (indexTasks.length > 0) {
+        const prevSteps = grouped['安全'].length > 0 ? [1] : [];
+        plan.push({
+          step: stepNumber++,
+          phase: '性能优化',
+          description: '创建必要的索引',
+          tasks: indexTasks.map(s => s.description),
+          dependencies: prevSteps
+        });
+      }
+      
+      // 查询优化
+      const queryTasks = perfTasks.filter(s => !s.type?.includes('索引'));
+      if (queryTasks.length > 0) {
+        const prevSteps = indexTasks.length > 0 ? [stepNumber - 1] : [];
+        plan.push({
+          step: stepNumber++,
+          phase: '性能优化',
+          description: '优化SQL查询',
+          tasks: queryTasks.map(s => s.description),
+          dependencies: prevSteps
+        });
+      }
+    }
+    
+    // 规范改进
+    if (grouped['规范'].length > 0) {
+      plan.push({
+        step: stepNumber++,
+        phase: '代码规范',
+        description: '改进代码规范',
+        tasks: grouped['规范'].slice(0, 3).map(s => s.description),
+        dependencies: []
+      });
+    }
+    
+    // 验证测试
+    plan.push({
+      step: stepNumber++,
+      phase: '验证测试',
+      description: '测试优化效果',
+      tasks: ['使用EXPLAIN分析执行计划', '性能基准测试', '回归测试'],
+      dependencies: plan.length > 0 ? [plan.length] : []
+    });
+    
+    return plan;
+  }
+  
+  /**
+   * 生成查询重写建议
+   * @param {Object} integratedResults - 整合的分析结果
+   * @returns {Array} 查询重写列表
+   */
+  generateQueryRewrites(integratedResults) {
+    const rewrites = [];
+    
+    // 从性能分析提取重写建议
+    if (integratedResults.performanceAnalysis?.success) {
+      const perfData = integratedResults.performanceAnalysis.data;
+      
+      // 检查是否有子查询优化建议
+      (perfData.bottlenecks || []).forEach(b => {
+        if (b.type?.includes('子查询') && b.location) {
+          rewrites.push({
+            type: '子查询优化',
+            description: '将子查询改写为JOIN',
+            reason: b.description,
+            benefit: b.impact || '性能提升30-70%'
+          });
+        }
+        
+        // 检查全表扫描
+        if (b.type?.includes('全表扫描') && b.location) {
+          rewrites.push({
+            type: '索引优化',
+            description: '添加索引避免全表扫描',
+            reason: b.description,
+            benefit: '性能提升10-100倍'
+          });
+        }
+      });
+    }
+    
+    // 从安全审计提取重写建议
+    if (integratedResults.securityAudit?.success) {
+      const secData = integratedResults.securityAudit.data;
+      
+      (secData.vulnerabilities || []).forEach(v => {
+        if (v.type?.includes('SQL注入') || v.type?.includes('注入')) {
+          rewrites.push({
+            type: '安全修复',
+            description: '使用参数化查询',
+            reason: v.description,
+            benefit: '完全消除SQL注入风险'
+          });
+        }
+      });
+    }
+    
+    return rewrites;
+  }
+  
+  /**
+   * 评估优化潜力
+   * @param {Object} integratedResults - 整合的分析结果
+   * @returns {string} 优化潜力评估
+   */
+  assessOptimizationPotential(integratedResults) {
+    let score = 0;
+    let count = 0;
+    
+    if (integratedResults.performanceAnalysis?.success) {
+      score += 100 - (integratedResults.performanceAnalysis.data.performanceScore || 50);
+      count++;
+    }
+    
+    if (integratedResults.securityAudit?.success) {
+      score += 100 - (integratedResults.securityAudit.data.securityScore || 50);
+      count++;
+    }
+    
+    if (integratedResults.standardsCheck?.success) {
+      score += 100 - (integratedResults.standardsCheck.data.standardsScore || 50);
+      count++;
+    }
+    
+    const avgGap = count > 0 ? score / count : 0;
+    
+    if (avgGap > 50) return '高';
+    if (avgGap > 30) return '中';
+    return '低';
   }
 
   /**
-   * 提取优化后的SQL
+   * 提取优化后的SQL(暂时保留兼容性)
    */
   extractOptimizedSql(integratedResults) {
-    return integratedResults.optimizationSuggestions?.success && 
-           integratedResults.optimizationSuggestions.data.optimizedSqlData
-      ? integratedResults.optimizationSuggestions.data.optimizedSqlData
-      : null;
+    // 优先从optimizationSuggestions提取(向后兼容)
+    if (integratedResults.optimizationSuggestions?.success &&
+        integratedResults.optimizationSuggestions.data.optimizedSqlData) {
+      return integratedResults.optimizationSuggestions.data.optimizedSqlData;
+    }
+    
+    // 未来可以从前3个分析器生成优化SQL
+    return null;
   }
 
   /**

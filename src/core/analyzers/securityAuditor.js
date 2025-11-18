@@ -23,14 +23,11 @@ class SecurityAuditor extends BaseAnalyzer {
     
     const { sqlQuery } = input;
     
-    // 使用提示词模板
+    // 使用专用的安全审计提示词模板
     const { systemPrompt } = await buildPrompt(
-      'security-auditor.md',
+      'security-audit.md',
       {},
-      {
-        category: 'analyzers',
-        section: '安全审计'
-      }
+      { category: 'analyzers' }
     );
 
     const messages = [
@@ -46,43 +43,6 @@ ${sqlQuery}`)
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL安全审计', error);
-    }
-  }
-
-  /**
-   * 检测SQL注入风险
-   * @param {Object} input - 输入参数
-   * @param {string} input.sqlQuery - SQL查询语句
-   * @returns {Promise<Object>} SQL注入检测结果
-   */
-  async detectSqlInjection(input) {
-    await this.initialize();
-    
-    const { sqlQuery } = input;
-    
-    // 使用提示词模板
-    const { systemPrompt } = await buildPrompt(
-      'security-auditor.md',
-      {},
-      {
-        category: 'analyzers',
-        section: 'SQL注入检测'
-      }
-    );
-
-    const messages = [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(`请检测以下SQL注入风险：
-
-SQL查询:
-${sqlQuery}`)
-    ];
-
-    try {
-      const result = await this.invokeLLMAndParse(messages);
-      return this.formatResponse(result);
-    } catch (error) {
-      return this.handleError('SQL注入检测', error);
     }
   }
 }

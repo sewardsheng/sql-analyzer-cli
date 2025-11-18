@@ -526,46 +526,6 @@ class IntelligentRuleLearner extends BaseAnalyzer {
     }
   }
 
-  /**
-   * 检索相关规则
-   * @param {Object} input - 输入参数
-   * @param {string} input.query - 查询字符串
-   * @param {string} input.databaseType - 数据库类型
-   * @param {number} input.limit - 返回规则数量限制
-   * @returns {Promise<Object>} 检索结果
-   */
-  async retrieveRules(input) {
-    await this.initialize();
-    
-    const { query, databaseType, limit = 5 } = input;
-    
-    try {
-      const { systemPrompt } = await buildPrompt(
-        'intelligent-rule-learner.md',
-        {},
-        {
-          category: 'analyzers',
-          section: '规则检索'
-        }
-      );
-
-      const messages = [
-        new SystemMessage(systemPrompt),
-        new HumanMessage(`请为以下${databaseType || '未知'}数据库的SQL查询检索相关规则：\n\n查询: ${query}`)
-      ];
-
-      const response = await this.getLLM().invoke(messages);
-      const result = JSONCleaner.parse(response.content);
-      
-      return {
-        success: true,
-        data: result,
-        databaseType: result.databaseType || databaseType || 'unknown'
-      };
-    } catch (error) {
-      return this.handleError('规则检索', error);
-    }
-  }
 
   /**
    * 评估规则文件质量

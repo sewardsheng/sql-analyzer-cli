@@ -23,14 +23,11 @@ class PerformanceAnalyzer extends BaseAnalyzer {
     
     const { sqlQuery } = input;
     
-    // 使用提示词模板
+    // 使用专用的性能分析提示词模板
     const { systemPrompt } = await buildPrompt(
-      'performance-analyzer.md',
+      'performance-analysis.md',
       {},
-      {
-        category: 'analyzers',
-        section: '性能分析'
-      }
+      { category: 'analyzers' }
     );
 
     const messages = [
@@ -48,43 +45,6 @@ ${sqlQuery}`)
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError('SQL性能分析', error);
-    }
-  }
-
-  /**
-   * 生成执行计划分析
-   * @param {Object} input - 输入参数
-   * @param {string} input.sqlQuery - SQL查询语句
-   * @returns {Promise<Object>} 执行计划分析结果
-   */
-  async analyzeExecutionPlan(input) {
-    await this.initialize();
-    
-    const { sqlQuery } = input;
-    
-    // 使用提示词模板
-    const { systemPrompt } = await buildPrompt(
-      'performance-analyzer.md',
-      {},
-      {
-        category: 'analyzers',
-        section: '执行计划分析'
-      }
-    );
-
-    const messages = [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(`请分析以下SQL执行计划：
-
-SQL查询:
-${sqlQuery}`)
-    ];
-
-    try {
-      const result = await this.invokeLLMAndParse(messages);
-      return this.formatResponse(result);
-    } catch (error) {
-      return this.handleError('执行计划分析', error);
     }
   }
 }

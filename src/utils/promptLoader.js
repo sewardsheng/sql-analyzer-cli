@@ -53,45 +53,32 @@ export function replaceTemplateVariables(template, variables) {
 /**
  * 从markdown模板中提取system和user部分
  * @param {string} template - 模板内容
- * @param {string} section - 要提取的特定部分(可选)
  * @returns {Object} {systemPrompt, userPrompt}
  */
-export function extractPromptsFromTemplate(template, section = null) {
-  // 如果指定了section，先提取该section的内容
-  let workingTemplate = template;
-  if (section) {
-    const sectionPattern = new RegExp(`## 系统角色 - ${section}\\s+([\\s\\S]*?)(?=\\n---\\n|\\n## 系统角色|$)`, 'i');
-    const sectionMatch = template.match(sectionPattern);
-    if (sectionMatch) {
-      workingTemplate = sectionMatch[0];
-    } else {
-      console.warn(`未找到指定的section: ${section}, 使用完整模板`);
-    }
-  }
-  
+export function extractPromptsFromTemplate(template) {
   // 提取系统角色定义和任务目标作为system prompt
   const systemSections = [];
   
   // 提取 ## 系统角色定义 或 ## 系统角色 - XXX 部分
-  const roleMatch = workingTemplate.match(/## 系统角色.*\s+([\s\S]*?)(?=\n##|$)/);
+  const roleMatch = template.match(/## 系统角色.*\s+([\s\S]*?)(?=\n##|$)/);
   if (roleMatch) {
     systemSections.push(roleMatch[1].trim());
   }
   
   // 提取 ## 任务目标 部分
-  const goalMatch = workingTemplate.match(/## 任务目标\s+([\s\S]*?)(?=\n##|$)/);
+  const goalMatch = template.match(/## 任务目标\s+([\s\S]*?)(?=\n##|$)/);
   if (goalMatch) {
     systemSections.push(goalMatch[1].trim());
   }
   
   // 提取输出格式要求作为system prompt的一部分
-  const outputMatch = workingTemplate.match(/## 输出格式(?:要求)?\s+([\s\S]*?)(?=\n##|$)/);
+  const outputMatch = template.match(/## 输出格式(?:要求)?\s+([\s\S]*?)(?=\n##|$)/);
   if (outputMatch) {
     systemSections.push(outputMatch[1].trim());
   }
   
   // 提取指导原则
-  const guideMatch = workingTemplate.match(/## .*指导原则\s+([\s\S]*?)(?=\n##|$)/);
+  const guideMatch = template.match(/## .*指导原则\s+([\s\S]*?)(?=\n##|$)/);
   if (guideMatch) {
     systemSections.push(guideMatch[1].trim());
   }
@@ -100,7 +87,7 @@ export function extractPromptsFromTemplate(template, section = null) {
   
   // 提取输入信息部分作为user prompt的基础
   // 注意：使用贪婪匹配以确保包含完整的多行内容（如嵌套的markdown代码块）
-  const inputMatch = workingTemplate.match(/## 输入信息\s+([\s\S]*?)(?=\n## (?:输出格式|评估|特殊|$))/);
+  const inputMatch = template.match(/## 输入信息\s+([\s\S]*?)(?=\n## (?:输出格式|评估|特殊|$))/);
   const userPrompt = inputMatch ? inputMatch[1].trim() : '';
   
   return {
@@ -113,11 +100,11 @@ export function extractPromptsFromTemplate(template, section = null) {
  * 构建完整的prompt
  * @param {string} templateName - 模板文件名
  * @param {Object} variables - 变量对象
- * @param {Object} options - 可选配置 {category, section}
+ * @param {Object} options - 可选配置 {category}
  * @returns {Promise<Object>} {systemPrompt, userPrompt}
  */
 export async function buildPrompt(templateName, variables = {}, options = {}) {
-  const { category = 'rule-learning', section = null } = options;
+  const { category = 'rule-learning' } = options;
   
   // 加载模板
   const template = await loadPromptTemplate(templateName, category);
@@ -126,7 +113,7 @@ export async function buildPrompt(templateName, variables = {}, options = {}) {
   const filledTemplate = replaceTemplateVariables(template, variables);
   
   // 提取system和user部分
-  const { systemPrompt, userPrompt } = extractPromptsFromTemplate(filledTemplate, section);
+  const { systemPrompt, userPrompt } = extractPromptsFromTemplate(filledTemplate);
   
   return {
     systemPrompt,

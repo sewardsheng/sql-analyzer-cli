@@ -20,18 +20,42 @@ class QuickAnalyzer extends BaseAnalyzer {
    * @returns {Promise<Object>} 快速分析结果
    */
   async quickAnalyze(input) {
-    await this.initialize();
-    
     const { sqlQuery, options = {} } = input;
     
-    // 使用快速分析提示词模板
+    try {
+      await this.initialize();
+    } catch (initError) {
+      // 如果初始化失败（通常是API连接问题），返回基础结果而不是抛出错误
+      return {
+        success: true,
+        data: {
+          quickScore: 60, // 默认中等评分
+          criticalIssues: [],
+          quickSuggestions: [
+            {
+              type: "API连接",
+              severity: "中",
+              description: "无法连接到分析服务，请检查网络连接和API配置",
+              suggestion: "检查网络连接和API配置后重试"
+            }
+          ],
+          analysisMetadata: {
+            threshold: options.threshold || 70,
+            passed: false,
+            hasBlocking: false,
+            checkTime: new Date().toISOString(),
+            analyzerVersion: '1.0.0',
+            apiError: true
+          }
+        }
+      };
+    }
+    
+    // 使用专用的快速分析提示词模板
     const { systemPrompt } = await buildPrompt(
-      'quick-analyzer.md',
+      'quick-analysis.md',
       {},
-      {
-        category: 'analyzers',
-        section: '快速分析'
-      }
+      { category: 'analyzers' }
     );
 
     const messages = [
@@ -51,7 +75,31 @@ ${sqlQuery}`)
       // 使用基类的 formatResponse 方法
       return this.formatResponse(enhancedResult);
     } catch (error) {
-      return this.handleError('SQL快速分析', error);
+      // 如果LLM调用失败，返回基础结果而不是抛出错误
+      console.warn(`LLM调用失败: ${error.message}`);
+      return {
+        success: true,
+        data: {
+          quickScore: 60, // 默认中等评分
+          criticalIssues: [],
+          quickSuggestions: [
+            {
+              type: "API连接",
+              severity: "中",
+              description: "无法连接到分析服务，请检查网络连接和API配置",
+              suggestion: "检查网络连接和API配置后重试"
+            }
+          ],
+          analysisMetadata: {
+            threshold: options.threshold || 70,
+            passed: false,
+            hasBlocking: false,
+            checkTime: new Date().toISOString(),
+            analyzerVersion: '1.0.0',
+            apiError: true
+          }
+        }
+      };
     }
   }
 

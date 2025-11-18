@@ -17,6 +17,7 @@ import { registerKnowledgeRoutes } from './routes/knowledge.js';
 import { registerConfigRoutes } from './routes/config.js';
 import { registerInitRoutes } from './routes/init.js';
 import { registerStatusRoutes } from './routes/status.js';
+import { registerHealthRoutes } from './routes/health.js';
 
 /**
  * 创建并启动API服务器
@@ -63,6 +64,7 @@ export async function createApiServer(options = {}) {
   registerConfigRoutes(app);
   registerInitRoutes(app);
   registerStatusRoutes(app);
+  registerHealthRoutes(app);
   
   // 获取分析服务实例
   const analysisService = getAnalysisService();
@@ -93,6 +95,9 @@ export async function createApiServer(options = {}) {
       description: 'SQL语句智能分析与扫描API服务',
       endpoints: {
         health: 'GET /api/health',
+        healthPing: 'GET /api/health/ping',
+        healthStatus: 'GET /api/health/status',
+        healthCheck: 'GET /api/health/check/:type',
         analyze: 'POST /api/analyze',
         analyzeBatch: 'POST /api/analyze/batch',
         history: 'GET /api/history',
@@ -106,40 +111,6 @@ export async function createApiServer(options = {}) {
     });
   });
   
-  /**
-   * GET /api/health - 健康检查
-   * 返回服务器状态信息
-   */
-  app.get('/api/health', async (c) => {
-    const startTime = Date.now();
-    
-    try {
-      // 检查分析服务是否可用
-      const coordinator = await analysisService.getCoordinator();
-      await coordinator.initialize();
-      
-      const responseTime = Date.now() - startTime;
-      
-      return c.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        responseTime: `${responseTime}ms`,
-        service: 'sql-analyzer-api',
-        version: '1.0.0'
-      });
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      
-      return c.json({
-        status: 'unhealthy',
-        timestamp: new Date().toISOString(),
-        responseTime: `${responseTime}ms`,
-        service: 'sql-analyzer-api',
-        version: '1.0.0',
-        error: error.message
-      }, 503);
-    }
-  });
   
   /**
    * GET /api/docs - API文档
@@ -336,6 +307,9 @@ export async function createApiServer(options = {}) {
       availableEndpoints: [
         'GET /',
         'GET /api/health',
+        'GET /api/health/ping',
+        'GET /api/health/status',
+        'GET /api/health/check/:type',
         'POST /api/analyze',
         'POST /api/analyze/batch',
         'GET /api/history',

@@ -8,7 +8,8 @@ import chalk from 'chalk';
 import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
 import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
 import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
-import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
+// SqlOptimizer已删除 - 优化建议现在由ReportGenerator从前3个分析器整合
+// import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
 import { createIntelligentRuleLearnerTool } from './analyzers/intelligentRuleLearner.js';
 import { createQuickAnalyzerTool } from './analyzers/quickAnalyzer.js';
 import ReportGenerator from './reporter.js';
@@ -48,12 +49,12 @@ class SqlAnalysisCoordinator {
       }
     });
     
-    // 初始化所有分析器工具
+    // 初始化核心分析器工具(移除冗余的optimizer)
     this.tools = {
       performanceAnalyzer: createPerformanceAnalyzerTool(this.config),
       securityAuditor: createSecurityAuditorTool(this.config),
       standardsChecker: createCodingStandardsCheckerTool(this.config),
-      optimizer: createSqlOptimizerAndSuggesterTool(this.config),
+      // optimizer已删除 - 优化建议由ReportGenerator整合
       ruleLearner: createIntelligentRuleLearnerTool(this.config),
       quickAnalyzer: createQuickAnalyzerTool(this.config)
     };
@@ -90,12 +91,44 @@ class SqlAnalysisCoordinator {
         console.log("🔍 执行快速基础分析...");
       }
       
-      const quickResult = await this.tools.quickAnalyzer.func({
-        sqlQuery,
-        options: {
-          headless: this.config.headless
-        }
-      });
+      // 执行快速分析，添加错误处理
+      let quickResult;
+      try {
+        quickResult = await this.tools.quickAnalyzer.func({
+          sqlQuery,
+          options: {
+            headless: this.config.headless
+          }
+        });
+      } catch (analysisError) {
+        console.warn(chalk.yellow(`快速分析API调用失败: ${analysisError.message}`));
+        console.warn(chalk.yellow('将生成基础分析结果...'));
+        
+        // 创建一个基础的快速分析结果，即使API失败也能返回有效结果
+        quickResult = {
+          success: true,
+          data: {
+            quickScore: 60, // 默认中等评分
+            criticalIssues: [],
+            quickSuggestions: [
+              {
+                type: "API连接",
+                severity: "中",
+                description: "无法连接到分析服务，请检查网络连接和API配置",
+                suggestion: "检查网络连接和API配置后重试"
+              }
+            ],
+            analysisMetadata: {
+              threshold: options.threshold || 70,
+              passed: false,
+              hasBlocking: false,
+              checkTime: new Date().toISOString(),
+              analyzerVersion: '1.0.0',
+              apiError: true
+            }
+          }
+        };
+      }
       
       if (!quickResult.success) {
         throw new Error(quickResult.error);
@@ -208,70 +241,35 @@ class SqlAnalysisCoordinator {
       console.log(`\n🔍 识别到数据库类型: ${databaseType}\n`);
     }
     
-    // 继续执行优化建议和规则学习（这些依赖前面的分析结果）
-    console.log("\n💡 步骤4: 生成优化建议...");
-    const additionalTasks = [];
-    
-    // 整合前面的分析结果
-    const tempResults = {
-      performanceAnalysis: null,
-      securityAudit: null,
-      standardsCheck: null
-    };
-    
-    initialResults.forEach(({ type, result }) => {
-      if (type === 'performance') tempResults.performanceAnalysis = result;
-      else if (type === 'security') tempResults.securityAudit = result;
-      else if (type === 'standards') tempResults.standardsCheck = result;
-    });
-    
-    // 优化建议生成（此时已有数据库类型）
-    additionalTasks.push(
-      this.tools.optimizer.func({
-        sqlQuery,
-        databaseType,
-        performanceAnalysis: tempResults.performanceAnalysis,
-        securityAudit: tempResults.securityAudit,
-        standardsCheck: tempResults.standardsCheck
-      }).then(result => ({ type: 'optimizer', result }))
-      .catch(error => ({ type: 'optimizer', result: { success: false, error: error.message } }))
-    );
-    
-    // 规则学习（可选）
-    if (options.learn !== false) {
-      console.log("🎓 步骤5: 规则学习...");
-      additionalTasks.push(
-        this.tools.ruleLearner.func({
-          sqlQuery,
-          databaseType,
-          analysisResults: tempResults
-        }).then(result => ({ type: 'learner', result }))
-        .catch(error => ({ type: 'learner', result: { success: false, error: error.message } }))
-      );
-    }
-    
-    // 等待优化建议和规则学习完成
-    const additionalResults = await Promise.all(additionalTasks);
-    
-    // 合并所有结果
-    const allResults = [...initialResults, ...additionalResults];
-    
-    // 整合所有结果
+    // 整合前3个分析器的结果
     const integratedResults = {
       performanceAnalysis: null,
       securityAudit: null,
       standardsCheck: null,
-      optimizationSuggestions: null,
       ruleLearning: null
     };
     
-    allResults.forEach(({ type, result }) => {
+    initialResults.forEach(({ type, result }) => {
       if (type === 'performance') integratedResults.performanceAnalysis = result;
       else if (type === 'security') integratedResults.securityAudit = result;
       else if (type === 'standards') integratedResults.standardsCheck = result;
-      else if (type === 'optimizer') integratedResults.optimizationSuggestions = result;
-      else if (type === 'learner') integratedResults.ruleLearning = result;
     });
+    
+    // 规则学习（可选,独立执行）
+    if (options.learn !== false) {
+      console.log("\n🎓 步骤4: 规则学习...");
+      try {
+        const learnerResult = await this.tools.ruleLearner.func({
+          sqlQuery,
+          databaseType,
+          analysisResults: integratedResults
+        });
+        integratedResults.ruleLearning = learnerResult;
+      } catch (error) {
+        integratedResults.ruleLearning = { success: false, error: error.message };
+        console.warn(chalk.yellow(`规则学习失败: ${error.message}`));
+      }
+    }
     
     console.log("\n✅ 所有分析任务完成\n");
     
