@@ -1,0 +1,52 @@
+{
+  "deploymentType": "docker",
+  "environment": "production",
+  "port": 3000,
+  "host": "0.0.0.0",
+  "docker": {
+    "imageName": "sql-analyzer-api",
+    "containerName": "sql-analyzer-api",
+    "ports": {
+      "host": 3000,
+      "container": 3000
+    },
+    "volumes": {
+      "logs": "./logs:/app/logs",
+      "data": "./data:/app/data"
+    },
+    "environment": {
+      "NODE_ENV": "production",
+      "API_HOST": "0.0.0.0",
+      "API_PORT": "3000",
+      "LOG_LEVEL": "info",
+      "CORS_ENABLED": "true",
+      "CORS_ORIGIN": "*",
+      "RATE_LIMIT_ENABLED": "true",
+      "RATE_LIMIT_REQUESTS": "100",
+      "RATE_LIMIT_WINDOW": "900000"
+    }
+  },
+  "pm2": {
+    "name": "sql-analyzer-api",
+    "script": "dist/server.js",
+    "instances": 1,
+    "exec_mode": "fork",
+    "env": {
+      "NODE_ENV": "production",
+      "API_HOST": "0.0.0.0",
+      "API_PORT": "3000"
+    }
+  },
+  "systemd": {
+    "serviceName": "sql-analyzer-api",
+    "user": "root",
+    "workingDirectory": "/opt/sql-analyzer-api",
+    "executable": "/usr/bin/bun",
+    "arguments": "run dist/server.js",
+    "environment": {
+      "NODE_ENV": "production",
+      "API_HOST": "0.0.0.0",
+      "API_PORT": "3000"
+    }
+  }
+}

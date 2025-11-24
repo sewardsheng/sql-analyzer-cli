@@ -1,396 +1,941 @@
-# 部署指南
+# SQL Analyzer API 部署指南
 
-本文档介绍SQL Analyzer CLI的部署流程和健康检查功能。
+## 概述
 
-## 目录
+本指南详细介绍如何在不同环境中部署 SQL Analyzer API 服务，包括 Docker、云平台和传统服务器部署。SQL Analyzer API 是一个纯 API 服务，专注于提供 SQL 语句的智能分析功能。
 
-- [快速部署](#快速部署)
-- [增强部署脚本](#增强部署脚本)
-- [健康检查](#健康检查)
-- [故障排除](#故障排除)
-- [回滚机制](#回滚机制)
+## 系统要求
 
-## 快速部署
+### 最低配置
+- **CPU**: 2 核心
+- **内存**: 4GB RAM
+- **存储**: 20GB 可用空间
+- **网络**: 稳定的互联网连接
 
-### 基本部署
+### 推荐配置
+- **CPU**: 4 核心或更多
+- **内存**: 8GB RAM 或更多
+- **存储**: 50GB SSD
+- **网络**: 高带宽连接
+
+### 软件依赖
+- **Node.js**: 18.0.0 或更高版本
+- **Bun**: 1.0.0 或更高版本（推荐）
+- **Docker**: 20.10.0 或更高版本（可选）
+- **Docker Compose**: 2.0.0 或更高版本（可选）
+
+## 环境配置
+
+### 环境变量
+
+创建 `.env` 文件并配置以下变量：
+
+```env
+# 基础配置
+NODE_ENV=production
+API_HOST=0.0.0.0
+API_PORT=3000
+
+# 日志配置
+LOG_LEVEL=info                    # debug, info, warn, error
+LOG_REQUEST_BODY=false             # 是否记录请求体
+LOG_FILE_PATH=./logs/api.log      # 日志文件路径
+
+# CORS 配置
+CORS_ENABLED=true
+CORS_ORIGIN=*                   # 或指定域名：https://example.com
+
+# 限流配置
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100          # 每个时间窗口的请求数
+RATE_LIMIT_WINDOW=900000          # 时间窗口（毫秒），15分钟
+
+# 安全配置
+API_KEY_REQUIRED=false            # 是否需要 API 密钥
+API_KEY=your-secret-key          # API 密钥
+
+# LLM 配置
+CUSTOM_API_KEY=your_api_key_here
+CUSTOM_MODEL=deepseek-ai/DeepSeek-V3.1
+CUSTOM_BASE_URL=https://api.openai.com/v1
+CUSTOM_EMBEDDING_MODEL=BAAI/bge-m3
+
+# 向量存储配置
+VECTOR_STORE_API_KEY=
+VECTOR_STORE_BASE_URL=
+VECTOR_STORE_EMBEDDING_MODEL=
+
+# 数据库配置（如果使用外部数据库）
+DATABASE_URL=postgresql://user:password@localhost:5432/sql_analyzer
+REDIS_URL=redis://localhost:6379     # 可选，用于缓存
+
+# 监控配置
+HEALTH_CHECK_ENABLED=true
+METRICS_ENABLED=false             # 是否启用指标收集
+```
+
+## Docker 部署
+
+### 1. 使用 Dockerfile
 
 ```bash
 # 克隆项目
-git clone <repository-url>
-cd sql-analyzer-cli
+git clone https://github.com/your-username/sql-analyzer-api.git
+cd sql-analyzer-api
+
+# 构建镜像
+docker build -t sql-analyzer-api .
+
+# 运行容器
+docker run -d \
+  --name sql-analyzer-api \
+  -p 3000:3000 \
+  --restart unless-stopped \
+  -e NODE_ENV=production \
+  -e API_HOST=0.0.0.0 \
+  -e API_PORT=3000 \
+  -e CUSTOM_API_KEY=your_api_key_here \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/data:/app/data \
+  sql-analyzer-api
+```
+
+### 2. 使用 Docker Compose
+
+```bash
+# 克隆项目
+git clone https://github.com/your-username/sql-analyzer-api.git
+cd sql-analyzer-api
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件
+
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+### 3. 生产环境 Docker 配置
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  sql-analyzer-api:
+    image: sql-analyzer-api:latest
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=warn
+      - RATE_LIMIT_REQUESTS=200
+      - CUSTOM_API_KEY=${CUSTOM_API_KEY}
+    volumes:
+      - /var/log/sql-analyzer:/app/logs
+      - /opt/sql-analyzer/data:/app/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "bun", "run", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 可选：添加Redis用于缓存和会话存储
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 可选：添加PostgreSQL用于数据持久化
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sql_analyzer
+      - POSTGRES_USER=sql_analyzer
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sql_analyzer"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  default:
+    driver: bridge
+```
+
+## 云平台部署
+
+### 1. AWS ECS
+
+#### 创建 ECS 任务定义
+
+```json
+{
+  "family": "sql-analyzer-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::account:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::account:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "sql-analyzer-api",
+      "image": "your-account.dkr.ecr.region.amazonaws.com/sql-analyzer-api:latest",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "API_HOST",
+          "value": "0.0.0.0"
+        },
+        {
+          "name": "CUSTOM_API_KEY",
+          "value": "${CUSTOM_API_KEY}"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sql-analyzer-api",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:3000/api/health/ping || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3
+      }
+    }
+  ]
+}
+```
+
+#### 部署命令
+
+```bash
+# 创建 ECR 仓库
+aws ecr create-repository --repository-name sql-analyzer-api
+
+# 推送镜像
+aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin your-account.dkr.ecr.us-west-2.amazonaws.com
+docker tag sql-analyzer-api:latest your-account.dkr.ecr.us-west-2.amazonaws.com/sql-analyzer-api:latest
+docker push your-account.dkr.ecr.us-west-2.amazonaws.com/sql-analyzer-api:latest
+
+# 创建服务
+aws ecs create-service \
+  --cluster sql-analyzer-cluster \
+  --service-name sql-analyzer-api \
+  --task-definition sql-analyzer-api \
+  --desired-count 2 \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-12345],securityGroups=[sg-12345],assignPublicIp=ENABLED}" \
+  --load-balancer targetGroupArn=arn:aws:elasticloadbalancing:region:account:targetgroup/sql-analyzer-api,containerName=sql-analyzer-api,containerPort=3000
+```
+
+### 2. Google Cloud Run
+
+```bash
+# 构建并推送镜像
+gcloud builds submit --tag gcr.io/PROJECT_ID/sql-analyzer-api .
+
+# 部署到 Cloud Run
+gcloud run deploy sql-analyzer-api \
+  --image gcr.io/PROJECT_ID/sql-analyzer-api \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --cpu 1 \
+  --max-instances 10 \
+  --min-instances 1 \
+  --set-env-vars NODE_ENV=production,LOG_LEVEL=info,CUSTOM_API_KEY=$CUSTOM_API_KEY \
+  --set-cloudsql-instances INSTANCE_CONNECTION_NAME
+```
+
+### 3. Azure Container Instances
+
+```bash
+# 创建资源组
+az group create --name sql-analyzer-rg --location eastus
+
+# 创建容器注册表
+az acr create --resource-group sql-analyzer-rg --name sqlanalyzeracr --sku Basic
+
+# 构建并推送镜像
+az acr build --registry sqlanalyzeracr --image sql-analyzer-api .
+
+# 创建容器实例
+az container create \
+  --resource-group sql-analyzer-rg \
+  --name sql-analyzer-api \
+  --image sqlanalyzeracr.azurecr.io/sql-analyzer-api:latest \
+  --cpu 1 \
+  --memory 2 \
+  --ports 3000 \
+  --environment-variables \
+    NODE_ENV=production \
+    API_HOST=0.0.0.0 \
+    CUSTOM_API_KEY=$CUSTOM_API_KEY \
+  --dns-name-label sql-analyzer-api-unique
+```
+
+## 传统服务器部署
+
+### 1. 直接部署
+
+```bash
+# 安装 Bun
+curl -fsSL https://bun.sh/install | bash
+
+# 克隆项目
+git clone https://github.com/your-username/sql-analyzer-api.git
+cd sql-analyzer-api
 
 # 安装依赖
 bun install
 
-# 运行健康检查
-bun run health
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件
 
-# 启动API服务
-bun run api
+# 构建项目
+bun run build
+
+# 启动服务
+NODE_ENV=production bun run start
 ```
 
-### 生产环境部署
+### 2. 使用 PM2
 
 ```bash
-# 使用增强部署脚本
-bun run scripts/deploy.js
+# 安装 PM2
+npm install -g pm2
+
+# 创建 PM2 配置文件
+cat > ecosystem.config.js << EOF
+module.exports = {
+  apps: [{
+    name: 'sql-analyzer-api',
+    script: 'src/server.js',
+    interpreter: 'bun',
+    instances: 'max',
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production',
+      API_HOST: '0.0.0.0',
+      API_PORT: 3000,
+      CUSTOM_API_KEY: process.env.CUSTOM_API_KEY
+    },
+    error_file: './logs/err.log',
+    out_file: './logs/out.log',
+    log_file: './logs/combined.log',
+    time: true,
+    max_memory_restart: '1G',
+    node_args: '--max-old-space-size=1024',
+    watch: false,
+    ignore_watch: ['node_modules', 'logs'],
+    restart_delay: 4000,
+    max_restarts: 10,
+    min_uptime: '10s'
+  }]
+};
+EOF
+
+# 启动服务
+pm2 start ecosystem.config.js
+
+# 保存配置
+pm2 save
+
+# 设置开机自启
+pm2 startup
 ```
 
-## 增强部署脚本
-
-### 功能特性
-
-增强部署脚本 (`scripts/deploy.js`) 提供以下功能：
-
-1. **环境检查** - 验证Node.js版本、内存、磁盘空间
-2. **依赖验证** - 检查package.json和node_modules
-3. **配置验证** - 验证配置文件和规则目录
-4. **自动备份** - 创建部署前备份
-5. **数据库连接测试** - 验证数据库配置
-6. **健康检查** - 部署后系统状态验证
-7. **回滚机制** - 失败时自动回滚
-
-### 使用方法
+### 3. 使用 Systemd
 
 ```bash
-# 执行完整部署流程
-bun run scripts/deploy.js
+# 创建服务文件
+sudo tee /etc/systemd/system/sql-analyzer-api.service > /dev/null <<EOF
+[Unit]
+Description=SQL Analyzer API
+After=network.target
 
-# 或者通过bun脚本
-bun run deploy
+[Service]
+Type=simple
+User=sql-analyzer
+Group=sql-analyzer
+WorkingDirectory=/opt/sql-analyzer-api
+Environment=NODE_ENV=production
+Environment=API_HOST=0.0.0.0
+Environment=API_PORT=3000
+Environment=CUSTOM_API_KEY=${CUSTOM_API_KEY}
+ExecStart=/usr/local/bin/bun run src/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sql-analyzer-api
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sql-analyzer-api/logs /opt/sql-analyzer-api/data
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 创建用户和目录
+sudo useradd -r -s /bin/false sql-analyzer
+sudo mkdir -p /opt/sql-analyzer-api/{logs,data}
+sudo chown -R sql-analyzer:sql-analyzer /opt/sql-analyzer-api
+
+# 启用并启动服务
+sudo systemctl daemon-reload
+sudo systemctl enable sql-analyzer-api
+sudo systemctl start sql-analyzer-api
+
+# 检查状态
+sudo systemctl status sql-analyzer-api
 ```
 
-### 部署阶段
+## 负载均衡配置
 
-#### Phase 1: 环境检查
-- Node.js版本验证 (需要v14+)
-- Bun版本检查
-- 可用内存检查
-- 磁盘空间验证
+### 1. Nginx 反向代理
 
-#### Phase 2: 依赖验证
-- package.json存在性检查
-- node_modules完整性验证
-- 关键依赖包验证
+```nginx
+# /etc/nginx/sites-available/sql-analyzer-api
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+    
+    # 重定向到 HTTPS
+    return 301 https://$server_name$request_uri;
+}
 
-#### Phase 3: 配置验证
-- 环境配置文件检查
-- 规则目录验证
-- Prompt文件完整性检查
+server {
+    listen 443 ssl http2;
+    server_name api.yourdomain.com;
+    
+    # SSL 配置
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    ssl_prefer_server_ciphers off;
+    
+    # 安全头
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+    
+    # 日志
+    access_log /var/log/nginx/sql-analyzer-api.access.log;
+    error_log /var/log/nginx/sql-analyzer-api.error.log;
+    
+    # 限制请求大小
+    client_max_body_size 10M;
+    
+    # 超时设置
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # 健康检查
+        proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+    }
+    
+    # API 文档
+    location /api/docs/ {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # 静态文件缓存
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
 
-#### Phase 4: 创建备份
-- 自动创建时间戳备份
-- 备份关键文件和目录
-- 保留最近5个备份
+### 2. HAProxy 配置
 
-#### Phase 5: 数据库连接测试
-- 验证各数据库配置
-- 测试连接可用性
+```haproxy
+# /etc/haproxy/haproxy.cfg
+global
+    daemon
+    maxconn 4096
+    log stdout format raw local0
+    
+defaults
+    mode http
+    timeout connect 5000ms
+    timeout client 50000ms
+    timeout server 50000ms
+    option httplog
+    option dontlognull
+    
+frontend sql_analyzer_frontend
+    bind *:80
+    bind *:443 ssl crt /path/to/certificate.pem
+    redirect scheme https if !{ ssl_fc }
+    default_backend sql_analyzer_backend
+    
+    # ACL for health checks
+    acl is_health_check path_beg /api/health
+    use_backend health_backend if is_health_check
+    
+backend sql_analyzer_backend
+    balance roundrobin
+    option httpchk GET /api/health/ping
+    server api1 127.0.0.1:3000 check
+    server api2 127.0.0.1:3001 check
+    server api3 127.0.0.1:3002 check
+    
+    # 健康检查配置
+    option httpchk GET /api/health/ping
+    http-check expect status 200
+    
+backend health_backend
+    server health 127.0.0.1:3000 check
+```
 
-#### Phase 6: 执行部署
-- 运行测试套件
-- 构建项目（如果需要）
+## 监控和日志
 
-#### Phase 7: 健康检查
-- CLI命令可用性测试
-- 核心模块加载验证
-- API服务状态检查
-
-## 健康检查
-
-### CLI健康检查
-
-#### 完整健康检查
+### 1. 健康检查
 
 ```bash
-# 执行所有健康检查
-bun run src/index.js health
+# 基本健康检查
+curl -f http://localhost:3000/api/health/ping || exit 1
 
-# 显示详细输出
-bun run src/index.js health --verbose
+# 详细健康状态
+curl http://localhost:3000/api/health/status | jq .
 
-# JSON格式输出
-bun run src/index.js health --json
-
-# 保存结果到文件
-bun run src/index.js health --output health-report.json
+# 系统资源检查
+curl http://localhost:3000/api/health/check/system | jq .
 ```
 
-#### 特定检查类型
+### 2. 日志管理
 
 ```bash
-# 检查核心模块
-bun run src/index.js health --check core-modules
+# 查看实时日志
+tail -f logs/api.log
 
-# 检查配置文件
-bun run src/index.js health --check configuration
+# 使用 journalctl（systemd）
+sudo journalctl -u sql-analyzer-api -f
 
-# 检查规则文件
-bun run src/index.js health --check rules
+# 使用 PM2 日志
+pm2 logs sql-analyzer-api
 
-# 检查依赖包
-bun run src/index.js health --check dependencies
-
-# 检查内存使用
-bun run src/index.js health --check memory
-
-# 检查磁盘空间
-bun run src/index.js health --check disk-space
+# 日志轮转配置
+sudo tee /etc/logrotate.d/sql-analyzer-api > /dev/null <<EOF
+/opt/sql-analyzer-api/logs/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 sql-analyzer sql-analyzer
+    postrotate
+        systemctl reload sql-analyzer-api
+    endscript
+}
+EOF
 ```
 
-### API健康检查
-
-#### 基本健康检查
+### 3. 指标收集
 
 ```bash
-# 完整健康检查
-curl http://localhost:3000/api/health
+# Prometheus 配置
+# 添加到 prometheus.yml
+scrape_configs:
+  - job_name: 'sql-analyzer-api'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 15s
 
-# 简单ping检查
-curl http://localhost:3000/api/health/ping
-
-# 服务状态信息
-curl http://localhost:3000/api/health/status
+# Grafana 仪表板
+# 导入预配置的仪表板模板
 ```
 
-#### 特定检查类型
+## 安全配置
+
+### 1. 防火墙设置
 
 ```bash
-# 检查核心模块
-curl http://localhost:3000/api/health/check/core-modules
+# UFW (Ubuntu)
+sudo ufw allow 3000/tcp
+sudo ufw allow 22/tcp
+sudo ufw enable
 
-# 检查配置文件
-curl http://localhost:3000/api/health/check/configuration
+# iptables
+sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+sudo iptables -A INPUT -j DROP
+sudo iptables-save
+
+# firewalld (CentOS)
+sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=22/tcp
+sudo firewall-cmd --reload
 ```
 
-### 健康检查项目
+### 2. SSL/TLS 配置
 
-| 检查类型 | 描述 | 关键性 |
-|---------|------|--------|
-| core-modules | 核心模块加载检查 | ✅ 关键 |
-| configuration | 配置文件完整性 | ✅ 关键 |
-| rules | 规则文件检查 | ✅ 关键 |
-| prompts | Prompt文件检查 | ✅ 关键 |
-| dependencies | 依赖包验证 | ⚠️ 非关键 |
-| memory | 内存使用检查 | ⚠️ 非关键 |
-| disk-space | 磁盘空间检查 | ⚠️ 非关键 |
+```nginx
+# Nginx SSL 配置
+server {
+    listen 443 ssl http2;
+    server_name api.yourdomain.com;
 
-### 健康状态
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    ssl_prefer_server_ciphers off;
+    
+    # HSTS
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+    
+    # 其他安全头
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "strict-origin-when-cross-origin";
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 
-- **healthy** - 所有检查通过
-- **degraded** - 有非关键检查失败
-- **unhealthy** - 有关键检查失败
-- **error** - 检查执行出错
+# HTTP 重定向到 HTTPS
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+### 3. API 密钥认证
+
+```env
+# 启用 API 密钥
+API_KEY_REQUIRED=true
+API_KEY=your-secure-random-key-here
+
+# 或使用环境变量文件
+echo "API_KEY=$(openssl rand -hex 32)" >> .env
+```
+
+## 性能优化
+
+### 1. 缓存配置
+
+```javascript
+// Redis 缓存配置
+const redis = require('redis');
+const client = redis.createClient({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: process.env.REDIS_PORT || 6379,
+  db: 0,
+  password: process.env.REDIS_PASSWORD
+});
+
+// 缓存分析结果
+async function cacheAnalysisResult(sql, result) {
+  const key = `analysis:${crypto.createHash('md5').update(sql).digest('hex')}`;
+  await client.setex(key, 3600, JSON.stringify(result)); // 1小时过期
+}
+```
+
+### 2. 连接池配置
+
+```javascript
+// 数据库连接池
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  max: 20, // 最大连接数
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+```
+
+### 3. 集群模式
+
+```javascript
+// PM2 集群配置
+module.exports = {
+  apps: [{
+    name: 'sql-analyzer-api',
+    script: 'src/server.js',
+    interpreter: 'bun',
+    instances: 'max', // 使用所有 CPU 核心
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production'
+    }
+  }]
+};
+```
 
 ## 故障排除
 
 ### 常见问题
 
-#### 1. Node.js版本过低
-
-```
-❌ Node.js版本过低: v12.18.0，需要v14或更高版本
-```
-
-**解决方案：**
-```bash
-# 使用nvm升级Node.js
-nvm install 18
-nvm use 18
-```
-
-#### 2. 依赖包缺失
-
-```
-❌ node_modules目录不存在，需要运行bun install
-```
-
-**解决方案：**
-```bash
-bun install
-```
-
-#### 3. 配置文件缺失
-
-```
-❌ 关键配置文件缺失: package.json
-```
-
-**解决方案：**
-```bash
-# 恢复备份或重新初始化项目
-bun run scripts/deploy.js --rollback
-```
-
-#### 4. 内存不足
-
-```
-⚠️ 可用内存较低: 0.5GB
-```
-
-**解决方案：**
-- 释放系统内存
-- 增加系统内存
-- 关闭不必要的进程
-
-#### 5. 磁盘空间不足
-
-```
-⚠️ 项目目录较大，建议清理
-```
-
-**解决方案：**
-```bash
-# 清理备份
-rm -rf .backup/backup-*
-
-# 清理日志文件
-rm -f *.log
-
-# 清理node_modules并重新安装
-rm -rf node_modules
-bun install
-```
-
-### API服务问题
-
-#### API服务无法启动
+#### 1. 服务无法启动
 
 ```bash
 # 检查端口占用
-netstat -an | grep :3000
+netstat -tlnp | grep :3000
+
+# 检查权限
+ls -la /opt/sql-analyzer-api/
+
+# 检查日志
+journalctl -u sql-analyzer-api --no-pager
 
 # 检查配置
-bun run src/index.js config show
-
-# 查看详细日志
-bun run src/index.js api --verbose
+cat /opt/sql-analyzer-api/.env
 ```
 
-#### 健康检查失败
+#### 2. 性能问题
 
 ```bash
-# 检查API服务状态
-curl http://localhost:3000/api/health/ping
+# 检查系统资源
+top
+htop
+free -h
+df -h
 
-# 查看详细错误信息
-curl http://localhost:3000/api/health
+# 检查网络
+ss -tulpn | grep :3000
+
+# 检查进程
+ps aux | grep node
 ```
 
-## 回滚机制
-
-### 自动回滚
-
-部署失败时，脚本会自动执行回滚：
-
-```bash
-❌ 部署失败: 健康检查失败
-🔄 开始回滚...
-  ✓ 已恢复: package.json
-  ✓ 已恢复: src/core/
-  ✓ 已恢复: src/cli/
-✅ 回滚完成
-```
-
-### 手动回滚
-
-```bash
-# 查看可用备份
-ls -la .backup/
-
-# 手动回滚到指定备份
-bun run scripts/deploy.js --rollback backup-2025-11-18T12-00-00-000Z
-```
-
-### 备份管理
-
-```bash
-# 查看备份信息
-cat .backup/backup-2025-11-18T12-00-00-000Z/backup-info.json
-
-# 清理旧备份（保留最近5个）
-bun run scripts/deploy.js --cleanup
-
-# 删除所有备份
-rm -rf .backup/
-```
-
-## 监控和维护
-
-### 定期健康检查
-
-建议设置定期健康检查：
-
-```bash
-# 每日健康检查
-0 9 * * * cd /path/to/sql-analyzer-cli && bun run health >> /var/log/health.log 2>&1
-
-# 每周完整部署检查
-0 2 * * 0 cd /path/to/sql-analyzer-cli && bun run deploy >> /var/log/deploy.log 2>&1
-```
-
-### 日志监控
-
-```bash
-# 查看部署日志
-tail -f /var/log/deploy.log
-
-# 查看健康检查日志
-tail -f /var/log/health.log
-
-# 查看API服务日志
-tail -f /var/log/sql-analyzer-api.log
-```
-
-### 性能监控
+#### 3. 内存泄漏
 
 ```bash
 # 监控内存使用
-watch -n 5 'ps aux | grep sql-analyzer'
+pm2 monit
 
-# 监控磁盘使用
-df -h /path/to/sql-analyzer-cli
+# 生成堆快照
+kill -USR2 <pid>
 
-# 监控API响应时间
-curl -w "@curl-format.txt" -o /dev/null -s http://localhost:3000/api/health/ping
+# 检查内存趋势
+watch -n 1 'ps aux | grep node | grep -v grep'
 ```
 
-## 配置建议
+## 备份和恢复
 
-### 生产环境配置
+### 1. 数据备份
 
 ```bash
-# 设置环境变量
-export NODE_ENV=production
-export API_PORT=3000
-export API_HOST=0.0.0.0
+#!/bin/bash
+# backup.sh
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/backup/sql-analyzer-$DATE"
 
-# 使用PM2管理进程
-pm2 start src/index.js --name sql-analyzer --env production
+mkdir -p $BACKUP_DIR
 
-# 设置日志轮转
-pm2 install pm2-logrotate
-pm2 set pm2-logrotate:max_size 10M
-pm2 set pm2-logrotate:retain 30
+# 备份配置
+cp -r /opt/sql-analyzer-api/.env $BACKUP_DIR/
+
+# 备份数据
+cp -r /opt/sql-analyzer-api/data $BACKUP_DIR/
+
+# 备份日志
+cp -r /opt/sql-analyzer-api/logs $BACKUP_DIR/
+
+# 压缩备份
+tar -czf $BACKUP_DIR.tar.gz $BACKUP_DIR
+rm -rf $BACKUP_DIR
+
+echo "备份完成: $BACKUP_DIR.tar.gz"
 ```
 
-### 安全配置
+### 2. 灾难恢复
 
 ```bash
-# 限制API访问
-export API_CORS_ORIGIN="https://yourdomain.com"
+#!/bin/bash
+# restore.sh
+BACKUP_FILE=$1
 
-# 启用HTTPS
-export API_SSL=true
-export API_SSL_CERT=/path/to/cert.pem
-export API_SSL_KEY=/path/to/key.pem
+if [ -z "$BACKUP_FILE" ]; then
+    echo "用法: $0 <backup_file.tar.gz>"
+    exit 1
+fi
 
-# 设置访问日志
-export API_ACCESS_LOG=/var/log/sql-analyzer-access.log
+# 停止服务
+sudo systemctl stop sql-analyzer-api
+
+# 解压备份
+tar -xzf $BACKUP_FILE -C /tmp/
+
+# 恢复文件
+sudo cp -r /tmp/sql-analyzer-*/.env /opt/sql-analyzer-api/
+sudo cp -r /tmp/sql-analyzer-*/data/* /opt/sql-analyzer-api/data/
+
+# 设置权限
+sudo chown -R sql-analyzer:sql-analyzer /opt/sql-analyzer-api/
+
+# 启动服务
+sudo systemctl start sql-analyzer-api
+
+echo "恢复完成"
+```
+
+## 生产环境最佳实践
+
+### 1. 安全加固
+
+```bash
+# 禁用 root 登录
+sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+
+# 更改 SSH 端口
+sudo sed -i 's/#Port 22/Port 2222/' /etc/ssh/sshd_config
+
+# 配置 fail2ban
+sudo apt install fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+### 2. 监控告警
+
+```bash
+# 设置监控脚本
+cat > /opt/sql-analyzer-api/monitor.sh << 'EOF'
+#!/bin/bash
+HEALTH_CHECK=$(curl -s http://localhost:3000/api/health/ping)
+if [[ "$HEALTH_CHECK" != *"pong"* ]]; then
+    echo "API 服务异常" | mail -s "SQL Analyzer API 告警" admin@example.com
+fi
+EOF
+
+chmod +x /opt/sql-analyzer-api/monitor.sh
+
+# 添加到 crontab
+echo "*/5 * * * * /opt/sql-analyzer-api/monitor.sh" | crontab -
+```
+
+### 3. 自动更新
+
+```bash
+# 创建更新脚本
+cat > /opt/sql-analyzer-api/update.sh << 'EOF'
+#!/bin/bash
+cd /opt/sql-analyzer-api
+
+# 备份当前版本
+./backup.sh
+
+# 拉取最新代码
+git pull origin main
+
+# 更新依赖
+bun install
+
+# 重启服务
+sudo systemctl restart sql-analyzer-api
+
+echo "更新完成"
+EOF
+
+chmod +x /opt/sql-analyzer-api/update.sh
 ```
 
 ## 总结
 
-通过使用增强部署脚本和健康检查功能，可以确保SQL Analyzer CLI的稳定部署和运行。定期执行健康检查和监控可以及时发现和解决问题，保证系统的可靠性。
+通过本部署指南，您可以：
 
-如有问题，请参考故障排除部分或查看详细日志信息。
+- ✅ 在多种环境中部署 API 服务
+- ✅ 实现高可用和负载均衡
+- ✅ 配置监控和日志管理
+- ✅ 确保安全性和性能
+- ✅ 建立备份和恢复机制
+
+选择适合您需求的部署方式，并按照相应的步骤进行操作。对于生产环境，建议使用 Docker 或云平台部署，并配置适当的监控和备份策略。

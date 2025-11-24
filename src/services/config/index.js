@@ -162,7 +162,7 @@ class ConfigManager {
       
       return config;
     } catch (error) {
-      // 文件不存在或读取失败,返回默认配置
+      // 文件不存在或读取失败，返回默认配置
       return { ...DEFAULT_CONFIG };
     }
   }
@@ -222,7 +222,7 @@ class ConfigManager {
         const content = await fs.readFile(ENV_FILE, 'utf8');
         env = this.parseEnvContent(content);
       } catch {
-        // 文件不存在,使用空对象
+        // 文件不存在，使用空对象
       }
       
       // 更新配置
@@ -264,24 +264,6 @@ class ConfigManager {
    * 重置配置为默认值
    */
   async reset() {
-    const chalk = (await import('chalk')).default;
-    const inquirer = (await import('inquirer')).default;
-    
-    // 确认重置操作
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: '确定要重置所有配置为默认值吗？',
-        default: false
-      }
-    ]);
-    
-    if (!confirm) {
-      console.log(chalk.gray('操作已取消'));
-      return;
-    }
-    
     const env = {};
     for (const [key, envKey] of Object.entries(CONFIG_MAP)) {
       env[envKey] = String(DEFAULT_CONFIG[key]);
@@ -292,8 +274,14 @@ class ConfigManager {
     // 强制刷新缓存
     await this.getConfig(true);
     
-    console.log(chalk.green('✅ 配置已重置为默认值\n'));
-    await this.list();
+    console.log('✅ 配置已重置为默认值\n');
+    
+    return {
+      success: true,
+      data: {
+        message: '配置已重置为默认值'
+      }
+    };
   }
 
   /**
@@ -301,27 +289,14 @@ class ConfigManager {
    */
   async list() {
     const config = await this.getConfig();
-    const chalk = (await import('chalk')).default;
     
-    console.clear();
-    console.log(chalk.cyan(`
-╔═════════════════════════════════════════════════════════════╗
-║                        系统配置                             ║
-╚═════════════════════════════════════════════════════════════╝
-`));
-    
-    console.log(chalk.blue('当前配置项:'));
-    console.log(chalk.gray('─'.repeat(60)));
-    
-    for (const key of Object.keys(DEFAULT_CONFIG)) {
-      const value = config[key];
-      const displayValue = value === '' ? chalk.gray('(未设置)') : chalk.white(value);
-      const keyName = chalk.cyan(CONFIG_DESC[key] || key);
-      console.log(`${keyName.padEnd(30)}: ${displayValue}`);
-    }
-    
-    console.log(chalk.gray('─'.repeat(60)));
-    console.log(chalk.yellow('\n💡 提示: 使用 "sql-analyzer config set <key> <value>" 修改配置\n'));
+    return {
+      success: true,
+      data: {
+        config: config,
+        descriptions: CONFIG_DESC
+      }
+    };
   }
 
   /**
@@ -372,14 +347,14 @@ export async function setConfig(key, value) {
  * 列出所有配置（向后兼容）
  */
 export async function listConfig() {
-  await configManager.list();
+  return await configManager.list();
 }
 
 /**
  * 重置配置为默认值（向后兼容）
  */
 export async function resetConfig() {
-  await configManager.reset();
+  return await configManager.reset();
 }
 
 // ============================================================================

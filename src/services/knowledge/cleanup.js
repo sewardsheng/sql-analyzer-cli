@@ -1,8 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
-import inquirer from 'inquirer';
 import { readConfig } from '../config/index.js';
 import IntelligentRuleLearner from '../../core/analyzers/intelligentRuleLearner.js';
 
@@ -15,13 +13,6 @@ import IntelligentRuleLearner from '../../core/analyzers/intelligentRuleLearner.
  */
 async function cleanupRules(options = {}) {
   try {
-    console.clear();
-    console.log(chalk.cyan(`
-╔═════════════════════════════════════════════════════════════╗
-║                    规则质量清理                             ║
-╚═════════════════════════════════════════════════════════════╝
-`));
-
     const threshold = parseInt(options.score || '60');
     const backup = options.backup || false;
     const rulesDir = options.rulesDir || './rules/learning-rules';
@@ -38,21 +29,24 @@ async function cleanupRules(options = {}) {
     try {
       await fs.access(issuesDir);
     } catch (error) {
-      console.log(chalk.red(`规则目录不存在: ${issuesDir}`));
-      return;
+      throw new Error(`规则目录不存在: ${issuesDir}`);
     }
 
     // 获取所有规则文件（只从 issues 目录）
-    const spinner = ora('正在扫描 issues 目录中的规则文件...').start();
+    console.log(chalk.blue('正在扫描 issues 目录中的规则文件...'));
     const allFiles = await getAllRuleFiles(issuesDir);
     
     if (allFiles.length === 0) {
-      spinner.warn('issues 目录中没有找到规则文件');
-      console.log(chalk.blue('💡 提示: 已认可的规则已移动到 approved/ 目录，低质量规则已移动到 archived/ 目录'));
-      return;
+      return {
+        success: true,
+        data: {
+          message: 'issues 目录中没有找到规则文件',
+          suggestion: '已认可的规则已移动到 approved/ 目录，低质量规则已移动到 archived/ 目录'
+        }
+      };
     }
     
-    spinner.succeed(`找到 ${allFiles.length} 个待处理规则文件`);
+    console.log(chalk.green(`找到 ${allFiles.length} 个待处理规则文件`));
 
     // 读取配置
     const config = await readConfig();
@@ -65,7 +59,7 @@ async function cleanupRules(options = {}) {
     });
 
     // 评估所有规则文件
-    const evaluationSpinner = ora('正在评估规则质量...').start();
+    console.log(chalk.blue('正在评估规则质量...'));
     const evaluationResults = [];
     let evaluatedCount = 0;
 
@@ -73,7 +67,7 @@ async function cleanupRules(options = {}) {
       try {
         const fileContent = await fs.readFile(filePath, 'utf8');
         
-        // 评估规则质量
+        //评估规则质量
         const evaluation = await learner.evaluateRuleQuality({
           filePath,
           content: fileContent
@@ -94,46 +88,67 @@ async function cleanupRules(options = {}) {
           });
 
           // 更新进度
-          evaluationSpinner.text = `评估中... (${evaluatedCount}/${allFiles.length})`;
+          console.log(chalk.gray(`评估中... (${evaluatedCount}/${allFiles.length})`));
         }
       } catch (error) {
         console.log(chalk.yellow(`  警告: 评估文件失败 ${path.basename(filePath)}: ${error.message}`));
       }
     }
 
-    evaluationSpinner.succeed(`评估完成: ${evaluatedCount} 个文件`);
+    console.log(chalk.green(`评估完成: ${evaluatedCount} 个文件`));
 
     // 自动移动文件到相应目录
     if (autoMove && evaluatedCount > 0) {
-      await autoMoveFiles(evaluationResults, learner, rulesDir);
+      const moveResults = await autoMoveFiles(evaluationResults, learner, rulesDir);
+      
+      // 显示移动结果
+      if (moveResults.approved.length > 0) {
+        console.log(chalk.green(`\n✅ 已移动 ${moveResults.approved.length} 个高质量规则到 approved/ 目录:`));
+        moveResults.approved.forEach(item => {
+          console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
+        });
+      }
+      
+      if (moveResults.archived.length > 0) {
+        console.log(chalk.yellow(`\n📦 已移动 ${moveResults.archived.length} 个低质量规则到 archived/ 目录:`));
+        moveResults.archived.forEach(item => {
+          console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
+        });
+      }
+      
+      if (moveResults.failed.length > 0) {
+        console.log(chalk.red(`\n❌ ${moveResults.failed.length} 个文件移动失败:`));
+        moveResults.failed.forEach(item => {
+          console.log(chalk.red(`  • ${path.basename(item.path)}: ${item.error}`));
+        });
+      }
+      
+      const highQuality = evaluationResults.filter(r => r.score >= threshold).length;
+      const lowQuality = evaluationResults.filter(r => r.score < threshold).length;
+      
+      return {
+        success: true,
+        data: {
+          evaluated: evaluatedCount,
+          highQuality: highQuality,
+          lowQuality: lowQuality,
+          moveResults: moveResults,
+          message: '自动分类完成'
+        }
+      };
     }
 
     // 获取低质量规则文件（用于传统清理方式）
     const lowQualityFiles = evaluationResults.filter(result => result.score < threshold);
 
-    // 如果启用了自动移动，显示统计信息
-    if (autoMove) {
-      const highQuality = evaluationResults.filter(r => r.score >= threshold).length;
-      const lowQuality = evaluationResults.filter(r => r.score < threshold).length;
-      
-      console.log(chalk.blue(`\n═══════════════════════════════════════════════════════════`));
-      console.log(chalk.blue(`分类完成统计:`));
-      console.log(chalk.white(`  • 总文件数: ${evaluatedCount}`));
-      console.log(chalk.green(`  • 高质量规则 (≥${threshold}): ${highQuality} (已移动到 approved/)`));
-      console.log(chalk.yellow(`  • 低质量规则 (<${threshold}): ${lowQuality} (已移动到 archived/)`));
-      console.log(chalk.blue(`═══════════════════════════════════════════════════════════\n`));
-      
-      console.log(chalk.green(`✅ 自动分类完成\n`));
-      console.log(chalk.blue(`建议操作:`));
-      console.log(chalk.white(`  1. 运行 "sql-analyzer learn reset" 重置向量存储`));
-      console.log(chalk.white(`  2. 运行 "sql-analyzer learn load" 重新加载规则到知识库\n`));
-      return;
-    }
-
     // 传统清理方式（当 autoMove 为 false 时）
     if (lowQualityFiles.length === 0) {
-      console.log(chalk.green(`\n✅ 没有发现低于阈值 (${threshold}) 的规则文件\n`));
-      return;
+      return {
+        success: true,
+        data: {
+          message: `没有发现低于阈值 (${threshold}) 的规则文件`
+        }
+      };
     }
 
     console.log(chalk.yellow(`\n发现 ${lowQualityFiles.length} 个低质量规则文件:\n`));
@@ -155,24 +170,21 @@ async function cleanupRules(options = {}) {
       console.log('');
     });
 
-    // 确认删除
-    const { confirmDelete } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirmDelete',
-        message: chalk.yellow(`确定要删除这 ${lowQualityFiles.length} 个低质量规则文件吗？`),
-        default: false
-      }
-    ]);
-
-    if (!confirmDelete) {
-      console.log(chalk.blue('\n操作已取消\n'));
-      return;
+    // 如果不启用自动移动，返回评估结果供调用方处理
+    if (!autoMove) {
+      return {
+        success: true,
+        data: {
+          lowQualityFiles: lowQualityFiles,
+          threshold: threshold,
+          message: '评估完成，请手动处理低质量规则'
+        }
+      };
     }
 
     // 备份低质量规则
     if (backup) {
-      const backupSpinner = ora('正在备份低质量规则...').start();
+      console.log(chalk.blue('正在备份低质量规则...'));
       const backupDir = path.join(rulesDir, 'archived', new Date().toISOString().split('T')[0]);
       
       try {
@@ -184,16 +196,14 @@ async function cleanupRules(options = {}) {
           await fs.copyFile(file.path, backupPath);
         }
         
-        backupSpinner.succeed(`已备份到: ${backupDir}`);
+        console.log(chalk.green(`已备份到: ${backupDir}`));
       } catch (error) {
-        backupSpinner.fail('备份失败');
-        console.log(chalk.red(`错误: ${error.message}`));
-        return;
+        throw new Error(`备份失败: ${error.message}`);
       }
     }
 
     // 删除低质量规则
-    const deleteSpinner = ora('正在删除低质量规则...').start();
+    console.log(chalk.blue('正在删除低质量规则...'));
     let deletedCount = 0;
     let failedCount = 0;
 
@@ -208,18 +218,24 @@ async function cleanupRules(options = {}) {
     }
 
     if (failedCount === 0) {
-      deleteSpinner.succeed(`成功删除 ${deletedCount} 个低质量规则文件`);
+      console.log(chalk.green(`成功删除 ${deletedCount} 个低质量规则文件`));
     } else {
-      deleteSpinner.warn(`删除了 ${deletedCount} 个文件，${failedCount} 个失败`);
+      console.log(chalk.yellow(`删除了 ${deletedCount} 个文件，${failedCount} 个失败`));
     }
 
     // 清理空目录
     await cleanupEmptyDirectories(issuesDir);
 
     console.log(chalk.green(`\n✅ 清理完成\n`));
-    console.log(chalk.blue(`建议操作:`));
-    console.log(chalk.white(`  1. 运行 "sql-analyzer learn reset" 重置向量存储`));
-    console.log(chalk.white(`  2. 运行 "sql-analyzer learn load" 重新加载规则到知识库\n`));
+
+    return {
+      success: true,
+      data: {
+        deletedCount,
+        failedCount,
+        message: '清理完成'
+      }
+    };
 
   } catch (error) {
     console.error(chalk.red('清理规则时发生错误:'), error.message);
@@ -292,7 +308,7 @@ async function cleanupEmptyDirectories(issuesDir) {
  * @param {string} rulesDir - 规则目录
  */
 async function autoMoveFiles(evaluationResults, learner, rulesDir) {
-  const moveSpinner = ora('正在自动分类规则文件...').start();
+  console.log(chalk.blue('正在自动分类规则文件...'));
   
   try {
     const filesToMove = evaluationResults.map(result => ({
@@ -302,33 +318,20 @@ async function autoMoveFiles(evaluationResults, learner, rulesDir) {
 
     const moveResults = await learner.batchMoveRules(filesToMove, 60);
     
-    moveSpinner.succeed('规则文件分类完成');
+    console.log(chalk.green('规则文件分类完成'));
     
-    // 显示移动结果
-    if (moveResults.approved.length > 0) {
-      console.log(chalk.green(`\n✅ 已移动 ${moveResults.approved.length} 个高质量规则到 approved/ 目录:`));
-      moveResults.approved.forEach(item => {
-        console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
-      });
-    }
-    
-    if (moveResults.archived.length > 0) {
-      console.log(chalk.yellow(`\n📦 已移动 ${moveResults.archived.length} 个低质量规则到 archived/ 目录:`));
-      moveResults.archived.forEach(item => {
-        console.log(chalk.white(`  • ${path.basename(item.originalPath)} (${item.score}/100)`));
-      });
-    }
-    
-    if (moveResults.failed.length > 0) {
-      console.log(chalk.red(`\n❌ ${moveResults.failed.length} 个文件移动失败:`));
-      moveResults.failed.forEach(item => {
-        console.log(chalk.red(`  • ${path.basename(item.path)}: ${item.error}`));
-      });
-    }
-    
+    return moveResults;
   } catch (error) {
-    moveSpinner.fail('自动分类失败');
+    console.log(chalk.red('自动分类失败'));
     console.log(chalk.red(`错误: ${error.message}`));
+    return {
+      approved: [],
+      archived: [],
+      failed: filesToMove.map(file => ({
+        path: file.path,
+        error: error.message
+      }))
+    };
   }
 }
 

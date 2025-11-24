@@ -3,6 +3,14 @@
  * 整合API响应格式化和业务场景特定的响应处理
  */
 
+import { 
+  ApiError, 
+  ErrorTypes, 
+  isApiError, 
+  getErrorStatusCode,
+  fromError as convertToApiError 
+} from './apiError.js';
+
 // ============================================================================
 // 基础响应构建器 (来自原 apiResponse.js)
 // ============================================================================
@@ -409,6 +417,87 @@ export function formatConfigResponse(config) {
  */
 export function formatSystemStatusResponse(status) {
   return formatSuccessResponse(status, '获取系统状态成功');
+}
+
+// ============================================================================
+// 新增：统一错误处理响应格式化器
+// ============================================================================
+
+/**
+ * 格式化API错误响应
+ * @param {Error} error - 错误对象
+ * @param {boolean} includeStack - 是否包含堆栈信息
+ * @returns {Object} 格式化的错误响应
+ */
+export function formatApiErrorResponse(error, includeStack = false) {
+  let apiError = error;
+  
+  // 如果不是ApiError实例，转换为ApiError
+  if (!isApiError(error)) {
+    apiError = convertToApiError(error);
+  }
+  
+  const response = {
+    success: false,
+    error: apiError.getUserMessage(),
+    type: apiError.type,
+    code: apiError.code,
+    timestamp: apiError.timestamp,
+    statusCode: apiError.statusCode
+  };
+  
+  // 添加错误详情
+  if (apiError.details) {
+    response.details = apiError.details;
+  }
+  
+  // 在开发环境中添加调试信息
+  if (includeStack && process.env.NODE_ENV === 'development') {
+    response.originalError = apiError.message;
+    response.stack = apiError.stack;
+  }
+  
+  return response;
+}
+
+/**
+ * 创建Hono错误响应
+ * @param {Error} error - 错误对象
+ * @param {Object} context - Hono上下文
+ * @returns {Response} Hono响应对象
+ */
+export function createHonoErrorResponse(error, context) {
+  const apiError = isApiError(error) ? error : convertToApiError(error);
+  const includeStack = process.env.NODE_ENV === 'development';
+  const errorResponse = formatApiErrorResponse(apiError, includeStack);
+  
+  // 调试日志：记录错误信息
+  console.log('[DEBUG] createHonoErrorResponse called with:', {
+    errorMessage: apiError.message,
+    errorType: apiError.type,
+    statusCode: apiError.statusCode,
+    contextType: typeof context,
+    hasJson: typeof context.json,
+    hasHeader: typeof context.header
+  });
+  
+  try {
+    // 使用 Hono 的正确 API 设置响应头
+    context.header('Content-Type', 'application/json');
+    context.header('X-Error-Type', apiError.type);
+    context.header('X-Error-Code', apiError.code || 'UNKNOWN');
+    
+    // 在开发环境中添加调试头
+    if (includeStack) {
+      context.header('X-Debug-Mode', 'true');
+    }
+    
+    return context.json(errorResponse, apiError.statusCode);
+  } catch (headerError) {
+    console.log('[DEBUG] Header setting error:', headerError);
+    // 如果设置头失败，至少返回 JSON 响应
+    return context.json(errorResponse, apiError.statusCode);
+  }
 }
 
 // ============================================================================

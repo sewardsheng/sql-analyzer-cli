@@ -5,32 +5,33 @@
 
 import chalk from 'chalk';
 import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
-import { getKnowledgeService } from '../../knowledge/knowledgeService.js';
+import { createValidationError } from '../../../utils/apiError.js';
 
 /**
  * 注册知识库相关路由
  * @param {Object} app - Hono应用实例
  */
 export function registerKnowledgeRoutes(app) {
-  const knowledgeService = getKnowledgeService();
-
   /**
    * GET /api/knowledge - 获取知识库状态
    * 返回知识库的初始化状态和统计信息
    */
   app.get('/api/knowledge', async (c) => {
     try {
+      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.getKnowledgeStatus();
       
       if (!result.success) {
-        return c.json(formatErrorResponse('获取知识库状态失败', result.error), 500);
+        throw new Error(result.error);
       }
       
       return c.json(formatSuccessResponse(result.data, '获取知识库状态成功'));
     } catch (error) {
       console.error(chalk.red(`[API] 获取知识库状态失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取知识库状态失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -49,15 +50,19 @@ export function registerKnowledgeRoutes(app) {
       const body = await c.req.json();
       
       if (!body.query || typeof body.query !== 'string') {
-        return c.json(formatErrorResponse('请求体必须包含 "query" 字段，且为字符串类型'), 400);
+        throw createValidationError('请求体必须包含 "query" 字段，且为字符串类型');
       }
       
       const k = body.k || 4;
+      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.searchKnowledge(body.query, k);
       
       if (!result.success) {
-        return c.json(formatErrorResponse(result.error), 503);
+        throw new Error(result.error);
       }
+      
+      console.log(chalk.blue(`[API] 搜索知识库: "${body.query}"`));
       
       return c.json(formatSuccessResponse({
         query: body.query,
@@ -70,7 +75,8 @@ export function registerKnowledgeRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 搜索知识库失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('搜索知识库失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -105,6 +111,9 @@ export function registerKnowledgeRoutes(app) {
       
       console.log(chalk.blue(`[API] 开始学习文档，目录: ${options.rulesDir}`));
       
+      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const knowledgeService = getKnowledgeService();
+      
       // 在后台执行学习任务
       knowledgeService.learnDocuments(options).then((result) => {
         if (result.success) {
@@ -113,14 +122,15 @@ export function registerKnowledgeRoutes(app) {
           console.error(chalk.red('[API] 文档学习失败:'), result.error);
         }
       }).catch(error => {
-        console.error(chalk.red('[API] 文档学习失败:'), error.message);
+        console.error(chalk.red('[API] 启动知识库学习失败:'), error.message);
       });
       
       return c.json(formatSuccessResponse(null, '知识库学习任务已启动'));
     } catch (error) {
       console.error(chalk.red(`[API] 启动知识库学习失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('启动知识库学习失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -132,6 +142,8 @@ export function registerKnowledgeRoutes(app) {
     try {
       console.log(chalk.blue('[API] 正在重置知识库...'));
       
+      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.resetKnowledge();
       
       if (result.success) {
@@ -139,12 +151,13 @@ export function registerKnowledgeRoutes(app) {
         return c.json(formatSuccessResponse(null, '知识库已重置'));
       } else {
         console.log(chalk.red('[API] 重置知识库失败'));
-        return c.json(formatErrorResponse('重置知识库失败', result.error), 500);
+        throw new Error(result.error);
       }
     } catch (error) {
       console.error(chalk.red(`[API] 重置知识库失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('重置知识库失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -161,17 +174,14 @@ export function registerKnowledgeRoutes(app) {
       const format = c.req.query('format') || 'json';
       const includeContent = c.req.query('includeContent') === 'true';
       
-      const options = {
-        format,
-        includeContent
-      };
-      
       console.log(chalk.blue(`[API] 导出知识库，格式: ${format}`));
       
-      const result = await knowledgeService.exportKnowledge(options);
+      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const knowledgeService = getKnowledgeService();
+      const result = await knowledgeService.exportKnowledge({ format, includeContent });
       
       if (!result.success) {
-        return c.json(formatErrorResponse('导出知识库失败', result.error), 500);
+        throw new Error(result.error);
       }
       
       if (format === 'csv') {
@@ -184,7 +194,8 @@ export function registerKnowledgeRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 导出知识库失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('导出知识库失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -224,7 +235,8 @@ export function registerKnowledgeRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 启动规则清理失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('启动规则清理失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -263,7 +275,8 @@ export function registerKnowledgeRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 启动规则评估失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('启动规则评估失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
 }

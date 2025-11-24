@@ -5,6 +5,7 @@
 
 import chalk from 'chalk';
 import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
+import { createValidationError } from '../../../utils/apiError.js';
 
 /**
  * 注册配置管理相关路由
@@ -24,7 +25,8 @@ export function registerConfigRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取配置失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取配置失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -39,17 +41,18 @@ export function registerConfigRoutes(app) {
       const config = await readConfig();
       
       if (!(key in config)) {
-        return c.json(formatErrorResponse(`配置项 "${key}" 不存在`), 404);
+        throw createValidationError(`配置项 "${key}" 不存在`);
       }
       
       return c.json(formatSuccessResponse({
         key,
         value: config[key]
-      }, '获取配置项成功'));
+      }, `获取配置项成功`));
     } catch (error) {
       console.error(chalk.red(`[API] 获取配置项失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取配置项失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -68,7 +71,7 @@ export function registerConfigRoutes(app) {
       const body = await c.req.json();
       
       if (body.value === undefined) {
-        return c.json(formatErrorResponse('请求体必须包含 "value" 字段'), 400);
+        throw createValidationError('请求体必须包含 "value" 字段');
       }
       
       const { setConfigValue } = await import('../../config/index.js');
@@ -83,7 +86,8 @@ export function registerConfigRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 设置配置项失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('设置配置项失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -95,7 +99,6 @@ export function registerConfigRoutes(app) {
     try {
       const key = c.req.param('key');
       const { resetConfigValue } = await import('../../config/index.js');
-      
       await resetConfigValue(key);
       
       console.log(chalk.green(`[API] 配置项 "${key}" 已重置`));
@@ -104,7 +107,8 @@ export function registerConfigRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 重置配置项失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('重置配置项失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -115,7 +119,6 @@ export function registerConfigRoutes(app) {
   app.post('/api/config/reset', async (c) => {
     try {
       const { resetAllConfig } = await import('../../config/index.js');
-      
       await resetAllConfig();
       
       console.log(chalk.green('[API] 所有配置已重置为默认值'));
@@ -124,7 +127,8 @@ export function registerConfigRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 重置所有配置失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('重置所有配置失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -141,7 +145,8 @@ export function registerConfigRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取配置选项列表失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取配置选项列表失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
 }

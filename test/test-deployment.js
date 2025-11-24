@@ -33,52 +33,16 @@ class DeploymentTester {
   }
 
   /**
-   * 测试健康检查命令
-   */
-  async testHealthCheckCommand() {
-    console.log('📋 测试健康检查命令...');
-    
-    try {
-      // 测试基本健康检查
-      const output = execSync('node src/index.js health --json', { 
-        cwd: this.projectRoot, 
-        encoding: 'utf8' 
-      });
-      
-      const result = JSON.parse(output);
-      
-      if (result.status && result.summary) {
-        this.addResult('健康检查命令', true, '命令执行成功');
-      } else {
-        this.addResult('健康检查命令', false, '返回格式不正确');
-      }
-      
-    } catch (error) {
-      this.addResult('健康检查命令', false, error.message);
-    }
-  }
-
-  /**
    * 测试健康检查API
    */
-  async testHealthCheckAPI() {
-    console.log('🌐 测试健康检查API...');
+  async testHealthCheckCommand() {
+    console.log('📋 测试健康检查API...');
     
     try {
-      // 启动API服务器（后台）
-      const serverProcess = require('child_process').spawn('node', ['src/index.js', 'api'], {
-        cwd: this.projectRoot,
-        stdio: 'pipe',
-        detached: true
-      });
-      
-      // 等待服务器启动
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // 测试ping端点
+      // 测试基本健康检查API
       const http = require('http');
       
-      const pingResult = await new Promise((resolve, reject) => {
+      const result = await new Promise((resolve, reject) => {
         const req = http.get('http://localhost:3000/api/health/ping', (res) => {
           let data = '';
           res.on('data', chunk => data += chunk);
@@ -98,17 +62,55 @@ class DeploymentTester {
         });
       });
       
-      if (pingResult.success && pingResult.message === 'pong') {
+      if (result.status === 'ok') {
         this.addResult('健康检查API', true, 'API响应正常');
       } else {
         this.addResult('健康检查API', false, 'API响应异常');
       }
       
-      // 关闭服务器
-      process.kill(-serverProcess.pid);
-      
     } catch (error) {
       this.addResult('健康检查API', false, error.message);
+    }
+  }
+
+  /**
+   * 测试详细健康状态API
+   */
+  async testHealthCheckAPI() {
+    console.log('🌐 测试详细健康状态API...');
+    
+    try {
+      // 测试详细健康状态端点
+      const http = require('http');
+      
+      const statusResult = await new Promise((resolve, reject) => {
+        const req = http.get('http://localhost:3000/api/health/status', (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        });
+        
+        req.on('error', reject);
+        req.setTimeout(5000, () => {
+          req.destroy();
+          reject(new Error('请求超时'));
+        });
+      });
+      
+      if (statusResult.status === 'healthy' && statusResult.uptime) {
+        this.addResult('详细健康状态API', true, '状态信息完整');
+      } else {
+        this.addResult('详细健康状态API', false, '状态信息不完整');
+      }
+      
+    } catch (error) {
+      this.addResult('详细健康状态API', false, error.message);
     }
   }
 

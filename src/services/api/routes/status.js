@@ -9,6 +9,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
+import { createValidationError } from '../../../utils/apiError.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -143,7 +144,8 @@ export function registerStatusRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取系统状态失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取系统状态失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -155,7 +157,8 @@ export function registerStatusRoutes(app) {
     try {
       return c.json(formatSuccessResponse({ status: 'healthy' }, '系统健康'));
     } catch (error) {
-      return c.json(formatErrorResponse('系统不健康', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -182,7 +185,8 @@ export function registerStatusRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取知识库状态失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取知识库状态失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -199,7 +203,8 @@ export function registerStatusRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取历史记录状态失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取历史记录状态失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
 }

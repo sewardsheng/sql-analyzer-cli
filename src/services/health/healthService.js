@@ -6,11 +6,14 @@
 import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 class HealthService {
   constructor() {
     this.projectRoot = path.resolve(__dirname, '../../..');
     this.checks = new Map();
+    this.execAsync = promisify(exec);
     this.setupDefaultChecks();
   }
 
@@ -65,6 +68,41 @@ class HealthService {
       name: '磁盘空间',
       critical: false,
       check: () => this.checkDiskSpace()
+    });
+
+    // CPU使用率检查
+    this.addCheck('cpu-usage', {
+      name: 'CPU使用率',
+      critical: false,
+      check: () => this.checkCpuUsage()
+    });
+
+    // 网络连接检查
+    this.addCheck('network', {
+      name: '网络连接',
+      critical: false,
+      check: () => this.checkNetworkConnectivity()
+    });
+
+    // 外部服务依赖检查
+    this.addCheck('external-services', {
+      name: '外部服务依赖',
+      critical: false,
+      check: () => this.checkExternalServices()
+    });
+
+    // 数据库连接检查
+    this.addCheck('database-connections', {
+      name: '数据库连接',
+      critical: false,
+      check: () => this.checkDatabaseConnections()
+    });
+
+    // API响应时间检查
+    this.addCheck('api-performance', {
+      name: 'API性能',
+      critical: false,
+      check: () => this.checkApiPerformance()
     });
   }
 
@@ -556,6 +594,345 @@ class HealthService {
     }
 
     return recommendations;
+  }
+
+  /**
+   * 检查CPU使用率
+   */
+  async checkCpuUsage() {
+    const startTime = Date.now();
+    const results = {
+      status: 'pass',
+      message: 'CPU使用率正常',
+      details: {}
+    };
+
+    try {
+      const os = await import('os');
+      const cpus = os.cpus();
+      let totalIdle = 0;
+      let totalTick = 0;
+
+      cpus.forEach(cpu => {
+        for (const type in cpu.times) {
+          totalTick += cpu.times[type];
+        }
+        totalIdle += cpu.times.idle;
+      });
+
+      const idle = totalIdle / cpus.length;
+      const total = totalTick / cpus.length;
+      const usage = 100 - (idle / total) * 100;
+
+      results.details = {
+        usage: Math.round(usage * 100) / 100 + '%',
+        cores: cpus.length,
+        model: cpus[0]?.model || 'Unknown'
+      };
+
+      if (usage > 90) {
+        results.status = 'fail';
+        results.message = 'CPU使用率过高';
+      } else if (usage > 80) {
+        results.status = 'warning';
+        results.message = 'CPU使用率较高';
+      }
+
+    } catch (error) {
+      results.status = 'warning';
+      results.message = `CPU使用率检查失败: ${error.message}`;
+      results.details.error = error.message;
+    }
+
+    results.duration = Date.now() - startTime;
+    return results;
+  }
+
+  /**
+   * 检查网络连接
+   */
+  async checkNetworkConnectivity() {
+    const startTime = Date.now();
+    const results = {
+      status: 'pass',
+      message: '网络连接正常',
+      details: {}
+    };
+
+    try {
+      const testUrls = [
+        'https://www.google.com',
+        'https://www.github.com',
+        'https://api.openai.com'
+      ];
+
+      const connectivityResults = [];
+      
+      for (const url of testUrls) {
+        try {
+          const response = await fetch(url, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(5000) // 5秒超时
+          });
+          
+          connectivityResults.push({
+            url,
+            status: 'connected',
+            responseTime: Date.now() - startTime,
+            statusCode: response.status
+          });
+        } catch (error) {
+          connectivityResults.push({
+            url,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+
+      const connectedCount = connectivityResults.filter(r => r.status === 'connected').length;
+      results.details = {
+        tested: testUrls.length,
+        connected: connectedCount,
+        failed: testUrls.length - connectedCount,
+        results: connectivityResults
+      };
+
+      if (connectedCount === 0) {
+        results.status = 'fail';
+        results.message = '所有网络连接测试失败';
+      } else if (connectedCount < testUrls.length) {
+        results.status = 'warning';
+        results.message = '部分网络连接测试失败';
+      }
+
+    } catch (error) {
+      results.status = 'warning';
+      results.message = `网络连接检查失败: ${error.message}`;
+      results.details.error = error.message;
+    }
+
+    results.duration = Date.now() - startTime;
+    return results;
+  }
+
+  /**
+   * 检查外部服务依赖
+   */
+  async checkExternalServices() {
+    const startTime = Date.now();
+    const results = {
+      status: 'pass',
+      message: '外部服务依赖正常',
+      details: {}
+    };
+
+    try {
+      const services = [];
+      
+      // 检查OpenAI API连接
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const response = await fetch('https://api.openai.com/v1/models', {
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+            },
+            signal: AbortSignal.timeout(10000)
+          });
+          
+          services.push({
+            name: 'OpenAI API',
+            status: response.ok ? 'available' : 'unavailable',
+            responseTime: Date.now() - startTime,
+            statusCode: response.status
+          });
+        } catch (error) {
+          services.push({
+            name: 'OpenAI API',
+            status: 'error',
+            error: error.message
+          });
+        }
+      }
+
+      // 检查其他外部服务...
+      
+      const availableCount = services.filter(s => s.status === 'available').length;
+      results.details = {
+        total: services.length,
+        available: availableCount,
+        services
+      };
+
+      if (services.length > 0 && availableCount === 0) {
+        results.status = 'fail';
+        results.message = '所有外部服务不可用';
+      } else if (availableCount < services.length) {
+        results.status = 'warning';
+        results.message = '部分外部服务不可用';
+      }
+
+    } catch (error) {
+      results.status = 'warning';
+      results.message = `外部服务检查失败: ${error.message}`;
+      results.details.error = error.message;
+    }
+
+    results.duration = Date.now() - startTime;
+    return results;
+  }
+
+  /**
+   * 检查数据库连接
+   */
+  async checkDatabaseConnections() {
+    const startTime = Date.now();
+    const results = {
+      status: 'pass',
+      message: '数据库连接正常',
+      details: {}
+    };
+
+    try {
+      const databases = [];
+      
+      // 检查配置的数据库连接
+      const { getConfigManager } = await import('../config/index.js');
+      const configManager = getConfigManager();
+      const config = await configManager.getConfig();
+      
+      if (config.databases) {
+        for (const [name, dbConfig] of Object.entries(config.databases)) {
+          try {
+            // 这里应该根据数据库类型进行实际连接测试
+            // 简化处理，只检查配置是否完整
+            if (dbConfig.host && dbConfig.port && dbConfig.database) {
+              databases.push({
+                name,
+                status: 'configured',
+                host: dbConfig.host,
+                port: dbConfig.port,
+                type: dbConfig.type || 'unknown'
+              });
+            } else {
+              databases.push({
+                name,
+                status: 'incomplete',
+                error: '配置不完整'
+              });
+            }
+          } catch (error) {
+            databases.push({
+              name,
+              status: 'error',
+              error: error.message
+            });
+          }
+        }
+      }
+
+      const configuredCount = databases.filter(d => d.status === 'configured').length;
+      results.details = {
+        total: databases.length,
+        configured: configuredCount,
+        databases
+      };
+
+      if (databases.length > 0 && configuredCount === 0) {
+        results.status = 'fail';
+        results.message = '所有数据库配置有问题';
+      } else if (configuredCount < databases.length) {
+        results.status = 'warning';
+        results.message = '部分数据库配置有问题';
+      }
+
+    } catch (error) {
+      results.status = 'warning';
+      results.message = `数据库连接检查失败: ${error.message}`;
+      results.details.error = error.message;
+    }
+
+    results.duration = Date.now() - startTime;
+    return results;
+  }
+
+  /**
+   * 检查API性能
+   */
+  async checkApiPerformance() {
+    const startTime = Date.now();
+    const results = {
+      status: 'pass',
+      message: 'API性能正常',
+      details: {}
+    };
+
+    try {
+      const testStartTime = Date.now();
+      
+      // 测试内部API端点
+      const testEndpoints = [
+        '/api/health/ping',
+        '/api/health/status'
+      ];
+
+      const performanceResults = [];
+      
+      for (const endpoint of testEndpoints) {
+        try {
+          const response = await fetch(`http://localhost:${process.env.PORT || 3000}${endpoint}`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000)
+          });
+          
+          const responseTime = Date.now() - testStartTime;
+          performanceResults.push({
+            endpoint,
+            status: response.ok ? 'success' : 'failed',
+            responseTime,
+            statusCode: response.status
+          });
+        } catch (error) {
+          performanceResults.push({
+            endpoint,
+            status: 'error',
+            error: error.message
+          });
+        }
+      }
+
+      const successCount = performanceResults.filter(r => r.status === 'success').length;
+      const avgResponseTime = performanceResults
+        .filter(r => r.responseTime)
+        .reduce((sum, r) => sum + r.responseTime, 0) / successCount || 0;
+
+      results.details = {
+        tested: testEndpoints.length,
+        success: successCount,
+        failed: testEndpoints.length - successCount,
+        averageResponseTime: Math.round(avgResponseTime) + 'ms',
+        results: performanceResults
+      };
+
+      if (successCount === 0) {
+        results.status = 'fail';
+        results.message = '所有API性能测试失败';
+      } else if (avgResponseTime > 2000) {
+        results.status = 'warning';
+        results.message = 'API响应时间较慢';
+      } else if (successCount < testEndpoints.length) {
+        results.status = 'warning';
+        results.message = '部分API性能测试失败';
+      }
+
+    } catch (error) {
+      results.status = 'warning';
+      results.message = `API性能检查失败: ${error.message}`;
+      results.details.error = error.message;
+    }
+
+    results.duration = Date.now() - startTime;
+    return results;
   }
 }
 

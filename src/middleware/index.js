@@ -1,0 +1,78 @@
+/**
+ * 中间件索引文件
+ * 统一导出所有中间件
+ */
+
+import { createDefaultCorsMiddleware } from './cors.js';
+import { createDefaultRequestLoggerMiddleware } from './requestLogger.js';
+import { createDefaultRateLimiterMiddleware, createAnalysisRateLimiterMiddleware } from './rateLimiter.js';
+import { createDefaultErrorHandlerMiddleware, notFoundHandlerMiddleware } from './errorHandler.js';
+import { ApiError, ErrorTypes, createValidationError, createNotFoundError, createExternalServiceError } from '../utils/apiError.js';
+
+/**
+ * 创建默认中间件链
+ * @returns {Array} 中间件数组
+ */
+function createDefaultMiddlewareChain() {
+  return [
+    createDefaultCorsMiddleware(),
+    createDefaultRateLimiterMiddleware(),
+    createDefaultRequestLoggerMiddleware(),
+    createDefaultErrorHandlerMiddleware()
+  ];
+}
+
+/**
+ * 创建分析API专用中间件链
+ * @returns {Array} 中间件数组
+ */
+function createAnalysisMiddlewareChain() {
+  return [
+    createDefaultCorsMiddleware(),
+    createAnalysisRateLimiterMiddleware(),
+    createDefaultRequestLoggerMiddleware(),
+    createDefaultErrorHandlerMiddleware()
+  ];
+}
+
+/**
+ * 创建管理API专用中间件链
+ * @returns {Array} 中间件数组
+ */
+function createAdminMiddlewareChain() {
+  return [
+    createDefaultCorsMiddleware(),
+    createDefaultRateLimiterMiddleware(),
+    createDefaultRequestLoggerMiddleware(),
+    createDefaultErrorHandlerMiddleware()
+  ];
+}
+
+// 导出所有中间件
+export {
+  // CORS中间件
+  createDefaultCorsMiddleware,
+  
+  // 请求日志中间件
+  createDefaultRequestLoggerMiddleware,
+  
+  // 限流中间件
+  createDefaultRateLimiterMiddleware,
+  createAnalysisRateLimiterMiddleware,
+  
+  // 错误处理中间件
+  createDefaultErrorHandlerMiddleware,
+  notFoundHandlerMiddleware,
+  
+  // 中间件链
+  createDefaultMiddlewareChain,
+  createAnalysisMiddlewareChain,
+  createAdminMiddlewareChain,
+  
+  // 导出中间件类和工具函数
+  ApiError,
+  ErrorTypes,
+  createValidationError,
+  createNotFoundError,
+  createExternalServiceError
+};

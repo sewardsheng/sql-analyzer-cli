@@ -9,6 +9,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { formatSuccessResponse, formatErrorResponse } from '../../../utils/responseHandler.js';
+import { createValidationError } from '../../../utils/apiError.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,7 +43,7 @@ export function registerInitRoutes(app) {
       const config = await readConfig();
       
       if (config.initialized && !force) {
-        return c.json(formatErrorResponse('系统已经初始化。如需重新初始化，请设置 force 参数为 true'), 400);
+        throw createValidationError('系统已经初始化。如需重新初始化，请设置 force 参数为 true');
       }
       
       // 创建必要的目录
@@ -80,7 +81,8 @@ export function registerInitRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 系统初始化失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('系统初始化失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -142,7 +144,8 @@ export function registerInitRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 获取初始化状态失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('获取初始化状态失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -190,7 +193,8 @@ export function registerInitRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 创建目录结构失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('创建目录结构失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
   
@@ -223,7 +227,8 @@ export function registerInitRoutes(app) {
     } catch (error) {
       console.error(chalk.red(`[API] 配置文件初始化失败: ${error.message}`));
       
-      return c.json(formatErrorResponse('初始化配置文件失败', error.message), 500);
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
     }
   });
 }
