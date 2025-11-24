@@ -5,7 +5,7 @@
  * 纯API模式，移除所有CLI相关功能
  */
 
-import { createApiServer } from './services/api/index.js';
+import { createApiServer } from './api/index.js';
 import { setupGlobalErrorHandlers, logInfo, logError } from './utils/logger.js';
 
 // 设置全局错误处理

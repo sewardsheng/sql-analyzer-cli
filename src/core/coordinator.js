@@ -5,13 +5,13 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import chalk from 'chalk';
-import { createPerformanceAnalyzerTool } from './analyzers/performanceAnalyzer.js';
-import { createSecurityAuditorTool } from './analyzers/securityAuditor.js';
-import { createCodingStandardsCheckerTool } from './analyzers/codingStandardsChecker.js';
+import { createPerformanceAnalyzerTool } from './analyzers/performance-analyzer.js';
+import { createSecurityAuditorTool } from './analyzers/security-auditor.js';
+import { createCodingStandardsCheckerTool } from './analyzers/coding-standards-checker.js';
 // SqlOptimizer已删除 - 优化建议现在由ReportGenerator从前3个分析器整合
-// import { createSqlOptimizerAndSuggesterTool } from './analyzers/sqlOptimizerAndSuggester.js';
-import { createIntelligentRuleLearnerTool } from './analyzers/intelligentRuleLearner.js';
-import { createQuickAnalyzerTool } from './analyzers/quickAnalyzer.js';
+// import { createSqlOptimizerAndSuggesterTool } from './analyzers/sql-optimizer-and-suggester.js';
+import { createIntelligentRuleLearnerTool } from './analyzers/intelligent-rule-learner.js';
+import { createQuickAnalyzerTool } from './analyzers/quick-analyzer.js';
 import ReportGenerator from './reporter.js';
 
 /**

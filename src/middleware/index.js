@@ -4,10 +4,10 @@
  */
 
 import { createDefaultCorsMiddleware } from './cors.js';
-import { createDefaultRequestLoggerMiddleware } from './requestLogger.js';
-import { createDefaultRateLimiterMiddleware, createAnalysisRateLimiterMiddleware } from './rateLimiter.js';
-import { createDefaultErrorHandlerMiddleware, notFoundHandlerMiddleware } from './errorHandler.js';
-import { ApiError, ErrorTypes, createValidationError, createNotFoundError, createExternalServiceError } from '../utils/apiError.js';
+import { createDefaultRequestLoggerMiddleware } from './request-logger.js';
+import { createDefaultRateLimiterMiddleware, createAnalysisRateLimiterMiddleware } from './rate-limiter.js';
+import { createDefaultErrorHandlerMiddleware, notFoundHandlerMiddleware } from './error-handler.js';
+import { ApiError, ErrorTypes, createValidationError, createNotFoundError, createExternalServiceError } from '../utils/api/api-error.js';
 
 /**
  * 创建默认中间件链
