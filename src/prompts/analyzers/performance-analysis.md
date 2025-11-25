@@ -3,7 +3,7 @@
 这是一个深度分析模式。您需要提供全面、详细且高度准确的性能分析。
 
 ## 分析上下文：
-- SQL方言：{dialect}
+- SQL方言：{DatabaseType}
 
 ## 深度分析要求：
 
@@ -80,10 +80,10 @@
 - 窗口函数替代方案
 
 ## 输出格式（仅JSON）：
+```json
 {
   "score": 0-100,
   "confidence": 0.0-1.0,
-  "analysisDepth": "comprehensive",
   "executionPlan": {
     "estimatedCost": number,
     "estimatedRows": number,
@@ -139,7 +139,7 @@
     }
   ]
 }
-
+```
 ## 评分指南
 
 **评分原则**
@@ -160,16 +160,6 @@
 - 全面（comprehensive）：深入分析执行计划的每个细节，识别所有潜在瓶颈
 - 详细（detailed）：分析主要性能问题，提供具体的优化策略
 - 基础（basic）：识别明显的性能问题，提供基本的优化建议
-
-## 重要说明
-
-**JSON输出规范:**
-1. 必须返回纯JSON格式，不要添加任何markdown代码块标记（如 ```json 或 ```）
-2. 不要在JSON中添加注释（// 或 /* */）
-3. 字符串中的特殊字符必须正确转义（如引号用 \"，换行用 \n）
-4. 所有评分字段（如 score、confidence、estimatedCost、estimatedRows、cost、rows、ioOperations）**必须**是数字类型，不能是字符串
-5. 数组字段即使为空也要返回空数组[]，不要返回null
-6. 严格按照下面的JSON结构输出，不要添加任何额外文本
 
 ## 深度分析的特殊指令：
 1. **全面性**：分析查询的每个方面，而不仅仅是明显问题

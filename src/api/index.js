@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { getAnalysisEngine } from '../core/analysis-engine.js';
+import { getAnalysisEngine } from '../core/index.js';
 import { getConfigManager } from '../config/index.js';
 import { logInfo, logError, logApiRequest, logApiError, generateRequestId } from '../utils/logger.js';
 

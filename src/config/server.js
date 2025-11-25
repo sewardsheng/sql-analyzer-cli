@@ -11,7 +11,7 @@ import { logInfo } from '../utils/logger.js';
  */
 export function getServerConfig() {
   const serverConfig = {
-    port: parseInt(process.env.PORT) || 3000,
+    port: parseInt(process.env.PORT) || 3001,
     host: process.env.HOST || '0.0.0.0',
     cors: process.env.CORS !== 'false',
     corsOrigin: process.env.CORS_ORIGIN || '*',

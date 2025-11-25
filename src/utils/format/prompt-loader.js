@@ -13,19 +13,43 @@ import path from 'path';
  */
 export async function loadPromptTemplate(templateName, category = 'rule-learning') {
   try {
+    // 获取项目根目录（向上查找package.json）
+    let currentDir = process.cwd();
+    while (currentDir !== path.dirname(currentDir)) {
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      try {
+        await fs.access(packageJsonPath);
+        break; // 找到package.json，说明是项目根目录
+      } catch {
+        currentDir = path.dirname(currentDir);
+      }
+    }
+    
     const templatePath = path.join(
-      process.cwd(),
+      currentDir,
       'src',
       'prompts',
       category,
       templateName
     );
     
+    console.log(`🔧 加载模板路径: ${templatePath}`);
+    
+    // 检查文件是否存在
+    try {
+      await fs.access(templatePath);
+      console.log(`✅ 文件存在: ${templatePath}`);
+    } catch (accessError) {
+      console.error(`❌ 文件不存在: ${templatePath}`, accessError);
+      throw new Error(`文件不存在: ${templatePath}`);
+    }
+    
     const content = await fs.readFile(templatePath, 'utf8');
+    console.log(`✅ 文件读取成功，内容长度: ${content.length}`);
     return content;
   } catch (error) {
     console.error(`加载prompt模板失败: ${templateName}`, error);
-    throw new Error(`无法加载prompt模板: ${templateName}`);
+    throw new Error(`无法加载prompt模板: ${templateName} - ${error.message}`);
   }
 }
 
@@ -56,39 +80,51 @@ export function replaceTemplateVariables(template, variables) {
  * @returns {Object} {systemPrompt, userPrompt}
  */
 export function extractPromptsFromTemplate(template) {
+  console.log(`🔧 开始提取模板，模板长度: ${template.length}`);
+  console.log(`🔧 模板前100字符: ${template.substring(0, 100)}`);
+  
   // 提取系统角色定义和任务目标作为system prompt
   const systemSections = [];
   
-  // 提取 ## 系统角色定义 或 ## 系统角色 - XXX 部分
-  const roleMatch = template.match(/## 系统角色.*\s+([\s\S]*?)(?=\n##|$)/);
-  if (roleMatch) {
-    systemSections.push(roleMatch[1].trim());
+  // 提取开头的描述部分（第一段到第一个##之前）
+  const descMatch = template.match(/^([\s\S]*?)\s*##/);
+  if (descMatch) {
+    systemSections.push(descMatch[1].trim());
   }
   
-  // 提取 ## 任务目标 部分
-  const goalMatch = template.match(/## 任务目标\s+([\s\S]*?)(?=\n##|$)/);
-  if (goalMatch) {
-    systemSections.push(goalMatch[1].trim());
+  // 提取各种分析要求部分
+  const requirementMatches = template.match(/## [^：]*：?\s*([\s\S]*?)(?=\n##|$)/g);
+  if (requirementMatches) {
+    requirementMatches.forEach(match => {
+      if (match[1] && match[1].trim()) {
+        systemSections.push(match[1].trim());
+      }
+    });
   }
   
   // 提取输出格式要求作为system prompt的一部分
-  const outputMatch = template.match(/## 输出格式(?:要求)?\s+([\s\S]*?)(?=\n##|$)/);
+  const outputMatch = template.match(/## 输出格式(?:要求)?\s*([\s\S]*?)(?=\n##|$)/);
+  console.log(`🔧 输出格式匹配: ${outputMatch ? '成功' : '失败'}`);
   if (outputMatch) {
     systemSections.push(outputMatch[1].trim());
   }
   
-  // 提取指导原则
-  const guideMatch = template.match(/## .*指导原则\s+([\s\S]*?)(?=\n##|$)/);
-  if (guideMatch) {
-    systemSections.push(guideMatch[1].trim());
+  // 提取评分指南和重要说明
+  const guideMatches = template.match(/## (评分指南|重要说明|深度分析的特殊指令|验证标准)\s*([\s\S]*?)(?=\n##|$)/g);
+  if (guideMatches) {
+    guideMatches.forEach(match => {
+      if (match[1] && match[1].trim()) {
+        systemSections.push(match[1].trim());
+      }
+    });
   }
   
   const systemPrompt = systemSections.join('\n\n');
   
-  // 提取输入信息部分作为user prompt的基础
-  // 注意：使用贪婪匹配以确保包含完整的多行内容（如嵌套的markdown代码块）
-  const inputMatch = template.match(/## 输入信息\s+([\s\S]*?)(?=\n## (?:输出格式|评估|特殊|$))/);
-  const userPrompt = inputMatch ? inputMatch[1].trim() : '';
+  // 对于这种格式的提示词，用户提示词就是SQL语句本身
+  const userPrompt = '请分析提供的SQL语句并按照要求返回JSON格式的分析结果。';
+  
+  console.log(`🔧 最终提取结果 - systemPrompt长度: ${systemPrompt.length}, userPrompt长度: ${userPrompt.length}`);
   
   return {
     systemPrompt,
@@ -114,6 +150,8 @@ export async function buildPrompt(templateName, variables = {}, options = {}) {
   
   // 提取system和user部分
   const { systemPrompt, userPrompt } = extractPromptsFromTemplate(filledTemplate);
+  
+  console.log(`🔧 提取结果 - systemPrompt长度: ${systemPrompt?.length || 0}, userPrompt长度: ${userPrompt?.length || 0}`);
   
   return {
     systemPrompt,

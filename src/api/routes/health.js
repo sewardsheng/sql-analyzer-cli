@@ -16,7 +16,8 @@ export function registerHealthRoutes(app) {
    */
   app.get('/api/health', async (c) => {
     try {
-      const { HealthService } = await import('../../health/healthService.js');
+      const HealthServiceModule = await import('../../services/health-service.js');
+      const HealthService = HealthServiceModule.default;
       const healthService = new HealthService();
       const results = await healthService.performAllChecks();
       const report = healthService.generateReport(results);
@@ -50,7 +51,8 @@ export function registerHealthRoutes(app) {
   app.get('/api/health/check/:type', async (c) => {
     try {
       const { type } = c.req.param();
-      const { HealthService } = await import('../../health/healthService.js');
+      const HealthServiceModule = await import('../../services/health-service.js');
+      const HealthService = HealthServiceModule.default;
       const healthService = new HealthService();
       
       // 验证检查类型

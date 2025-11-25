@@ -3,7 +3,7 @@
 这是一个深度标准分析模式。您需要提供全面、详细且高度准确的编码标准遵循性和质量指标评估。
 
 ## 分析上下文：
-- SQL方言：{dialect}
+- SQL方言：{DatabaseType}
 
 ## 深度标准分析要求：
 
@@ -114,12 +114,14 @@
 - 最佳实践实施
 - 效率改进
 
+
+
 ## 输出格式（仅JSON）：
+```json
 {
   "score": 0-100,
   "confidence": 0.0-1.0,
-  "analysisDepth": "comprehensive",
-  "qualityLevel": "Excellent|Good|Fair|Poor|Critical",
+  "qualityLevel": "优秀|好|一般|差|严重",
   "standardsCompliance": {
     "overallCompliance": 0.0-1.0,
     "namingCompliance": 0.0-1.0,
@@ -133,14 +135,14 @@
     "queryLength": number,
     "joinCount": number,
     "subqueryCount": number,
-    "complexityLevel": "Low|Medium|High|VeryHigh"
+    "complexityLevel": "低|中|高|非常高"
   },
   "violations": [
     {
       "id": "唯一违规ID",
-      "category": "NamingConvention" | "Formatting" | "Structure" | "Documentation" | "Performance" | "Security",
+      "category": "命名约定" | "格式化" | "结构" | "文档" | "性能" | "安全",
       "subcategory": "具体违规子类别",
-      "severity": "Critical|Major|Minor|Info",
+      "severity": "严重|高|中|低",
       "confidence": 0.0-1.0,
       "rule": "违反的具体标准规则",
       "description": "违规的详细描述",
@@ -150,10 +152,10 @@
         "snippet": "显示违规的代码片段"
       },
       "impact": {
-        "readability": "None|Low|Medium|High",
-        "maintainability": "None|Low|Medium|High",
-        "performance": "None|Low|Medium|High",
-        "security": "None|Low|Medium|High"
+        "readability": "无|低|中|高",
+        "maintainability": "无|低|中|高",
+        "performance": "无|低|中|高",
+        "security": "无|低|中|高"
       },
       "standardsReference": "特定标准的引用",
       "evidence": "查询中的支持证据",
@@ -170,8 +172,8 @@
   },
   "recommendations": [
     {
-      "category": "Naming|Formatting|Structure|Documentation|Performance|BestPractices",
-      "priority": "Critical|High|Medium|Low",
+      "category": "命名" | "格式化" | "结构" | "文档" | "性能" | "最佳实践",
+      "priority": "严重|高|中|低",
       "title": "建议标题",
       "description": "详细建议描述",
       "implementation": {
@@ -185,8 +187,8 @@
         "performance": "这如何提高性能",
         "teamProductivity": "这如何帮助团队"
       },
-      "effort": "Low|Medium|High",
-      "impact": "Low|Medium|High"
+      "effort": "低|中|高",
+      "impact": "低|中|高"
     }
   ],
   "qualityMetrics": {
@@ -194,20 +196,20 @@
     "maintainabilityIndex": 0-100,
     "documentationCoverage": 0.0-1.0,
     "standardsAdherence": 0.0-1.0,
-    "codeComplexity": "Low|Medium|High|VeryHigh",
-    "technicalDebt": "Low|Medium|High|Critical"
+    "codeComplexity": "低|中|高|非常高",
+    "technicalDebt": "低|中|高|严重"
   },
   "bestPractices": [
     {
       "practice": "最佳实践描述",
-      "category": "General|{dialect}Specific|Enterprise|Industry",
-      "currentStatus": "Compliant|PartiallyCompliant|NonCompliant",
+      "category": "通用|{dialect}专有|企业|行业",
+      "currentStatus": "合规|部分合规|不合规",
       "improvementNeeded": "需要改进的内容",
       "implementation": "如何实施此最佳实践"
     }
   ]
 }
-
+```
 ## 评分指南
 
 **评分原则**
@@ -230,16 +232,6 @@
 - 一般（Fair）：存在一些规范问题，但不影响整体代码质量
 - 较差（Poor）：存在明显规范违规，影响代码可读性和可维护性
 - 严重（Critical）：存在严重规范问题，代码难以理解和维护
-
-## 重要说明
-
-**JSON输出规范:**
-1. 必须返回纯JSON格式，不要添加任何markdown代码块标记（如 ```json 或 ```）
-2. 不要在JSON中添加注释（// 或 /* */）
-3. 字符串中的特殊字符必须正确转义（如引号用 \"，换行用 \n）
-4. 所有评分字段（如 score、confidence、overallCompliance、namingCompliance、formattingCompliance、structuralCompliance、documentationCompliance、cyclomaticComplexity、nestingDepth、queryLength、joinCount、subqueryCount、line、column、totalChanges、criticalFixes、majorFixes、minorFixes、readabilityScore、maintainabilityIndex、documentationCoverage、standardsAdherence）**必须**是数字类型，不能是字符串
-5. 数组字段即使为空也要返回空数组[]，不要返回null
-6. 严格按照下面的JSON结构输出，不要添加任何额外文本
 
 ## 深度标准分析的特殊指令：
 1. **全面性**：检查编码标准和质量的每个方面

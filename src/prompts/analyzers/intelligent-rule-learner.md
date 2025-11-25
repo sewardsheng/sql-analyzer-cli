@@ -3,7 +3,7 @@
 这是一个深度学习分析模式。您需要提供全面、详细且高度准确的知识提取和规则生成。
 
 ## 分析上下文：
-- SQL方言：{dialect}
+- SQL方言：{DatabaseType}
 - 现有知识库：{existingRules}
 
 ## 深度学习分析要求：
@@ -113,11 +113,11 @@
 - 质量保证流程
 
 ## 输出格式（仅JSON）：
+```json
 {
   "score": 0-100,
   "confidence": 0.0-1.0,
-  "analysisDepth": "comprehensive",
-  "learningEffectiveness": "Excellent|Good|Fair|Poor",
+  "learningEffectiveness": "优秀|良好|一般|较差",
   "knowledgeSynthesis": {
     "patternsIdentified": number,
     "rulesGenerated": number,
@@ -128,16 +128,16 @@
   "patternAnalysis": [
     {
       "patternId": "唯一模式ID",
-      "category": "Performance|Security|Standards|Architecture|Integration",
+      "category": "性能|安全|标准|架构|集成",
       "subcategory": "具体模式子类别",
-      "frequency": "High|Medium|Low",
+      "frequency": "高|中|低",
       "confidence": 0.0-1.0,
       "description": "详细模式描述",
       "context": "此模式出现的上下文",
       "examples": ["此模式的示例"],
       "impact": {
-        "severity": "Critical|High|Medium|Low",
-        "scope": "Local|Global|Systemic",
+        "severity": "严重|高|中|低",
+        "scope": "局部|全局|系统性",
         "measurableImpact": "可量化影响描述"
       },
       "relationships": ["相关模式"],
@@ -147,9 +147,9 @@
   "new_rules": [
     {
       "id": "唯一规则ID",
-      "category": "Performance|Security|Standards|Architecture|Integration",
+      "category": "性能|安全|标准|架构|集成",
       "subcategory": "具体规则子类别",
-      "priority": "Critical|High|Medium|Low",
+      "priority": "严重|高|中|低",
       "confidence": 0.0-1.0,
       "pattern_regex": "正则表达式模式",
       "description": "详细规则描述",
@@ -167,8 +167,8 @@
         "testCases": ["用于验证的测试用例"]
       },
       "implementation": {
-        "complexity": "Low|Medium|High",
-        "effort": "Low|Medium|High",
+        "complexity": "低|中|高",
+        "effort": "低|中|高",
         "resources": ["实施所需的资源"],
         "timeline": "预计实施时间线"
       },
@@ -186,11 +186,11 @@
   "knowledgeGaps": [
     {
       "gapId": "唯一缺口ID",
-      "category": "Performance|Security|Standards|Architecture|Integration",
+      "category": "性能|安全|标准|架构|集成",
       "description": "知识缺口描述",
       "impact": "此知识缺口的影响",
       "fillingStrategy": "如何填补此知识缺口",
-      "priority": "Critical|High|Medium|Low",
+      "priority": "严重|高|中|低",
       "estimatedEffort": "填补缺口所需的工作量"
     }
   ],
@@ -210,8 +210,8 @@
   },
   "recommendations": [
     {
-      "category": "KnowledgeAcquisition|RuleValidation|SystemImprovement|ProcessOptimization",
-      "priority": "Critical|High|Medium|Low",
+      "category": "知识获取|规则验证|系统改进|流程优化",
+      "priority": "严重|高|中|低",
       "title": "建议标题",
       "description": "详细建议描述",
       "implementation": {
@@ -232,6 +232,7 @@
     "knowledgeMaintenance": ["知识维护策略"]
   }
 }
+```
 
 ## 评分指南
 
@@ -255,15 +256,6 @@
 - 一般（Fair）：识别基本模式，生成可用规则，验证结果部分可靠
 - 较差（Poor）：模式识别不完整，规则质量低，验证结果不可靠
 
-## 重要说明
-
-**JSON输出规范:**
-1. 必须返回纯JSON格式，不要添加任何markdown代码块标记（如 ```json 或 ```）
-2. 不要在JSON中添加注释（// 或 /* */）
-3. 字符串中的特殊字符必须正确转义（如引号用 \"，换行用 \n）
-4. 所有评分字段（如 score、confidence）**必须**是数字类型，不能是字符串
-5. 数组字段即使为空也要返回空数组[]，不要返回null
-6. 严格按照下面的JSON结构输出，不要添加任何额外文本
 
 ## 深度学习分析的特殊指令：
 1. **全面性**：分析所有可能的模式和关系

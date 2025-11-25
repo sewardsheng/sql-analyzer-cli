@@ -1,27 +1,23 @@
 /**
- * 统一API错误处理类
- * 提供标准化的错误类型和处理机制
+ * 优化的API错误处理类
+ * 简化错误类型和处理机制
  */
 
 /**
- * 错误类型枚举
+ * 简化的错误类型枚举
  */
 export const ErrorTypes = {
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
-  AUTHORIZATION_ERROR: 'AUTHORIZATION_ERROR',
-  NOT_FOUND_ERROR: 'NOT_FOUND_ERROR',
-  RATE_LIMIT_ERROR: 'RATE_LIMIT_ERROR',
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR',
-  TIMEOUT_ERROR: 'TIMEOUT_ERROR',
-  DATABASE_ERROR: 'DATABASE_ERROR',
-  CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
-  BUSINESS_ERROR: 'BUSINESS_ERROR'
+  VALIDATION: 'VALIDATION',
+  AUTH: 'AUTH',
+  NOT_FOUND: 'NOT_FOUND',
+  RATE_LIMIT: 'RATE_LIMIT',
+  EXTERNAL: 'EXTERNAL',
+  INTERNAL: 'INTERNAL',
+  BUSINESS: 'BUSINESS'
 };
 
 /**
- * 自定义API错误类
+ * 优化的API错误类
  */
 export class ApiError extends Error {
   /**
@@ -30,197 +26,112 @@ export class ApiError extends Error {
    * @param {string} type - 错误类型
    * @param {number} statusCode - HTTP状态码
    * @param {Object} details - 错误详情
-   * @param {string} code - 错误代码
    */
-  constructor(message, type = ErrorTypes.INTERNAL_ERROR, statusCode = 500, details = null, code = null) {
+  constructor(message, type = ErrorTypes.INTERNAL, statusCode = 500, details = null) {
     super(message);
     this.name = 'ApiError';
     this.type = type;
     this.statusCode = statusCode;
     this.details = details;
-    this.code = code;
     this.timestamp = new Date().toISOString();
     
-    // 确保堆栈跟踪正确
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
   }
 
   /**
-   * 转换为JSON格式
-   * @returns {Object} JSON格式的错误信息
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      type: this.type,
-      statusCode: this.statusCode,
-      code: this.code,
-      details: this.details,
-      timestamp: this.timestamp
-    };
-  }
-
-  /**
-   * 获取用户友好的错误消息
+   * 获取用户友好的错误消息 - 优化版本
    * @returns {string} 用户友好的错误消息
    */
   getUserMessage() {
-    switch (this.type) {
-      case ErrorTypes.VALIDATION_ERROR:
-        return '请求参数不正确，请检查输入';
-      case ErrorTypes.AUTHENTICATION_ERROR:
-        return '身份验证失败，请重新登录';
-      case ErrorTypes.AUTHORIZATION_ERROR:
-        return '权限不足，无法执行此操作';
-      case ErrorTypes.NOT_FOUND_ERROR:
-        return '请求的资源不存在';
-      case ErrorTypes.RATE_LIMIT_ERROR:
-        return '请求过于频繁，请稍后再试';
-      case ErrorTypes.EXTERNAL_SERVICE_ERROR:
-        return '外部服务暂时不可用，请稍后再试';
-      case ErrorTypes.TIMEOUT_ERROR:
-        return '请求超时，请稍后再试';
-      case ErrorTypes.DATABASE_ERROR:
-        return '数据库操作失败，请稍后再试';
-      case ErrorTypes.CONFIGURATION_ERROR:
-        return '系统配置错误，请联系管理员';
-      case ErrorTypes.BUSINESS_ERROR:
-        return this.message; // 业务错误直接显示原始消息
-      default:
-        return '系统错误，请稍后再试';
-    }
+    const messages = {
+      [ErrorTypes.VALIDATION]: '请求参数不正确，请检查输入',
+      [ErrorTypes.AUTH]: '身份验证或权限不足',
+      [ErrorTypes.NOT_FOUND]: '请求的资源不存在',
+      [ErrorTypes.RATE_LIMIT]: '请求过于频繁，请稍后再试',
+      [ErrorTypes.EXTERNAL]: '外部服务暂时不可用，请稍后再试',
+      [ErrorTypes.BUSINESS]: this.message, // 业务错误直接显示原始消息
+      [ErrorTypes.INTERNAL]: '系统错误，请稍后再试'
+    };
+    
+    return messages[this.type] || messages[ErrorTypes.INTERNAL];
   }
 }
 
 /**
- * 创建验证错误
+ * 创建验证错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
  * @returns {ApiError} 验证错误
  */
-export function createValidationError(message, details = null, code = null) {
-  return new ApiError(message, ErrorTypes.VALIDATION_ERROR, 400, details, code);
+export function createValidationError(message, details = null) {
+  return new ApiError(message, ErrorTypes.VALIDATION, 400, details);
 }
 
 /**
- * 创建身份验证错误
+ * 创建认证错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 身份验证错误
+ * @returns {ApiError} 认证错误
  */
-export function createAuthenticationError(message = '身份验证失败', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.AUTHENTICATION_ERROR, 401, details, code);
+export function createAuthError(message = '身份验证或权限不足', details = null) {
+  return new ApiError(message, ErrorTypes.AUTH, 401, details);
 }
 
 /**
- * 创建授权错误
- * @param {string} message - 错误消息
- * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 授权错误
- */
-export function createAuthorizationError(message = '权限不足', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.AUTHORIZATION_ERROR, 403, details, code);
-}
-
-/**
- * 创建未找到错误
+ * 创建未找到错误 - 优化版本
  * @param {string} resource - 资源名称
- * @param {string} identifier - 资源标识符
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
  * @returns {ApiError} 未找到错误
  */
-export function createNotFoundError(resource, identifier = '', details = null, code = null) {
-  const message = identifier ? `${resource} '${identifier}' 未找到` : `${resource}未找到`;
-  const errorDetails = { resource, identifier, ...details };
-  return new ApiError(message, ErrorTypes.NOT_FOUND_ERROR, 404, errorDetails, code);
+export function createNotFoundError(resource = '资源', details = null) {
+  const message = `${resource}未找到`;
+  return new ApiError(message, ErrorTypes.NOT_FOUND, 404, { resource, ...details });
 }
 
 /**
- * 创建限流错误
+ * 创建限流错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
  * @returns {ApiError} 限流错误
  */
-export function createRateLimitError(message = '请求过于频繁，请稍后再试', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.RATE_LIMIT_ERROR, 429, details, code);
+export function createRateLimitError(message = '请求过于频繁，请稍后再试', details = null) {
+  return new ApiError(message, ErrorTypes.RATE_LIMIT, 429, details);
 }
 
 /**
- * 创建外部服务错误
+ * 创建外部服务错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
  * @returns {ApiError} 外部服务错误
  */
-export function createExternalServiceError(message = '外部服务错误', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.EXTERNAL_SERVICE_ERROR, 502, details, code);
+export function createExternalError(message = '外部服务暂时不可用', details = null) {
+  return new ApiError(message, ErrorTypes.EXTERNAL, 502, details);
 }
 
 /**
- * 创建超时错误
+ * 创建业务错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 超时错误
- */
-export function createTimeoutError(message = '请求超时', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.TIMEOUT_ERROR, 408, details, code);
-}
-
-/**
- * 创建数据库错误
- * @param {string} message - 错误消息
- * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 数据库错误
- */
-export function createDatabaseError(message = '数据库操作失败', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.DATABASE_ERROR, 500, details, code);
-}
-
-/**
- * 创建配置错误
- * @param {string} message - 错误消息
- * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 配置错误
- */
-export function createConfigurationError(message = '系统配置错误', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.CONFIGURATION_ERROR, 500, details, code);
-}
-
-/**
- * 创建业务错误
- * @param {string} message - 错误消息
- * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
  * @returns {ApiError} 业务错误
  */
-export function createBusinessError(message, details = null, code = null) {
-  return new ApiError(message, ErrorTypes.BUSINESS_ERROR, 400, details, code);
+export function createBusinessError(message, details = null) {
+  return new ApiError(message, ErrorTypes.BUSINESS, 400, details);
 }
 
 /**
- * 创建内部服务器错误
+ * 创建内部错误 - 优化版本
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
- * @param {string} code - 错误代码
- * @returns {ApiError} 内部服务器错误
+ * @returns {ApiError} 内部错误
  */
-export function createInternalError(message = '内部服务器错误', details = null, code = null) {
-  return new ApiError(message, ErrorTypes.INTERNAL_ERROR, 500, details, code);
+export function createInternalError(message = '系统错误', details = null) {
+  return new ApiError(message, ErrorTypes.INTERNAL, 500, details);
 }
 
 /**
- * 从普通错误创建API错误
+ * 从普通错误创建API错误 - 优化版本
  * @param {Error} error - 普通错误对象
  * @param {string} defaultMessage - 默认错误消息
  * @returns {ApiError} API错误对象
@@ -230,31 +141,21 @@ export function fromError(error, defaultMessage = '未知错误') {
     return error;
   }
 
-  // 根据错误类型推断API错误类型
-  let type = ErrorTypes.INTERNAL_ERROR;
-  let statusCode = 500;
+  // 简化的错误类型映射
+  const errorMap = {
+    'ValidationError': { type: ErrorTypes.VALIDATION, statusCode: 400 },
+    'NotFoundError': { type: ErrorTypes.NOT_FOUND, statusCode: 404 },
+    'UnauthorizedError': { type: ErrorTypes.AUTH, statusCode: 401 },
+    'ForbiddenError': { type: ErrorTypes.AUTH, statusCode: 403 },
+    'RateLimitError': { type: ErrorTypes.RATE_LIMIT, statusCode: 429 }
+  };
 
-  if (error.name === 'ValidationError') {
-    type = ErrorTypes.VALIDATION_ERROR;
-    statusCode = 400;
-  } else if (error.name === 'NotFoundError') {
-    type = ErrorTypes.NOT_FOUND_ERROR;
-    statusCode = 404;
-  } else if (error.name === 'UnauthorizedError') {
-    type = ErrorTypes.AUTHENTICATION_ERROR;
-    statusCode = 401;
-  } else if (error.name === 'ForbiddenError') {
-    type = ErrorTypes.AUTHORIZATION_ERROR;
-    statusCode = 403;
-  } else if (error.name === 'RateLimitError') {
-    type = ErrorTypes.RATE_LIMIT_ERROR;
-    statusCode = 429;
-  }
+  const mapped = errorMap[error.name] || { type: ErrorTypes.INTERNAL, statusCode: 500 };
 
   return new ApiError(
     error.message || defaultMessage,
-    type,
-    statusCode,
+    mapped.type,
+    mapped.statusCode,
     {
       originalError: error.name,
       stack: error.stack
@@ -263,7 +164,7 @@ export function fromError(error, defaultMessage = '未知错误') {
 }
 
 /**
- * 检查是否为API错误
+ * 检查是否为API错误 - 优化版本
  * @param {Error} error - 错误对象
  * @returns {boolean} 是否为API错误
  */
@@ -272,7 +173,7 @@ export function isApiError(error) {
 }
 
 /**
- * 获取错误状态码
+ * 获取错误状态码 - 优化版本
  * @param {Error} error - 错误对象
  * @returns {number} HTTP状态码
  */
@@ -281,19 +182,14 @@ export function getErrorStatusCode(error) {
     return error.statusCode;
   }
 
-  // 根据错误类型推断状态码
-  if (error.name === 'ValidationError') {
-    return 400;
-  } else if (error.name === 'NotFoundError') {
-    return 404;
-  } else if (error.name === 'UnauthorizedError') {
-    return 401;
-  } else if (error.name === 'ForbiddenError') {
-    return 403;
-  } else if (error.name === 'RateLimitError') {
-    return 429;
-  }
+  // 简化的状态码映射
+  const statusCodeMap = {
+    'ValidationError': 400,
+    'NotFoundError': 404,
+    'UnauthorizedError': 401,
+    'ForbiddenError': 403,
+    'RateLimitError': 429
+  };
 
-  // 默认为内部服务器错误
-  return 500;
+  return statusCodeMap[error.name] || 500;
 }

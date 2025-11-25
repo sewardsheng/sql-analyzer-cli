@@ -7,20 +7,7 @@
   "scripts": {
     "dev": "NODE_ENV=development bun run src/server.js",
     "start": "NODE_ENV=production bun run src/server.js",
-    "build": "bun build ./src/server.js --outdir ./dist --target node",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "lint": "echo 'Linting not configured yet'",
-    "lint:fix": "echo 'Linting not configured yet'",
-    "format": "echo 'Formatting not configured yet'",
-    "docker:build": "docker build -t sql-analyzer-api .",
-    "docker:run": "docker run -p 3000:3000 sql-analyzer-api",
-    "docker:compose": "docker-compose up -d",
-    "docker:compose:down": "docker-compose down",
-    "docker:compose:logs": "docker-compose logs -f",
-    "clean": "rm -rf dist node_modules/.cache",
-    "postinstall": "echo 'Installation complete'"
+    "build": "bun build ./src/server.js --outdir ./dist --target node"
   },
   "keywords": [
     "sql",
@@ -29,8 +16,7 @@
     "security",
     "performance",
     "hono",
-    "docker",
-    "microservice"
+    "docker"
   ],
   "author": "盛威",
   "license": "MIT",
@@ -51,8 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.8.7",
-    "bun-types": "latest",
-    "jest": "^29.7.0"
+    "bun-types": "latest"
   },
   "engines": {
     "bun": ">=1.0.0",

@@ -1,10 +1,9 @@
 /**
- * SQL分析路由模块
- * 提供SQL分析相关的API端点
+ * SQL分析路由模块 - 新架构版本
+ * 提供SQL分析相关的API端点，移除向后兼容代码
  */
 
-import { getAnalysisEngine } from '../../core/analysis-engine.js';
-import { getConfigManager } from '../../config/index.js';
+import { getAnalysisEngine } from '../../core/index.js';
 import { formatAnalysisResult, formatBatchAnalysisResults } from '../../utils/api/response-handler.js';
 import { createValidationError } from '../../utils/api/api-error.js';
 
@@ -33,12 +32,10 @@ export function registerAnalyzeRoutes(app) {
         throw createValidationError('SQL语句不能为空');
       }
       
-      // 准备分析选项
+      // 准备新架构分析选项
       const analysisOptions = {
-        performance: body.options?.performance !== false,
-        security: body.options?.security !== false,
-        standards: body.options?.standards !== false,
-        learn: body.options?.learn === true
+        learning: body.options?.learning === true,
+        analysisConfig: body.options?.analysisConfig || {}
       };
       
       // 执行SQL分析
@@ -98,12 +95,10 @@ export function registerAnalyzeRoutes(app) {
         throw createValidationError('批量分析最多支持50条SQL语句');
       }
       
-      // 准备分析选项
+      // 准备新架构分析选项
       const analysisOptions = {
-        performance: body.options?.performance !== false,
-        security: body.options?.security !== false,
-        standards: body.options?.standards !== false,
-        learn: body.options?.learn === true
+        learning: body.options?.learning === true,
+        analysisConfig: body.options?.analysisConfig || {}
       };
       
       console.log(`[API] 收到批量分析请求，共 ${body.sqls.length} 条SQL`);

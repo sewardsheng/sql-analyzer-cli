@@ -102,11 +102,11 @@
 - 审计跟踪实施
 
 ## 输出格式（仅JSON）：
+```json
 {
   "score": 0-100,
   "confidence": 0.0-1.0,
-  "analysisDepth": "comprehensive",
-  "threatLevel": "Critical|High|Medium|Low",
+  "threatLevel": "严重|高|中|低",
   "attackSurface": {
     "totalVectors": number,
     "highRiskVectors": number,
@@ -180,7 +180,7 @@
     }
   ]
 }
-
+```
 ## 评分指南
 
 **评分原则**

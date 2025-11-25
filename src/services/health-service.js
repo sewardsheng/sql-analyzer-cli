@@ -11,7 +11,7 @@ import { promisify } from 'util';
 
 class HealthService {
   constructor() {
-    this.projectRoot = path.resolve(__dirname, '../../..');
+    this.projectRoot = path.resolve(process.cwd());
     this.checks = new Map();
     this.execAsync = promisify(exec);
     this.setupDefaultChecks();
@@ -115,8 +115,12 @@ class HealthService {
 
   /**
    * 执行所有健康检查
+   * 添加整体超时控制，防止长时间阻塞
    */
   async performAllChecks() {
+    const overallTimeout = 30000; // 30秒总体超时
+    const startTime = Date.now();
+    
     const results = {
       timestamp: new Date().toISOString(),
       status: 'healthy',
@@ -126,15 +130,75 @@ class HealthService {
         passed: 0,
         failed: 0,
         warnings: 0
-      }
+      },
+      duration: 0
     };
 
     console.log(chalk.blue('🏥 开始健康检查...\n'));
 
+    try {
+      // 创建超时Promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`健康检查总体超时 (${overallTimeout}ms)`));
+        }, overallTimeout);
+      });
+
+      // 执行所有检查的Promise
+      const checksPromise = this._executeAllChecks(results);
+
+      // 使用Promise.race来控制总体超时
+      await Promise.race([checksPromise, timeoutPromise]);
+      
+    } catch (error) {
+      if (error.message.includes('超时')) {
+        results.status = 'error';
+        console.log(chalk.red(`❌ ${error.message}`));
+        
+        // 标记未完成的检查为超时
+        for (const [id, check] of this.checks) {
+          if (!results.checks[id]) {
+            results.checks[id] = {
+              name: check.name,
+              critical: check.critical,
+              status: 'timeout',
+              message: '检查超时',
+              details: { error: error.message },
+              duration: 0
+            };
+            results.summary.total++;
+            results.summary.failed++;
+          }
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    results.duration = Date.now() - startTime;
+
+    // 输出总结
+    this.printSummary(results);
+
+    return results;
+  }
+
+  /**
+   * 执行所有检查的内部方法
+   */
+  async _executeAllChecks(results) {
     for (const [id, check] of this.checks) {
       try {
         console.log(chalk.yellow(`检查 ${check.name}...`));
-        const result = await check.check();
+        
+        // 为每个检查设置单独的超时
+        const checkTimeout = id === 'network' ? 20000 : 5000; // 网络检查20秒，其他5秒
+        const checkPromise = check.check();
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('检查超时')), checkTimeout);
+        });
+        
+        const result = await Promise.race([checkPromise, timeoutPromise]);
         
         results.checks[id] = {
           name: check.name,
@@ -165,10 +229,11 @@ class HealthService {
         }
 
       } catch (error) {
+        const status = error.message.includes('超时') ? 'timeout' : 'error';
         results.checks[id] = {
           name: check.name,
           critical: check.critical,
-          status: 'error',
+          status: status,
           message: `检查执行失败: ${error.message}`,
           details: { error: error.stack }
         };
@@ -185,11 +250,6 @@ class HealthService {
 
       console.log('');
     }
-
-    // 输出总结
-    this.printSummary(results);
-
-    return results;
   }
 
   /**
@@ -198,10 +258,12 @@ class HealthService {
   async checkCoreModules() {
     const startTime = Date.now();
     const coreModules = [
-      'src/core/coordinator.js',
-      'src/core/reporter.js',
-      'src/core/knowledge-base.js',
-      'src/utils/format/prompt-loader.js',
+      'src/core/engine/analysis-engine.js',
+      'src/core/analyzers/unified-analyzer.js',
+      'src/core/identification/database-identifier.js',
+      'src/core/reporting/report-integrator.js',
+      'src/core/engine/context.js',
+      'src/core/knowledge/knowledge-base.js',
       'src/utils/logger.js'
     ];
 
@@ -214,16 +276,22 @@ class HealthService {
     for (const modulePath of coreModules) {
       try {
         const fullPath = path.join(this.projectRoot, modulePath);
+        
+        // 检查文件是否存在
         await fs.access(fullPath);
         
-        // 尝试加载模块
-        await import(fullPath);
+        // 尝试加载模块 - 使用 file:// URL 格式以兼容 Node.js 和 Bun
+        const fileUrl = new URL(`file://${fullPath.replace(/\\/g, '/')}`);
+        await import(fileUrl);
         results.details.modules[modulePath] = 'loaded';
         
       } catch (error) {
         results.status = 'fail';
         results.message = `核心模块加载失败: ${modulePath}`;
-        results.details.modules[modulePath] = error.message;
+        results.details.modules[modulePath] = {
+          error: error.message,
+          errorType: error.constructor.name
+        };
         break;
       }
     }
@@ -470,13 +538,44 @@ class HealthService {
     };
 
     try {
-      // 简单的磁盘空间检查（通过检查项目目录大小）
-      const projectStats = await this.getDirectorySize(this.projectRoot);
-      results.details.projectSize = Math.round(projectStats.size / 1024 / 1024) + 'MB';
-      results.details.fileCount = projectStats.files;
+      // 优化：只检查关键目录，避免递归遍历整个项目
+      const criticalDirs = [
+        'src',
+        'node_modules',
+        'docs',
+        'rules'
+      ];
+      
+      let totalSize = 0;
+      let fileCount = 0;
+      const dirDetails = {};
+
+      for (const dir of criticalDirs) {
+        const dirPath = path.join(this.projectRoot, dir);
+        try {
+          const stats = await this.getDirectorySizeOptimized(dirPath);
+          totalSize += stats.size;
+          fileCount += stats.files;
+          dirDetails[dir] = {
+            size: Math.round(stats.size / 1024 / 1024) + 'MB',
+            files: stats.files
+          };
+        } catch (error) {
+          // 目录不存在或无法访问
+          dirDetails[dir] = {
+            error: error.message,
+            size: '0MB',
+            files: 0
+          };
+        }
+      }
+
+      results.details.projectSize = Math.round(totalSize / 1024 / 1024) + 'MB';
+      results.details.fileCount = fileCount;
+      results.details.directories = dirDetails;
 
       // 检查是否有足够的磁盘空间（这里简化处理）
-      if (projectStats.size > 1024 * 1024 * 1024) { // 1GB
+      if (totalSize > 1024 * 1024 * 1024) { // 1GB
         results.status = 'warning';
         results.message = '项目目录较大，建议清理';
       }
@@ -491,32 +590,47 @@ class HealthService {
   }
 
   /**
-   * 获取目录大小
+   * 优化的目录大小获取方法
+   * 限制递归深度和文件数量，避免性能问题
    */
-  async getDirectorySize(dirPath) {
+  async getDirectorySizeOptimized(dirPath, maxDepth = 2, maxFiles = 1000) {
     let totalSize = 0;
     let fileCount = 0;
+    let currentDepth = 0;
 
-    try {
-      const items = await fs.readdir(dirPath);
-      
-      for (const item of items) {
-        const itemPath = path.join(dirPath, item);
-        const stats = await fs.stat(itemPath);
-        
-        if (stats.isDirectory()) {
-          const subResult = await this.getDirectorySize(itemPath);
-          totalSize += subResult.size;
-          fileCount += subResult.files;
-        } else {
-          totalSize += stats.size;
-          fileCount++;
-        }
+    const scanDirectory = async (currentPath, depth) => {
+      if (depth > maxDepth || fileCount > maxFiles) {
+        return;
       }
-    } catch (error) {
-      // 忽略无法访问的文件
-    }
 
+      try {
+        const items = await fs.readdir(currentPath, { withFileTypes: true });
+        
+        for (const item of items) {
+          if (fileCount > maxFiles) break;
+          
+          const itemPath = path.join(currentPath, item.name);
+          
+          if (item.isDirectory()) {
+            if (depth < maxDepth) {
+              await scanDirectory(itemPath, depth + 1);
+            }
+          } else {
+            try {
+              const stats = await fs.stat(itemPath);
+              totalSize += stats.size;
+              fileCount++;
+            } catch (error) {
+              // 忽略无法访问的文件
+            }
+          }
+        }
+      } catch (error) {
+        // 忽略无法访问的目录
+      }
+    };
+
+    await scanDirectory(dirPath, currentDepth);
     return { size: totalSize, files: fileCount };
   }
 
@@ -650,6 +764,7 @@ class HealthService {
 
   /**
    * 检查网络连接
+   * 优化网络检查逻辑，提高成功率和可靠性
    */
   async checkNetworkConnectivity() {
     const startTime = Date.now();
@@ -660,34 +775,101 @@ class HealthService {
     };
 
     try {
+      // 使用更适合国内环境的测试URL
       const testUrls = [
-        'https://www.google.com',
-        'https://www.github.com',
-        'https://api.openai.com'
+        'https://www.baidu.com', // 国内网站，响应最快
+        'https://www.taobao.com', // 国内大型网站
       ];
 
       const connectivityResults = [];
+      const timeout = 5000; // 增加到5秒超时，提高成功率
       
-      for (const url of testUrls) {
-        try {
-          const response = await fetch(url, {
-            method: 'HEAD',
-            signal: AbortSignal.timeout(5000) // 5秒超时
-          });
-          
-          connectivityResults.push({
-            url,
-            status: 'connected',
-            responseTime: Date.now() - startTime,
-            statusCode: response.status
-          });
-        } catch (error) {
-          connectivityResults.push({
-            url,
-            status: 'failed',
-            error: error.message
-          });
+      // 使用Promise.allSettled来并行处理，但设置总体超时
+      const promises = testUrls.map(async (url) => {
+        const urlStartTime = Date.now();
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            // 使用GET请求而不是HEAD，某些服务器可能不支持HEAD
+            const response = await fetch(url, {
+              method: 'GET',
+              signal: controller.signal,
+              headers: {
+                'User-Agent': 'SQL-Analyzer-Health-Check/1.0',
+                'Accept': 'text/plain,text/html,*/*'
+              }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            return {
+              url,
+              status: 'connected',
+              responseTime: Date.now() - urlStartTime,
+              statusCode: response.status,
+              retryCount
+            };
+          } catch (error) {
+            retryCount++;
+            
+            // 如果不是最后一次重试，继续重试
+            if (retryCount <= maxRetries) {
+              // 等待一段时间再重试
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+            
+            // 最后一次重试失败，返回错误
+            return {
+              url,
+              status: 'failed',
+              error: this.getNetworkErrorMessage(error),
+              responseTime: Date.now() - urlStartTime,
+              retryCount
+            };
+          }
         }
+      });
+
+      // 设置总体超时为25秒，给重试留出时间
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('网络检查总体超时')), 25000);
+      });
+
+      try {
+        const settledResults = await Promise.race([
+          Promise.allSettled(promises),
+          timeoutPromise
+        ]);
+        
+        if (Array.isArray(settledResults)) {
+          connectivityResults.push(...settledResults.map(result =>
+            result.status === 'fulfilled' ? result.value : {
+              url: 'unknown',
+              status: 'failed',
+              error: result.reason.message,
+              retryCount: 0
+            }
+          ));
+        }
+      } catch (error) {
+        // 总体超时，使用已完成的请求结果
+        const partialResults = await Promise.allSettled(promises);
+        connectivityResults.push(...partialResults.map(result =>
+          result.status === 'fulfilled' ? result.value : {
+            url: 'unknown',
+            status: 'failed',
+            error: result.reason.message,
+            retryCount: 0
+          }
+        ));
+        results.status = 'warning';
+        results.message = '网络检查部分超时';
       }
 
       const connectedCount = connectivityResults.filter(r => r.status === 'connected').length;
@@ -698,12 +880,15 @@ class HealthService {
         results: connectivityResults
       };
 
+      // 更宽松的判断标准：只要有1个连接成功就认为网络正常
       if (connectedCount === 0) {
         results.status = 'fail';
         results.message = '所有网络连接测试失败';
       } else if (connectedCount < testUrls.length) {
         results.status = 'warning';
-        results.message = '部分网络连接测试失败';
+        results.message = `部分网络连接测试失败 (${connectedCount}/${testUrls.length})`;
+      } else {
+        results.message = `网络连接正常 (${connectedCount}/${testUrls.length})`;
       }
 
     } catch (error) {
@@ -714,6 +899,27 @@ class HealthService {
 
     results.duration = Date.now() - startTime;
     return results;
+  }
+
+  /**
+   * 获取网络错误的友好描述
+   */
+  getNetworkErrorMessage(error) {
+    if (error.name === 'AbortError') {
+      return '请求超时';
+    } else if (error.code === 'ENOTFOUND') {
+      return 'DNS解析失败';
+    } else if (error.code === 'ECONNREFUSED') {
+      return '连接被拒绝';
+    } else if (error.code === 'ECONNRESET') {
+      return '连接被重置';
+    } else if (error.code === 'ETIMEDOUT') {
+      return '连接超时';
+    } else if (error.message.includes('fetch failed')) {
+      return '网络请求失败';
+    } else {
+      return error.message || '未知网络错误';
+    }
   }
 
   /**
@@ -858,6 +1064,7 @@ class HealthService {
 
   /**
    * 检查API性能
+   * 修复循环依赖问题，避免在健康检查中调用自身API
    */
   async checkApiPerformance() {
     const startTime = Date.now();
@@ -868,61 +1075,51 @@ class HealthService {
     };
 
     try {
+      // 避免循环依赖：不调用自身API，而是检查内部状态
       const testStartTime = Date.now();
       
-      // 测试内部API端点
-      const testEndpoints = [
-        '/api/health/ping',
-        '/api/health/status'
-      ];
-
-      const performanceResults = [];
+      // 检查内存使用情况作为性能指标
+      const memUsage = process.memoryUsage();
+      const uptime = process.uptime();
       
-      for (const endpoint of testEndpoints) {
-        try {
-          const response = await fetch(`http://localhost:${process.env.PORT || 3000}${endpoint}`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000)
-          });
-          
-          const responseTime = Date.now() - testStartTime;
-          performanceResults.push({
-            endpoint,
-            status: response.ok ? 'success' : 'failed',
-            responseTime,
-            statusCode: response.status
-          });
-        } catch (error) {
-          performanceResults.push({
-            endpoint,
-            status: 'error',
-            error: error.message
-          });
+      // 检查事件循环延迟
+      const eventLoopDelay = await this.measureEventLoopDelay();
+      
+      // 检查CPU使用情况
+      const cpuUsage = process.cpuUsage();
+      
+      const performanceMetrics = {
+        memory: {
+          rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB'
+        },
+        uptime: Math.round(uptime) + 's',
+        eventLoopDelay: Math.round(eventLoopDelay * 100) / 100 + 'ms',
+        cpuUsage: {
+          user: Math.round(cpuUsage.user / 1000) + 'ms',
+          system: Math.round(cpuUsage.system / 1000) + 'ms'
         }
-      }
-
-      const successCount = performanceResults.filter(r => r.status === 'success').length;
-      const avgResponseTime = performanceResults
-        .filter(r => r.responseTime)
-        .reduce((sum, r) => sum + r.responseTime, 0) / successCount || 0;
-
-      results.details = {
-        tested: testEndpoints.length,
-        success: successCount,
-        failed: testEndpoints.length - successCount,
-        averageResponseTime: Math.round(avgResponseTime) + 'ms',
-        results: performanceResults
       };
 
-      if (successCount === 0) {
-        results.status = 'fail';
-        results.message = '所有API性能测试失败';
-      } else if (avgResponseTime > 2000) {
+      results.details = {
+        metrics: performanceMetrics,
+        timestamp: new Date().toISOString()
+      };
+
+      // 基于性能指标判断状态
+      const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+      const eventLoopDelayMs = eventLoopDelay;
+      
+      if (heapUsedMB > 500) { // 内存使用超过500MB
         results.status = 'warning';
-        results.message = 'API响应时间较慢';
-      } else if (successCount < testEndpoints.length) {
+        results.message = '内存使用较高';
+      } else if (eventLoopDelayMs > 10) { // 事件循环延迟超过10ms
         results.status = 'warning';
-        results.message = '部分API性能测试失败';
+        results.message = '事件循环延迟较高';
+      } else if (uptime < 5) { // 服务刚启动
+        results.status = 'pass';
+        results.message = 'API服务正在启动中';
       }
 
     } catch (error) {
@@ -933,6 +1130,20 @@ class HealthService {
 
     results.duration = Date.now() - startTime;
     return results;
+  }
+
+  /**
+   * 测量事件循环延迟
+   */
+  async measureEventLoopDelay() {
+    return new Promise((resolve) => {
+      const start = process.hrtime.bigint();
+      setImmediate(() => {
+        const end = process.hrtime.bigint();
+        const delay = Number(end - start) / 1000000; // 转换为毫秒
+        resolve(delay);
+      });
+    });
   }
 }
 

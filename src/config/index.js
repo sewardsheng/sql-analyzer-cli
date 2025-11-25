@@ -10,24 +10,14 @@ export const DEFAULT_CONFIG = {
   apiKey: '',
   model: 'zai-org/GLM-4.6',
   embeddingModel: 'BAAI/bge-m3',
-  apiPort: 3000,
+  apiPort: 3001,
   apiHost: '0.0.0.0',
   apiCorsEnabled: true,
   apiCorsOrigin: '*',
   // 摘要显示配置
   enableAISummary: true,
   enableColors: true,
-  summaryOutputFormat: 'pretty',
-  // Headless 模式配置
-  headless: {
-    defaultFormat: 'summary',     // 默认输出格式
-    defaultThreshold: 70,         // 默认评分阈值
-    scoreWeights: {
-      security: 0.50,             // 安全权重50%
-      performance: 0.30,          // 性能权重30%
-      standards: 0.20             // 规范权重20%
-    }
-  }
+  summaryOutputFormat: 'pretty'
 };
 
 // 配置键映射 (内部键名 -> 环境变量名)
@@ -42,10 +32,7 @@ const CONFIG_MAP = {
   apiCorsOrigin: 'API_CORS_ORIGIN',
   enableAISummary: 'ENABLE_AI_SUMMARY',
   enableColors: 'ENABLE_COLORS',
-  summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT',
-  // Headless 模式配置
-  'headless.defaultFormat': 'HEADLESS_DEFAULT_FORMAT',
-  'headless.defaultThreshold': 'HEADLESS_DEFAULT_THRESHOLD'
+  summaryOutputFormat: 'SUMMARY_OUTPUT_FORMAT'
 };
 
 // 配置键描述
@@ -60,9 +47,7 @@ const CONFIG_DESC = {
   apiCorsOrigin: 'CORS允许的源',
   enableAISummary: '是否启用AI摘要',
   enableColors: '是否启用颜色输出',
-  summaryOutputFormat: '摘要输出格式',
-  'headless.defaultFormat': 'Headless默认输出格式',
-  'headless.defaultThreshold': 'Headless默认评分阈值'
+  summaryOutputFormat: '摘要输出格式'
 };
 
 /**
@@ -139,25 +124,9 @@ class ConfigManager {
           if (isNaN(config[key])) config[key] = DEFAULT_CONFIG[key];
         } else if (key === 'apiCorsEnabled' || key === 'enableAISummary' || key === 'enableColors') {
           config[key] = envValue ? envValue === 'true' : DEFAULT_CONFIG[key];
-        } else if (key.startsWith('headless.')) {
-          // 处理 Headless 嵌套配置
-          const headlessKey = key.substring(9); // 移除 'headless.' 前缀
-          if (!config.headless) config.headless = { ...DEFAULT_CONFIG.headless };
-          
-          if (headlessKey === 'defaultThreshold') {
-            config.headless[headlessKey] = envValue ? parseInt(envValue, 10) : DEFAULT_CONFIG.headless[headlessKey];
-            if (isNaN(config.headless[headlessKey])) config.headless[headlessKey] = DEFAULT_CONFIG.headless[headlessKey];
-          } else {
-            config.headless[headlessKey] = envValue || DEFAULT_CONFIG.headless[headlessKey];
-          }
         } else {
           config[key] = envValue || DEFAULT_CONFIG[key];
         }
-      }
-      
-      // 确保 Headless 配置完整
-      if (!config.headless) {
-        config.headless = { ...DEFAULT_CONFIG.headless };
       }
       
       return config;

@@ -1,1 +1,0 @@
-select type, query_start_time, query_duration_ms/1000,formatReadableSize(memory_usage), databases, tables,user, query  from  system.query_log  order by memory_usage desc limit 5 \G;

@@ -7,7 +7,7 @@ import { createDefaultCorsMiddleware } from './cors.js';
 import { createDefaultRequestLoggerMiddleware } from './request-logger.js';
 import { createDefaultRateLimiterMiddleware, createAnalysisRateLimiterMiddleware } from './rate-limiter.js';
 import { createDefaultErrorHandlerMiddleware, notFoundHandlerMiddleware } from './error-handler.js';
-import { ApiError, ErrorTypes, createValidationError, createNotFoundError, createExternalServiceError } from '../utils/api/api-error.js';
+import { ApiError, ErrorTypes, createValidationError, createNotFoundError, createExternalError } from '../utils/api/api-error.js';
 
 /**
  * 创建默认中间件链
@@ -74,5 +74,5 @@ export {
   ErrorTypes,
   createValidationError,
   createNotFoundError,
-  createExternalServiceError
+  createExternalError
 };

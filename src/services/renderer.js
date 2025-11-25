@@ -21,8 +21,8 @@ export function displayResult(result) {
   }
   
   // 子代理模式结果
-  if (result.subagentsData || 
-      (result.performanceAnalysis && result.securityAudit && result.standardsCheck)) {
+  if (result.subagentsData ||
+      (result.performance && result.security && result.standards)) {
     displaySubagentsResult(result);
     return;
   }
@@ -48,21 +48,21 @@ function displayStandardResult(result) {
     console.log();
   }
   
-  if (result.performanceAnalysis) {
+  if (result.performance) {
     console.log(chalk.blue('🔍 性能分析:'));
-    console.log(result.performanceAnalysis);
+    console.log(result.performance);
     console.log();
   }
   
-  if (result.securityAudit) {
+  if (result.security) {
     console.log(chalk.yellow('🛡️  安全审计:'));
-    console.log(result.securityAudit);
+    console.log(result.security);
     console.log();
   }
   
-  if (result.standardsCheck) {
+  if (result.standards) {
     console.log(chalk.cyan('📝 编码规范检查:'));
-    console.log(result.standardsCheck);
+    console.log(result.standards);
     console.log();
   }
   
@@ -94,21 +94,21 @@ function displayStandardResult(result) {
 function displaySubagentsResult(result) {
   console.log(chalk.blue('\n🚀 分析结果\n'));
   
-  if (result.performanceAnalysis) {
+  if (result.performance) {
     console.log(chalk.blue('🔍 性能分析:'));
-    console.log(result.performanceAnalysis);
+    console.log(result.performance);
     console.log();
   }
   
-  if (result.securityAudit) {
+  if (result.security) {
     console.log(chalk.yellow('🛡️  安全审计:'));
-    console.log(result.securityAudit);
+    console.log(result.security);
     console.log();
   }
   
-  if (result.standardsCheck) {
+  if (result.standards) {
     console.log(chalk.cyan('📝 编码规范检查:'));
-    console.log(result.standardsCheck);
+    console.log(result.standards);
     console.log();
   }
   

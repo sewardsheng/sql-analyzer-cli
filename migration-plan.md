@@ -23,7 +23,6 @@ src/
 │       ├── codingStandardsChecker.js
 │       ├── intelligentRuleLearner.js
 │       ├── performanceAnalyzer.js
-│       ├── quickAnalyzer.js
 │       └── securityAuditor.js
 ├── middleware/
 │   ├── cors.js
@@ -117,7 +116,6 @@ src/
 │       ├── coding-standards-checker.js
 │       ├── intelligent-rule-learner.js
 │       ├── performance-analyzer.js
-│       ├── quick-analyzer.js
 │       └── security-auditor.js
 ├── config/
 │   ├── index.js
@@ -195,7 +193,6 @@ src/
 | `src/core/analyzers/codingStandardsChecker.js` | `src/core/analyzers/coding-standards-checker.js` | 移动+重命名 | 驼峰转连字符 |
 | `src/core/analyzers/intelligentRuleLearner.js` | `src/core/analyzers/intelligent-rule-learner.js` | 移动+重命名 | 驼峰转连字符 |
 | `src/core/analyzers/performanceAnalyzer.js` | `src/core/analyzers/performance-analyzer.js` | 移动+重命名 | 驼峰转连字符 |
-| `src/core/analyzers/quickAnalyzer.js` | `src/core/analyzers/quick-analyzer.js` | 移动+重命名 | 驼峰转连字符 |
 | `src/core/analyzers/securityAuditor.js` | `src/core/analyzers/security-auditor.js` | 移动+重命名 | 驼峰转连字符 |
 
 ### 5. 中间件迁移
@@ -312,7 +309,6 @@ src/
    - `src/core/analyzers/codingStandardsChecker.js` → `src/core/analyzers/coding-standards-checker.js`
    - `src/core/analyzers/intelligentRuleLearner.js` → `src/core/analyzers/intelligent-rule-learner.js`
    - `src/core/analyzers/performanceAnalyzer.js` → `src/core/analyzers/performance-analyzer.js`
-   - `src/core/analyzers/quickAnalyzer.js` → `src/core/analyzers/quick-analyzer.js`
    - `src/core/analyzers/securityAuditor.js` → `src/core/analyzers/security-auditor.js`
 
 3. **创建分析引擎**
@@ -500,7 +496,6 @@ import { ApiError, ErrorTypes } from '../utils/api/api-error.js';
 - [ ] SQL安全审计
 - [ ] SQL编码规范检查
 - [ ] 批量分析功能
-- [ ] 快速分析模式
 
 #### API功能
 - [ ] POST /api/analyze

@@ -14,7 +14,7 @@ import {
   isVectorStorePersisted, 
   loadVectorStoreFromDisk,
   retrieveDocuments
-} from '../core/vector-store.js';
+} from '../core/index.js';
 
 /**
  * 知识库业务服务类
