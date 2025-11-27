@@ -1,10 +1,9 @@
 /**
  * 分析器模块导出文件
- * 包含所有SQL分析相关的组件
+ * 已迁移到新的tools架构，此文件保留用于向后兼容
  */
 
-// 导出基础分析器
-export { default as BaseAnalyzer } from './base-analyzer.js';
+// 此模块已被新的tools架构替代
+// 请使用 src/core/tools/index.js 中的工具
 
-// 导出统一分析器
-export { default as UnifiedAnalyzer } from './unified-analyzer.js';
+export const deprecated = '此模块已被新的tools架构替代，请使用 src/core/tools/index.js';

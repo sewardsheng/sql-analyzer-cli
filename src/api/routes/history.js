@@ -4,8 +4,9 @@
  */
 
 import chalk from 'chalk';
-import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-handler.js';
 import { createValidationError } from '../../utils/api/api-error.js';
+
+import { formatSuccessResponse, formatErrorResponse, formatPaginatedResponse } from '../../utils/api/response-formatter.js';
 
 /**
  * 注册历史记录相关路由
@@ -18,7 +19,7 @@ export function registerHistoryRoutes(app) {
    */
   app.get('/api/history', async (c) => {
     try {
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const history = await historyService.getAllHistory();
       
@@ -40,7 +41,7 @@ export function registerHistoryRoutes(app) {
   app.get('/api/history/:id', async (c) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const record = await historyService.getHistoryById(id);
       
@@ -64,7 +65,7 @@ export function registerHistoryRoutes(app) {
   app.delete('/api/history/:id', async (c) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const success = await historyService.deleteHistory(id);
       
@@ -89,7 +90,7 @@ export function registerHistoryRoutes(app) {
    */
   app.delete('/api/history', async (c) => {
     try {
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const success = await historyService.clearAllHistory();
       
@@ -114,7 +115,7 @@ export function registerHistoryRoutes(app) {
    */
   app.get('/api/history/stats', async (c) => {
     try {
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const stats = await historyService.getHistoryStats();
       
@@ -143,7 +144,7 @@ export function registerHistoryRoutes(app) {
   app.post('/api/history/search', async (c) => {
     try {
       const body = await c.req.json();
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const results = await historyService.searchHistory(body);
       
@@ -166,7 +167,7 @@ export function registerHistoryRoutes(app) {
   app.get('/api/history/export', async (c) => {
     try {
       const format = c.req.query('format') || 'json';
-      const { getHistoryService } = await import('../../history/historyService.js');
+      const { getHistoryService } = await import('../../services/history/historyService.js');
       const historyService = getHistoryService();
       const result = await historyService.exportHistory({ format });
       

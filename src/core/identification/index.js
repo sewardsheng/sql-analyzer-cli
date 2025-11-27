@@ -4,4 +4,4 @@
  */
 
 // 导出数据库识别器
-export { default as DatabaseIdentifier } from './database-identifier.js';
+export { DatabaseIdentifier } from './database-identifier.js';

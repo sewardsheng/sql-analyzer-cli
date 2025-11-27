@@ -4,18 +4,16 @@
  */
 
 import { Hono } from 'hono';
-import { getAnalysisEngine } from '../core/index.js';
-import { getConfigManager } from '../config/index.js';
+import { getAPIConfig } from '../config/ConfigAdapters.js';
 import { logInfo, logError, logApiRequest, logApiError, generateRequestId } from '../utils/logger.js';
 
 // 导入路由模块
 import { registerAnalyzeRoutes } from './routes/analyze.js';
+import { registerConfigRoutes } from './routes/config.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerKnowledgeRoutes } from './routes/knowledge.js';
-import { registerConfigRoutes } from './routes/config.js';
-import { registerInitRoutes } from './routes/init.js';
-import { registerStatusRoutes } from './routes/status.js';
-import { registerHealthRoutes } from './routes/health.js';
+import { registerSystemRoutes } from './routes/system.js';
+import { registerRuleLearningRoutes } from './routes/rule-learning-hono.js';
 
 // 导入API文档
 // import { setupDocs } from './docs.js'; // 暂时禁用
@@ -39,15 +37,14 @@ import {
  * @returns {Promise<Object>} 服务器实例
  */
 export async function createApiServer(options = {}) {
-  const configManager = getConfigManager();
-  const config = await configManager.getConfig();
+  const apiConfig = getAPIConfig();
   
   // 合并配置
   const serverConfig = {
-    port: options.port || config.apiPort || 3000,
-    host: options.host || config.apiHost || '0.0.0.0',
-    corsEnabled: options.cors !== false && config.apiCorsEnabled !== false,
-    corsOrigin: options.corsOrigin || config.apiCorsOrigin || '*',
+    port: options.port || apiConfig.port,
+    host: options.host || apiConfig.host,
+    corsEnabled: options.cors !== false && apiConfig.corsEnabled,
+    corsOrigin: options.corsOrigin || apiConfig.corsOrigin,
     nodeEnv: options.nodeEnv || process.env.NODE_ENV || 'development',
     logLevel: options.logLevel || process.env.LOG_LEVEL || 'info'
   };
@@ -79,20 +76,16 @@ export async function createApiServer(options = {}) {
   app.use('*', createDefaultRateLimiterMiddleware());
   app.use('*', createDefaultRequestLoggerMiddleware());
   
-  // 注册路由模块
+  // 注册路由
   registerAnalyzeRoutes(app);
   registerHistoryRoutes(app);
   registerKnowledgeRoutes(app);
   registerConfigRoutes(app);
-  registerInitRoutes(app);
-  registerStatusRoutes(app);
-  registerHealthRoutes(app);
+  registerSystemRoutes(app);
+  registerRuleLearningRoutes(app);
   
   // 设置API文档
   // setupDocs(app); // 暂时禁用
-  
-  // 获取分析引擎实例
-  const analysisEngine = getAnalysisEngine();
   
   // 注册错误处理中间件（使用 Hono 的正确方式）
   app.onError(async (error, c) => {
@@ -149,7 +142,21 @@ export async function createApiServer(options = {}) {
         historyStats: 'GET /api/history/stats',
         knowledge: 'GET /api/knowledge',
         knowledgeSearch: 'POST /api/knowledge/search',
-        knowledgeLearn: 'POST /api/knowledge/learn'
+        knowledgeLearn: 'POST /api/knowledge/learn',
+        ruleLearning: {
+          config: 'GET /api/rule-learning/config',
+          updateConfig: 'PUT /api/rule-learning/config',
+          resetConfig: 'POST /api/rule-learning/config/reset',
+          status: 'GET /api/rule-learning/status',
+          learn: 'POST /api/rule-learning/learn',
+          history: 'GET /api/rule-learning/history',
+          rules: 'GET /api/rule-learning/rules',
+          ruleDetail: 'GET /api/rule-learning/rules/:ruleId',
+          approveRule: 'POST /api/rule-learning/rules/:ruleId/approve',
+          deleteRule: 'DELETE /api/rule-learning/rules/:ruleId',
+          statistics: 'GET /api/rule-learning/statistics',
+          cleanup: 'DELETE /api/rule-learning/cleanup'
+        }
       },
       documentation: '/api/docs/swagger',
       openapi: '/api/docs/doc'

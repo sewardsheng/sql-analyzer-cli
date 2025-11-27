@@ -4,8 +4,9 @@
  */
 
 import chalk from 'chalk';
-import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-handler.js';
 import { createValidationError } from '../../utils/api/api-error.js';
+
+import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 
 /**
  * 注册配置管理相关路由

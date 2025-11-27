@@ -91,13 +91,6 @@ class HealthService {
       check: () => this.checkExternalServices()
     });
 
-    // 数据库连接检查
-    this.addCheck('database-connections', {
-      name: '数据库连接',
-      critical: false,
-      check: () => this.checkDatabaseConnections()
-    });
-
     // API响应时间检查
     this.addCheck('api-performance', {
       name: 'API性能',
@@ -258,12 +251,14 @@ class HealthService {
   async checkCoreModules() {
     const startTime = Date.now();
     const coreModules = [
-      'src/core/engine/analysis-engine.js',
-      'src/core/analyzers/unified-analyzer.js',
+      'src/core/sql-analyzer.js',
+      'src/core/llm-json-parser.js',
+      'src/core/llm-service.js',
       'src/core/identification/database-identifier.js',
-      'src/core/reporting/report-integrator.js',
-      'src/core/engine/context.js',
-      'src/core/knowledge/knowledge-base.js',
+      'src/core/tools/base-tool.js',
+      'src/core/tools/performance-tool.js',
+      'src/core/tools/security-tool.js',
+      'src/core/tools/standards-tool.js',
       'src/utils/logger.js'
     ];
 
@@ -307,8 +302,7 @@ class HealthService {
     const startTime = Date.now();
     const configFiles = [
       'package.json',
-      '.env.example',
-      'src/config/databases.js'
+      '.env.example'
     ];
 
     const results = {
@@ -538,7 +532,7 @@ class HealthService {
     };
 
     try {
-      // 优化：只检查关键目录，避免递归遍历整个项目
+      // 只检查关键目录，避免递归遍历整个项目
       const criticalDirs = [
         'src',
         'node_modules',
@@ -575,10 +569,21 @@ class HealthService {
       results.details.directories = dirDetails;
 
       // 检查是否有足够的磁盘空间（这里简化处理）
-      if (totalSize > 1024 * 1024 * 1024) { // 1GB
+      // 增加更详细的磁盘空间检查逻辑
+      const sizeGB = totalSize / (1024 * 1024 * 1024);
+      if (sizeGB > 5) { // 5GB
+        results.status = 'fail';
+        results.message = '项目目录过大，需要立即清理';
+      } else if (sizeGB > 2) { // 2GB
         results.status = 'warning';
         results.message = '项目目录较大，建议清理';
+      } else if (sizeGB > 1) { // 1GB
+        results.status = 'warning';
+        results.message = '项目目录大小适中，可考虑优化';
       }
+      
+      // 添加详细的大小信息
+      results.details.sizeGB = Math.round(sizeGB * 100) / 100 + 'GB';
 
     } catch (error) {
       results.status = 'warning';
@@ -590,7 +595,7 @@ class HealthService {
   }
 
   /**
-   * 优化的目录大小获取方法
+   * 目录大小获取方法
    * 限制递归深度和文件数量，避免性能问题
    */
   async getDirectorySizeOptimized(dirPath, maxDepth = 2, maxFiles = 1000) {
@@ -669,11 +674,101 @@ class HealthService {
   /**
    * 生成健康报告
    */
+  /**
+   * 生成报告
+   * 为API路由提供格式化的健康检查报告
+   */
   generateReport(results) {
     return {
       ...results,
-      recommendations: this.generateRecommendations(results)
+      recommendations: this.generateRecommendations(results),
+      report: this.formatHealthReport(results)
     };
+  }
+
+  /**
+   * 格式化健康检查报告
+   * 提供更友好的报告格式
+   */
+  formatHealthReport(results) {
+    const lines = [];
+    lines.push(chalk.bold.blue('系统健康检查报告'));
+    lines.push(`检查时间: ${new Date(results.timestamp).toLocaleString()}`);
+    lines.push(`总体状态: ${this.getStatusColor(results.status)}`);
+    lines.push(`检查耗时: ${results.duration}ms`);
+    lines.push('');
+    
+    lines.push(chalk.bold('检查摘要:'));
+    lines.push(`  总检查项: ${results.summary.total}`);
+    lines.push(`  通过: ${chalk.green(results.summary.passed)}`);
+    lines.push(`  失败: ${chalk.red(results.summary.failed)}`);
+    lines.push(`  警告: ${chalk.yellow(results.summary.warnings)}`);
+    lines.push('');
+    
+    lines.push(chalk.bold('详细结果:'));
+    for (const [id, check] of Object.entries(results.checks)) {
+      const statusIcon = this.getStatusIcon(check.status);
+      const criticalMark = check.critical ? ' [关键]' : '';
+      lines.push(`  ${statusIcon} ${check.name}${criticalMark}: ${check.message}`);
+      
+      if (check.details && Object.keys(check.details).length > 0) {
+        for (const [key, value] of Object.entries(check.details)) {
+          if (typeof value === 'object') {
+            lines.push(`    ${key}: ${JSON.stringify(value)}`);
+          } else {
+            lines.push(`    ${key}: ${value}`);
+          }
+        }
+      }
+    }
+    
+    const recommendations = this.generateRecommendations(results);
+    if (recommendations.length > 0) {
+      lines.push('');
+      lines.push(chalk.bold('建议:'));
+      recommendations.forEach((rec, index) => {
+        lines.push(`  ${index + 1}. ${rec}`);
+      });
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * 获取状态颜色
+   */
+  getStatusColor(status) {
+    switch (status) {
+      case 'healthy':
+        return chalk.green('健康');
+      case 'degraded':
+        return chalk.yellow('降级');
+      case 'unhealthy':
+        return chalk.red('不健康');
+      case 'error':
+        return chalk.red('错误');
+      default:
+        return status;
+    }
+  }
+
+  /**
+   * 获取状态图标
+   */
+  getStatusIcon(status) {
+    switch (status) {
+      case 'pass':
+        return chalk.green('✓');
+      case 'warning':
+        return chalk.yellow('⚠️');
+      case 'fail':
+      case 'error':
+        return chalk.red('❌');
+      case 'timeout':
+        return chalk.red('⏱️');
+      default:
+        return chalk.gray('?');
+    }
   }
 
   /**
@@ -764,7 +859,7 @@ class HealthService {
 
   /**
    * 检查网络连接
-   * 优化网络检查逻辑，提高成功率和可靠性
+   * 改进网络检查逻辑，提高成功率和可靠性
    */
   async checkNetworkConnectivity() {
     const startTime = Date.now();
@@ -989,80 +1084,6 @@ class HealthService {
   }
 
   /**
-   * 检查数据库连接
-   */
-  async checkDatabaseConnections() {
-    const startTime = Date.now();
-    const results = {
-      status: 'pass',
-      message: '数据库连接正常',
-      details: {}
-    };
-
-    try {
-      const databases = [];
-      
-      // 检查配置的数据库连接
-      const { getConfigManager } = await import('../config/index.js');
-      const configManager = getConfigManager();
-      const config = await configManager.getConfig();
-      
-      if (config.databases) {
-        for (const [name, dbConfig] of Object.entries(config.databases)) {
-          try {
-            // 这里应该根据数据库类型进行实际连接测试
-            // 简化处理，只检查配置是否完整
-            if (dbConfig.host && dbConfig.port && dbConfig.database) {
-              databases.push({
-                name,
-                status: 'configured',
-                host: dbConfig.host,
-                port: dbConfig.port,
-                type: dbConfig.type || 'unknown'
-              });
-            } else {
-              databases.push({
-                name,
-                status: 'incomplete',
-                error: '配置不完整'
-              });
-            }
-          } catch (error) {
-            databases.push({
-              name,
-              status: 'error',
-              error: error.message
-            });
-          }
-        }
-      }
-
-      const configuredCount = databases.filter(d => d.status === 'configured').length;
-      results.details = {
-        total: databases.length,
-        configured: configuredCount,
-        databases
-      };
-
-      if (databases.length > 0 && configuredCount === 0) {
-        results.status = 'fail';
-        results.message = '所有数据库配置有问题';
-      } else if (configuredCount < databases.length) {
-        results.status = 'warning';
-        results.message = '部分数据库配置有问题';
-      }
-
-    } catch (error) {
-      results.status = 'warning';
-      results.message = `数据库连接检查失败: ${error.message}`;
-      results.details.error = error.message;
-    }
-
-    results.duration = Date.now() - startTime;
-    return results;
-  }
-
-  /**
    * 检查API性能
    * 修复循环依赖问题，避免在健康检查中调用自身API
    */
@@ -1131,7 +1152,6 @@ class HealthService {
     results.duration = Date.now() - startTime;
     return results;
   }
-
   /**
    * 测量事件循环延迟
    */

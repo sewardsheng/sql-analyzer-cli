@@ -1,11 +1,12 @@
 /**
- * SQL分析路由模块 - 新架构版本
- * 提供SQL分析相关的API端点，移除向后兼容代码
+ * SQL分析路由模块
+ * 使用新的SQLAnalyzer
  */
 
-import { getAnalysisEngine } from '../../core/index.js';
-import { formatAnalysisResult, formatBatchAnalysisResults } from '../../utils/api/response-handler.js';
+import { sqlAnalyzer } from '../../core/index.js';
 import { createValidationError } from '../../utils/api/api-error.js';
+import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
+import { getLearningConfig } from '../../config/ConfigAdapters.js';
 
 /**
  * 注册分析相关路由
@@ -32,47 +33,82 @@ export function registerAnalyzeRoutes(app) {
         throw createValidationError('SQL语句不能为空');
       }
       
-      // 准备新架构分析选项
-      const analysisOptions = {
-        learning: body.options?.learning === true,
-        analysisConfig: body.options?.analysisConfig || {}
+      // 准备分析选项
+      const options = {
+        performance: body.options?.performance !== false,
+        security: body.options?.security !== false,
+        standards: body.options?.standards !== false
       };
       
-      // 执行SQL分析
       console.log(`[API] 收到分析请求: ${sqlQuery.substring(0, 50)}...`);
       
-      const analysisEngine = getAnalysisEngine();
-      const result = await analysisEngine.analyzeSql({
-        sql: sqlQuery,
-        ...analysisOptions
-      });
+      // 执行SQL分析
+      const result = await sqlAnalyzer.analyze(sqlQuery, options);
       
       const responseTime = Date.now() - startTime;
       console.log(`[API] 分析完成，用时: ${responseTime}ms`);
       
-      // 保存到历史记录
-      try {
-        const { default: HistoryService } = await import('../../history/historyService.js');
-        const historyService = new HistoryService();
-        const historyId = historyService.saveAnalysis({
-          sql: sqlQuery,
-          result: result,
-          type: 'command' // API调用统一标记为command类型
-        });
-        console.log(`[API] 历史记录已保存: ${historyId}`);
-      } catch (historyError) {
-        console.warn(`[API] 保存历史记录失败: ${historyError.message}`);
-      }
+      // 异步历史记录保存 + 智能规则学习 - 不阻塞响应
+      setImmediate(async () => {
+        try {
+          const { getHistoryService } = await import('../../services/history/historyService.js');
+          const historyService = getHistoryService();
+          
+          // 保存历史记录
+          const recordId = await historyService.saveAnalysis({
+            sql: sqlQuery,
+            result: result,
+            type: 'command'
+          });
+          
+          // 触发智能规则学习（如果启用且有高质量分析结果）
+          if (body.options?.learn !== false && result.success) {
+            const config = getLearningConfig();
+            
+            if (config.learning?.enabled) {
+              const avgConfidence = calculateAverageConfidence(result);
+              const minConfidence = config.learning?.minConfidence ?? 0.7;
+              
+              // 只对高质量分析结果进行学习
+              if (avgConfidence >= minConfidence) {
+                try {
+                  const { getIntelligentRuleLearner } = await import('../../services/rule-learning/IntelligentRuleLearner.js');
+                  const { getLLMService } = await import('../../core/llm-service.js');
+                  
+                  const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
+                  
+                  // 异步执行规则学习，不阻塞主流程
+                  ruleLearner.learnFromAnalysis(result, sqlQuery).catch(error => {
+                    console.warn(`[API] 规则学习失败: ${error.message}`);
+                  });
+                } catch (learnError) {
+                  console.warn(`[API] 规则学习初始化失败: ${learnError.message}`);
+                }
+              }
+            }
+          }
+          
+          console.log(`[API] 历史记录已保存，ID: ${recordId}`);
+        } catch (historyError) {
+          console.warn(`[API] 异步保存失败: ${historyError.message}`);
+        }
+      });
       
-      // 返回结果
-      return c.json(formatAnalysisResult(result));
+      // 使用响应格式化工具
+      return c.json(formatSuccessResponse(result.data, {
+        ...result.metadata,
+        responseTime
+      }));
       
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.error(`[API] 分析失败: ${error.message}`);
       
-      // 错误会被中间件处理，这里重新抛出
-      throw error;
+      // 返回错误响应
+      return c.json(formatErrorResponse(error.message, {
+        responseTime,
+        timestamp: new Date().toISOString()
+      }), 400);
     }
   });
 
@@ -95,48 +131,20 @@ export function registerAnalyzeRoutes(app) {
         throw createValidationError('批量分析最多支持50条SQL语句');
       }
       
-      // 准备新架构分析选项
-      const analysisOptions = {
-        learning: body.options?.learning === true,
-        analysisConfig: body.options?.analysisConfig || {}
+      // 准备分析选项
+      const options = {
+        performance: body.options?.performance !== false,
+        security: body.options?.security !== false,
+        standards: body.options?.standards !== false
       };
       
       console.log(`[API] 收到批量分析请求，共 ${body.sqls.length} 条SQL`);
       
-      const analysisEngine = getAnalysisEngine();
-      
-      // 并行分析所有SQL
-      const analysisPromises = body.sqls.map(async (item, index) => {
-        try {
-          if (!item.sql || typeof item.sql !== 'string') {
-            return {
-              index,
-              success: false,
-              error: 'SQL语句不能为空或格式错误'
-            };
-          }
-          
-          const result = await analysisEngine.analyzeSql({
-            sql: item.sql.trim(),
-            ...analysisOptions
-          });
-          
-          return {
-            index,
-            sql: item.sql,
-            ...result
-          };
-        } catch (error) {
-          return {
-            index,
-            sql: item.sql,
-            success: false,
-            error: error.message
-          };
-        }
-      });
-      
-      const results = await Promise.all(analysisPromises);
+      // 使用新的批量分析方法
+      const results = await sqlAnalyzer.analyzeBatch(
+        body.sqls.map(item => item.sql || item),
+        options
+      );
       
       const responseTime = Date.now() - startTime;
       const succeeded = results.filter(r => r.success).length;
@@ -144,40 +152,120 @@ export function registerAnalyzeRoutes(app) {
       
       console.log(`[API] 批量分析完成，用时: ${responseTime}ms，成功: ${succeeded}，失败: ${failed}`);
       
-      // 保存到历史记录
-      try {
-        const { default: HistoryService } = await import('../../history/historyService.js');
-        const historyService = new HistoryService();
-        
-        // 为每条成功的SQL保存历史记录
-        results.forEach(result => {
-          if (result.success && result.sql) {
-            try {
-              historyService.saveAnalysis({
-                sql: result.sql,
-                result: result,
-                type: 'batch'
-              });
-            } catch (err) {
-              console.warn(`[API] 保存批量历史记录失败: ${err.message}`);
+      // 异步批量历史记录保存 + 智能规则学习 - 不阻塞响应
+      setImmediate(async () => {
+        try {
+          const { getHistoryService } = await import('../../services/history/historyService.js');
+          const historyService = getHistoryService();
+          
+          // 为每条成功的SQL保存历史记录
+          for (const result of results) {
+            if (result.success && result.sql) {
+              try {
+                await historyService.saveAnalysis({
+                  sql: result.sql,
+                  result: result,
+                  type: 'batch'
+                });
+                
+                // 触发智能规则学习（如果启用）
+                if (body.options?.learn !== false) {
+                  const config = getLearningConfig();
+                  
+                  if (config.learning?.enabled) {
+                    const avgConfidence = calculateAverageConfidence(result);
+                    const minConfidence = config.learning?.minConfidence ?? 0.7;
+                    
+                    if (avgConfidence >= minConfidence) {
+                      try {
+                        const { getIntelligentRuleLearner } = await import('../../services/rule-learning/IntelligentRuleLearner.js');
+                        const { getLLMService } = await import('../../core/llm-service.js');
+                        
+                        const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
+                        
+                        // 异步执行规则学习
+                        ruleLearner.learnFromAnalysis(result, result.sql).catch(error => {
+                          console.warn(`[API] 批量规则学习失败: ${error.message}`);
+                        });
+                      } catch (learnError) {
+                        console.warn(`[API] 批量规则学习初始化失败: ${learnError.message}`);
+                      }
+                    }
+                  }
+                }
+              } catch (err) {
+                console.warn(`[API] 异步保存批量历史记录失败: ${err.message}`);
+              }
             }
           }
-        });
-        
-        console.log(`[API] 批量历史记录已保存: ${succeeded} 条`);
-      } catch (historyError) {
-        console.warn(`[API] 保存批量历史记录失败: ${historyError.message}`);
-      }
+          
+          console.log(`[API] 批量历史记录已异步保存: ${succeeded} 条`);
+        } catch (historyError) {
+          console.warn(`[API] 异步保存批量历史记录失败: ${historyError.message}`);
+        }
+      });
       
-      // 返回结果
-      return c.json(formatBatchAnalysisResults(results));
+      // 使用响应格式化工具
+      return c.json(formatSuccessResponse(results, {
+        total: results.length,
+        succeeded,
+        failed,
+        responseTime,
+        timestamp: new Date().toISOString()
+      }));
       
     } catch (error) {
       const responseTime = Date.now() - startTime;
       console.error(`[API] 批量分析失败: ${error.message}`);
       
-      // 错误会被中间件处理，这里重新抛出
-      throw error;
+      // 返回错误响应
+      return c.json(formatErrorResponse(error.message, {
+        responseTime,
+        timestamp: new Date().toISOString()
+      }), 400);
     }
   });
+
+  /**
+   * GET /api/analyze/status - 获取分析器状态
+   */
+  app.get('/api/analyze/status', async (c) => {
+    try {
+      const status = sqlAnalyzer.getStatus();
+      
+      return c.json(formatSuccessResponse(status, {
+        timestamp: new Date().toISOString()
+      }));
+      
+    } catch (error) {
+      console.error(`[API] 获取状态失败: ${error.message}`);
+      
+      return c.json(formatErrorResponse(error.message, {
+        timestamp: new Date().toISOString()
+      }), 500);
+    }
+  });
+}
+
+/**
+ * 计算平均置信度
+ * @param {Object} analysisResult - 分析结果
+ * @returns {number} 平均置信度
+ */
+function calculateAverageConfidence(analysisResult) {
+  const confidences = [];
+  
+  if (analysisResult.data?.performance?.metadata?.confidence) {
+    confidences.push(analysisResult.data.performance.metadata.confidence);
+  }
+  if (analysisResult.data?.security?.metadata?.confidence) {
+    confidences.push(analysisResult.data.security.metadata.confidence);
+  }
+  if (analysisResult.data?.standards?.metadata?.confidence) {
+    confidences.push(analysisResult.data.standards.metadata.confidence);
+  }
+  
+  return confidences.length > 0
+    ? confidences.reduce((sum, conf) => sum + conf, 0) / confidences.length
+    : 0;
 }

@@ -166,7 +166,7 @@ class ReportIntegrator {
   }
 
   /**
-   * 优化的智能去重建议
+   * 智能去重建议
    * @param {Array} recommendations - 建议列表
    * @returns {Array} 去重后的建议列表
    */
@@ -254,16 +254,16 @@ class ReportIntegrator {
   }
 
   /**
-   * 生成优化的建议签名（用于去重比较）
+   * 生成建议签名（用于去重比较）
    * @param {Object} recommendation - 标准化的建议
    * @returns {string} 建议签名
    */
   generateOptimizedSignature(recommendation) {
-    // 优化：使用更简单的签名算法
+    // 使用更简单的签名算法
     const title = recommendation.title.toLowerCase().trim();
     const description = recommendation.description.toLowerCase().trim();
     
-    // 提取关键词 - 优化停用词列表
+    // 提取关键词 - 停用词列表
     const stopWords = new Set(['的', '是', '在', '有', '和', '与', '或', '但', '如果', '那么', 'the', 'is', 'in', 'and', 'or', 'but', 'if', 'then', 'for', 'to', 'with', 'by', 'from']);
     
     // 组合标题和描述的前50个字符作为快速签名
@@ -279,7 +279,7 @@ class ReportIntegrator {
   }
 
   /**
-   * 计算优化的相似度
+   * 计算相似度
    * @param {string} sig1 - 签名1
    * @param {string} sig2 - 签名2
    * @returns {number} 相似度 (0-1)
@@ -288,7 +288,7 @@ class ReportIntegrator {
     if (!sig1 || !sig2) return 0;
     if (sig1 === sig2) return 1;
 
-    // 优化：使用更快的相似度算法
+    // 使用更快的相似度算法
     const words1 = sig1.split('|');
     const words2 = sig2.split('|');
     
@@ -308,12 +308,12 @@ class ReportIntegrator {
   }
 
   /**
-   * 优化的合并相似建议
+   * 合并相似建议
    * @param {Object} existing - 现有建议
    * @param {Object} newRec - 新建议
    */
   mergeRecommendationsOptimized(existing, newRec) {
-    // 优化：使用预定义的级别映射
+    // 使用预定义的级别映射
     const severityLevels = { 'low': 1, 'medium': 2, 'high': 3, 'critical': 4 };
     const impactLevels = { 'low': 1, 'medium': 2, 'high': 3 };
     
@@ -327,12 +327,12 @@ class ReportIntegrator {
       existing.impact = newRec.impact;
     }
 
-    // 优化：简化来源合并
+    // 简化来源合并
     if (existing.source !== newRec.source) {
       existing.source = `${existing.source},${newRec.source}`;
     }
 
-    // 优化：限制描述长度
+    // 限制描述长度
     if (newRec.description && existing.description.length < 500) {
       existing.description += ` | ${newRec.description.substring(0, 100)}`;
     }
@@ -346,7 +346,7 @@ class ReportIntegrator {
   prioritizeRecommendations(recommendations) {
     if (!Array.isArray(recommendations)) return [];
 
-    // 优化：预计算优先级映射
+    // 预计算优先级映射
     const priorityOrder = { 'critical': 4, 'high': 3, 'medium': 2, 'low': 1 };
 
     return recommendations
@@ -355,7 +355,7 @@ class ReportIntegrator {
         priority: this.calculatePriority(rec)
       }))
       .sort((a, b) => {
-        // 优化的排序算法
+        // 排序算法
         const aLevel = priorityOrder[a.priority] || 0;
         const bLevel = priorityOrder[b.priority] || 0;
         
@@ -381,12 +381,12 @@ class ReportIntegrator {
     const { severity, impact, effort } = recommendation;
     const factors = this.config.priorityFactors;
 
-    // 优化：使用预定义的评分表
+    // 使用预定义的评分表
     const severityScore = this.getSeverityScore(severity);
     const impactScore = this.getImpactScore(impact);
     const effortScore = this.getEffortScore(effort);
 
-    // 优化的加权计算
+    // 加权计算
     return Math.round(
       severityScore * factors.severity +
       impactScore * factors.impact +

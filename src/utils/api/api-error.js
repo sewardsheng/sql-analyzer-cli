@@ -1,10 +1,10 @@
 /**
- * 优化的API错误处理类
- * 简化错误类型和处理机制
+ * API错误处理类
+ * 错误类型和处理机制
  */
 
 /**
- * 简化的错误类型枚举
+ * 错误类型枚举
  */
 export const ErrorTypes = {
   VALIDATION: 'VALIDATION',
@@ -17,7 +17,7 @@ export const ErrorTypes = {
 };
 
 /**
- * 优化的API错误类
+ * API错误类
  */
 export class ApiError extends Error {
   /**
@@ -41,7 +41,7 @@ export class ApiError extends Error {
   }
 
   /**
-   * 获取用户友好的错误消息 - 优化版本
+   * 获取用户友好的错误消息
    * @returns {string} 用户友好的错误消息
    */
   getUserMessage() {
@@ -60,7 +60,7 @@ export class ApiError extends Error {
 }
 
 /**
- * 创建验证错误 - 优化版本
+ * 创建验证错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 验证错误
@@ -70,7 +70,7 @@ export function createValidationError(message, details = null) {
 }
 
 /**
- * 创建认证错误 - 优化版本
+ * 创建认证错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 认证错误
@@ -80,7 +80,7 @@ export function createAuthError(message = '身份验证或权限不足', details
 }
 
 /**
- * 创建未找到错误 - 优化版本
+ * 创建未找到错误
  * @param {string} resource - 资源名称
  * @param {Object} details - 错误详情
  * @returns {ApiError} 未找到错误
@@ -91,7 +91,7 @@ export function createNotFoundError(resource = '资源', details = null) {
 }
 
 /**
- * 创建限流错误 - 优化版本
+ * 创建限流错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 限流错误
@@ -101,7 +101,7 @@ export function createRateLimitError(message = '请求过于频繁，请稍后�
 }
 
 /**
- * 创建外部服务错误 - 优化版本
+ * 创建外部服务错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 外部服务错误
@@ -111,7 +111,7 @@ export function createExternalError(message = '外部服务暂时不可用', det
 }
 
 /**
- * 创建业务错误 - 优化版本
+ * 创建业务错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 业务错误
@@ -121,7 +121,7 @@ export function createBusinessError(message, details = null) {
 }
 
 /**
- * 创建内部错误 - 优化版本
+ * 创建内部错误
  * @param {string} message - 错误消息
  * @param {Object} details - 错误详情
  * @returns {ApiError} 内部错误
@@ -131,7 +131,7 @@ export function createInternalError(message = '系统错误', details = null) {
 }
 
 /**
- * 从普通错误创建API错误 - 优化版本
+ * 从普通错误创建API错误
  * @param {Error} error - 普通错误对象
  * @param {string} defaultMessage - 默认错误消息
  * @returns {ApiError} API错误对象
@@ -141,7 +141,7 @@ export function fromError(error, defaultMessage = '未知错误') {
     return error;
   }
 
-  // 简化的错误类型映射
+  // 错误类型映射
   const errorMap = {
     'ValidationError': { type: ErrorTypes.VALIDATION, statusCode: 400 },
     'NotFoundError': { type: ErrorTypes.NOT_FOUND, statusCode: 404 },
@@ -164,7 +164,7 @@ export function fromError(error, defaultMessage = '未知错误') {
 }
 
 /**
- * 检查是否为API错误 - 优化版本
+ * 检查是否为API错误
  * @param {Error} error - 错误对象
  * @returns {boolean} 是否为API错误
  */
@@ -173,7 +173,7 @@ export function isApiError(error) {
 }
 
 /**
- * 获取错误状态码 - 优化版本
+ * 获取错误状态码
  * @param {Error} error - 错误对象
  * @returns {number} HTTP状态码
  */
@@ -182,7 +182,7 @@ export function getErrorStatusCode(error) {
     return error.statusCode;
   }
 
-  // 简化的状态码映射
+  // 状态码映射
   const statusCodeMap = {
     'ValidationError': 400,
     'NotFoundError': 404,

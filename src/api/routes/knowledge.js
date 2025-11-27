@@ -4,8 +4,9 @@
  */
 
 import chalk from 'chalk';
-import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-handler.js';
 import { createValidationError } from '../../utils/api/api-error.js';
+
+import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 
 /**
  * 注册知识库相关路由
@@ -18,7 +19,7 @@ export function registerKnowledgeRoutes(app) {
    */
   app.get('/api/knowledge', async (c) => {
     try {
-      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
       const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.getKnowledgeStatus();
       
@@ -54,7 +55,7 @@ export function registerKnowledgeRoutes(app) {
       }
       
       const k = body.k || 4;
-      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
       const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.searchKnowledge(body.query, k);
       
@@ -111,7 +112,7 @@ export function registerKnowledgeRoutes(app) {
       
       console.log(chalk.blue(`[API] 开始学习文档，目录: ${options.rulesDir}`));
       
-      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
       const knowledgeService = getKnowledgeService();
       
       // 在后台执行学习任务
@@ -142,7 +143,7 @@ export function registerKnowledgeRoutes(app) {
     try {
       console.log(chalk.blue('[API] 正在重置知识库...'));
       
-      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
       const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.resetKnowledge();
       
@@ -176,7 +177,7 @@ export function registerKnowledgeRoutes(app) {
       
       console.log(chalk.blue(`[API] 导出知识库，格式: ${format}`));
       
-      const { getKnowledgeService } = await import('../../knowledge/knowledgeService.js');
+      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
       const knowledgeService = getKnowledgeService();
       const result = await knowledgeService.exportKnowledge({ format, includeContent });
       
@@ -210,11 +211,13 @@ export function registerKnowledgeRoutes(app) {
    *   "rulesDir": "./rules"  // 可选，规则目录
    * }
    */
+  // 临时注释掉此路由，因为 cleanup.js 文件不存在
+  /*
   app.post('/api/knowledge/cleanup', async (c) => {
     try {
       const body = await c.req.json();
       
-      const { cleanupRules } = await import('../../knowledge/cleanup.js');
+      const { cleanupRules } = await import('../../services/cleanup.js');
       
       const options = {
         score: body.score || 60,
@@ -239,6 +242,7 @@ export function registerKnowledgeRoutes(app) {
       throw error;
     }
   });
+  */
   
   /**
    * POST /api/knowledge/evaluate - 评估所有规则质量
@@ -250,11 +254,13 @@ export function registerKnowledgeRoutes(app) {
    *   "rulesDir": "./rules"   // 可选，规则目录
    * }
    */
+  // 临时注释掉此路由，因为 evaluate.js 文件不存在
+  /*
   app.post('/api/knowledge/evaluate', async (c) => {
     try {
       const body = await c.req.json();
       
-      const { evaluateRules } = await import('../../knowledge/evaluate.js');
+      const { evaluateRules } = await import('../../services/evaluate.js');
       
       const options = {
         report: body.report || false,
@@ -279,4 +285,5 @@ export function registerKnowledgeRoutes(app) {
       throw error;
     }
   });
+  */
 }

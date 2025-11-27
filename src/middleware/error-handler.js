@@ -4,8 +4,28 @@
  */
 
 import { logError, logApiError } from '../utils/logger.js';
-import { createHonoErrorResponse } from '../utils/api/response-handler.js';
 import { isApiError } from '../utils/api/api-error.js';
+
+// 简化的错误响应处理函数
+function createHonoErrorResponse(error, c) {
+  const statusCode = error.statusCode || error.status || 500;
+  const message = error.message || '内部服务器错误';
+  
+  const errorResponse = {
+    success: false,
+    error: message,
+    type: error.type || 'INTERNAL_ERROR',
+    statusCode,
+    timestamp: new Date().toISOString()
+  };
+  
+  // 在开发环境中包含堆栈信息
+  if (process.env.NODE_ENV === 'development' && error.stack) {
+    errorResponse.stack = error.stack;
+  }
+  
+  return c.json(errorResponse, statusCode);
+}
 
 /**
  * 错误处理中间件

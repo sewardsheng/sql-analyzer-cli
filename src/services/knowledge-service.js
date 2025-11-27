@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getConfigManager } from '../config/index.js';
+import { getLLMConfig } from '../config/ConfigAdapters.js';
 import { 
   loadDocumentsFromRulesDirectory, 
   resetVectorStore, 
@@ -14,14 +14,14 @@ import {
   isVectorStorePersisted, 
   loadVectorStoreFromDisk,
   retrieveDocuments
-} from '../core/index.js';
+} from '../core/knowledge/index.js';
 
 /**
  * 知识库业务服务类
  */
 class KnowledgeService {
   constructor() {
-    this.configManager = getConfigManager();
+    this.llmConfig = getLLMConfig();
   }
 
   /**
@@ -32,7 +32,7 @@ class KnowledgeService {
   async learnDocuments(options = {}) {
     try {
       // 读取配置
-      const config = await this.configManager.getConfig();
+      const config = this.llmConfig;
       
       // 合并选项和配置
       const mergedOptions = {

@@ -199,6 +199,246 @@ class HistoryBusinessService {
     
     throw new Error(`不支持的导出格式: ${format}`);
   }
+
+  /**
+   * 获取统计信息（为规则学习系统提供）
+   * @returns {Promise<Object>} 统计信息
+   */
+  async getStatistics() {
+    return await this.getHistoryStats();
+  }
+
+  /**
+   * 获取学习历史（为规则学习系统提供）
+   * @param {Object} filters - 过滤条件
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Object>} 学习历史
+   */
+  async getLearningHistory(filters = {}, options = {}) {
+    const { page = 1, limit = 20, sortBy = 'timestamp', sortOrder = 'desc' } = options;
+    
+    // 获取所有历史记录
+    let allHistory = await this.getAllHistory();
+    
+    // 应用过滤条件
+    if (filters.category) {
+      allHistory = allHistory.filter(record =>
+        record.result?.data?.[filters.category] ||
+        record.result?.issues?.some(issue => issue.category === filters.category)
+      );
+    }
+    
+    if (filters.status) {
+      allHistory = allHistory.filter(record =>
+        record.metadata?.learningStatus === filters.status
+      );
+    }
+    
+    if (filters.startDate) {
+      const startDate = new Date(filters.startDate);
+      allHistory = allHistory.filter(record =>
+        new Date(record.timestamp) >= startDate
+      );
+    }
+    
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      allHistory = allHistory.filter(record =>
+        new Date(record.timestamp) <= endDate
+      );
+    }
+    
+    // 排序
+    allHistory.sort((a, b) => {
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
+      const order = sortOrder === 'desc' ? -1 : 1;
+      
+      if (aValue < bValue) return -1 * order;
+      if (aValue > bValue) return 1 * order;
+      return 0;
+    });
+    
+    // 分页
+    const total = allHistory.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const items = allHistory.slice(startIndex, endIndex);
+    
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: endIndex < total,
+        hasPrev: page > 1
+      }
+    };
+  }
+
+  /**
+   * 获取生成的规则（为规则学习系统提供）
+   * @param {Object} filters - 过滤条件
+   * @param {Object} options - 查询选项
+   * @returns {Promise<Object>} 生成的规则
+   */
+  async getGeneratedRules(filters = {}, options = {}) {
+    // 这里应该从规则存储中获取，暂时返回模拟数据
+    const { page = 1, limit = 20 } = options;
+    
+    const mockRules = [
+      {
+        id: 'rule-1',
+        title: '避免使用SELECT *进行主键查询',
+        category: 'performance',
+        severity: 'medium',
+        status: 'approved',
+        quality: 85,
+        timestamp: new Date().toISOString()
+      },
+      {
+        id: 'rule-2',
+        title: '主键查询必须使用参数化查询',
+        category: 'security',
+        severity: 'high',
+        status: 'pending',
+        quality: 75,
+        timestamp: new Date().toISOString()
+      }
+    ];
+    
+    // 应用过滤条件
+    let filteredRules = mockRules;
+    
+    if (filters.category) {
+      filteredRules = filteredRules.filter(rule => rule.category === filters.category);
+    }
+    
+    if (filters.status) {
+      filteredRules = filteredRules.filter(rule => rule.status === filters.status);
+    }
+    
+    if (filters.minQuality) {
+      filteredRules = filteredRules.filter(rule => rule.quality >= filters.minQuality);
+    }
+    
+    if (filters.maxQuality) {
+      filteredRules = filteredRules.filter(rule => rule.quality <= filters.maxQuality);
+    }
+    
+    // 分页
+    const total = filteredRules.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const items = filteredRules.slice(startIndex, endIndex);
+    
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: endIndex < total,
+        hasPrev: page > 1
+      }
+    };
+  }
+
+  /**
+   * 根据ID获取规则（为规则学习系统提供）
+   * @param {string} ruleId - 规则ID
+   * @returns {Promise<Object|null>} 规则对象
+   */
+  async getRuleById(ruleId) {
+    const rules = await this.getGeneratedRules();
+    return rules.items.find(rule => rule.id === ruleId) || null;
+  }
+
+  /**
+   * 审批规则（为规则学习系统提供）
+   * @param {string} ruleId - 规则ID
+   * @param {boolean} approved - 是否审批通过
+   * @param {string} reason - 审批原因
+   * @returns {Promise<Object|null>} 更新后的规则
+   */
+  async approveRule(ruleId, approved, reason) {
+    // 这里应该更新规则存储，暂时返回模拟数据
+    const rule = await this.getRuleById(ruleId);
+    if (rule) {
+      rule.status = approved ? 'approved' : 'rejected';
+      rule.approvalReason = reason;
+      rule.approvedAt = new Date().toISOString();
+      return rule;
+    }
+    return null;
+  }
+
+  /**
+   * 删除规则（为规则学习系统提供）
+   * @param {string} ruleId - 规则ID
+   * @returns {Promise<boolean>} 是否删除成功
+   */
+  async deleteRule(ruleId) {
+    // 这里应该从规则存储中删除，暂时返回模拟结果
+    const rule = await this.getRuleById(ruleId);
+    return rule !== null;
+  }
+
+  /**
+   * 获取学习统计信息（为规则学习系统提供）
+   * @param {string} period - 统计周期
+   * @returns {Promise<Object>} 学习统计信息
+   */
+  async getLearningStatistics(period = '30d') {
+    const stats = await this.getStatistics();
+    const rules = await this.getGeneratedRules();
+    
+    return {
+      period,
+      history: {
+        total: stats.total,
+        byType: stats.byType,
+        byDatabase: stats.byDatabase,
+        byMonth: stats.byMonth
+      },
+      rules: {
+        total: rules.pagination.total,
+        approved: rules.items.filter(r => r.status === 'approved').length,
+        pending: rules.items.filter(r => r.status === 'pending').length,
+        rejected: rules.items.filter(r => r.status === 'rejected').length,
+        byCategory: {
+          performance: rules.items.filter(r => r.category === 'performance').length,
+          security: rules.items.filter(r => r.category === 'security').length,
+          standards: rules.items.filter(r => r.category === 'standards').length
+        }
+      },
+      learning: {
+        enabled: true,
+        lastLearning: new Date().toISOString(),
+        averageQuality: rules.items.reduce((sum, r) => sum + (r.quality || 0), 0) / rules.items.length || 0
+      }
+    };
+  }
+
+  /**
+   * 清理学习数据（为规则学习系统提供）
+   * @param {Object} options - 清理选项
+   * @returns {Promise<Object>} 清理结果
+   */
+  async cleanupLearningData(options = {}) {
+    const { olderThan, status, keepApproved = true } = options;
+    
+    // 这里应该执行实际的清理操作，暂时返回模拟结果
+    return {
+      deletedRecords: 0,
+      deletedRules: 0,
+      freedSpace: '0MB',
+      cleanupTime: new Date().toISOString()
+    };
+  }
 }
 
 // 创建服务实例

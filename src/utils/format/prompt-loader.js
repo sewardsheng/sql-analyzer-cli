@@ -34,6 +34,24 @@ export async function loadPromptTemplate(templateName, category = 'rule-learning
     );
     
     console.log(`🔧 加载模板路径: ${templatePath}`);
+    console.log(`🔧 当前工作目录: ${process.cwd()}`);
+    console.log(`🔧 项目根目录: ${currentDir}`);
+    console.log(`🔧 模板名称: ${templateName}`);
+    console.log(`🔧 类别: ${category}`);
+    
+    // 检查目录是否存在
+    const dirPath = path.join(currentDir, 'src', 'prompts', category);
+    console.log(`🔧 检查目录: ${dirPath}`);
+    try {
+      await fs.access(dirPath);
+      console.log(`✅ 目录存在: ${dirPath}`);
+      
+      // 列出目录中的文件
+      const files = await fs.readdir(dirPath);
+      console.log(`📁 目录中的文件: ${files.join(', ')}`);
+    } catch (dirError) {
+      console.error(`❌ 目录不存在: ${dirPath}`, dirError);
+    }
     
     // 检查文件是否存在
     try {

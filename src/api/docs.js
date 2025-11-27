@@ -453,7 +453,6 @@ docsApp.openapi('/health/check/{type}', {
         'cpu-usage',
         'network',
         'external-services',
-        'database-connections',
         'api-performance'
       ]),
       description: '检查类型'
