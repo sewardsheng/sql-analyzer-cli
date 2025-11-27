@@ -254,7 +254,7 @@ class HealthService {
       'src/core/sql-analyzer.js',
       'src/core/llm-json-parser.js',
       'src/core/llm-service.js',
-      'src/core/identification/database-identifier.js',
+      'src/core/identification/db-identifier.js',
       'src/core/tools/base-tool.js',
       'src/core/tools/performance-tool.js',
       'src/core/tools/security-tool.js',
@@ -1031,12 +1031,15 @@ class HealthService {
     try {
       const services = [];
       
-      // 检查OpenAI API连接
-      if (process.env.OPENAI_API_KEY) {
+      // 检查API连接（优先使用CUSTOM_API_KEY，回退到OPENAI_API_KEY）
+      const apiKey = process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY;
+      const baseUrl = process.env.CUSTOM_BASE_URL || 'https://api.openai.com/v1';
+      
+      if (apiKey) {
         try {
-          const response = await fetch('https://api.openai.com/v1/models', {
+          const response = await fetch(`${baseUrl}/models`, {
             headers: {
-              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+              'Authorization': `Bearer ${apiKey}`
             },
             signal: AbortSignal.timeout(10000)
           });

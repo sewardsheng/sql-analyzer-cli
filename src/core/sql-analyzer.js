@@ -9,7 +9,7 @@ import { SecurityTool } from './tools/security-tool.js';
 import { StandardsTool } from './tools/standards-tool.js';
 import { LlmJsonParser } from './llm-json-parser.js';
 import { LLMService } from './llm-service.js';
-import { getLLMConfig } from '../config/ConfigAdapters.js';
+import { unifiedConfigManager } from '../config/config-manager.js';
 
 /**
  * SQL分析器主控制器
@@ -18,7 +18,6 @@ import { getLLMConfig } from '../config/ConfigAdapters.js';
 class SQLAnalyzer {
   constructor(config = {}) {
     this.config = config;
-    this.llmConfig = getLLMConfig();
     
     // 初始化核心服务
     this.llmService = new LLMService(config);

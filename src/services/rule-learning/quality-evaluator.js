@@ -5,7 +5,7 @@
 
 import { buildPrompt } from '../../utils/format/prompt-loader.js';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
-import { RuleValidator } from './RuleValidator.js';
+import { RuleValidator } from './rule-validator.js';
 
 /**
  * 规则质量评估器类

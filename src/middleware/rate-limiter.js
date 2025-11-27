@@ -3,7 +3,7 @@
  * 防止API滥用和DDoS攻击
  */
 
-import { logWarning } from '../utils/logger.js';
+import { warn as logWarning } from '../utils/logger.js';
 
 /**
  * 内存存储的限流器

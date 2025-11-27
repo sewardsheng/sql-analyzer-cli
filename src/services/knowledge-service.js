@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getLLMConfig } from '../config/ConfigAdapters.js';
+import { unifiedConfigManager } from '../config/config-manager.js';
 import { 
   loadDocumentsFromRulesDirectory, 
   resetVectorStore, 
@@ -21,7 +21,7 @@ import {
  */
 class KnowledgeService {
   constructor() {
-    this.llmConfig = getLLMConfig();
+    this.llmConfig = unifiedConfigManager.getLLMConfig();
   }
 
   /**
@@ -466,9 +466,6 @@ class KnowledgeService {
   }
 }
 
-// 创建服务实例
-const knowledgeService = new KnowledgeService();
-
 // ============================================================================
 // 向后兼容的导出函数
 // ============================================================================
@@ -477,6 +474,7 @@ const knowledgeService = new KnowledgeService();
  * 学习文档（向后兼容）
  */
 export async function learnDocuments(options) {
+  const knowledgeService = new KnowledgeService();
   return await knowledgeService.learnDocuments(options);
 }
 
@@ -484,6 +482,7 @@ export async function learnDocuments(options) {
  * 显示知识库状态（向后兼容）
  */
 export async function showKnowledgeStatus() {
+  const knowledgeService = new KnowledgeService();
   return await knowledgeService.getKnowledgeStatus();
 }
 
@@ -496,8 +495,8 @@ export async function showKnowledgeStatus() {
  * @returns {KnowledgeService} 知识库服务实例
  */
 export function getKnowledgeService() {
-  return knowledgeService;
+  return new KnowledgeService();
 }
 
-// 导出服务类和实例
-export { KnowledgeService, knowledgeService };
+// 导出服务类
+export { KnowledgeService };

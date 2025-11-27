@@ -3,6 +3,9 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Bun
+bun.lockb
 bun.lock
 
 # Environment variables
@@ -65,9 +68,48 @@ jspm_packages/
 
 # Vector store
 .vector-store/
+vector-store/
 
 # History files
 history/
 
 # Learning rules
 rules/learning-rules/
+
+# Removed unused directories
+src/utils/file/
+
+# Test files
+test-*.js
+!test-*.example.js
+
+# Temporary files
+tmp/
+temp/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Build artifacts
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+.ts/
+
+# ESLint
+.eslintcache
+
+# Prettier
+.prettiercache
+
+# Debug
+.debug/

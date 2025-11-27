@@ -3,7 +3,7 @@
  * 消除QualityEvaluator和AutoApprover中的验证逻辑冗余
  */
 
-import { getValidationConfig, updateValidationConfig } from '../../config/ConfigAdapters.js';
+import { unifiedConfigManager } from '../../config/config-manager.js';
 
 /**
  * 规则验证器类
@@ -11,7 +11,7 @@ import { getValidationConfig, updateValidationConfig } from '../../config/Config
 export class RuleValidator {
   constructor() {
     // 使用统一配置管理器
-    this.validationConfig = getValidationConfig();
+    this.validationConfig = unifiedConfigManager.getValidationConfig();
   }
 
   /**
@@ -108,9 +108,11 @@ export class RuleValidator {
         score -= 15;
       }
 
-      // 4. 置信度严格检查
-      if (rule.confidence < 0.8) {
-        issues.push(`置信度过低，需要 >= 0.8: ${rule.confidence}`);
+      // 4. 置信度严格检查 - 使用统一配置
+      const approvalConfig = unifiedConfigManager.getApprovalConfig();
+      const confidenceThreshold = approvalConfig.completenessConfidenceThreshold || 0.7;
+      if (rule.confidence < confidenceThreshold) {
+        issues.push(`置信度过低，需要 >= ${confidenceThreshold}: ${rule.confidence}`);
         score -= 20;
       }
 
@@ -286,11 +288,21 @@ export class RuleValidator {
       return { valid: true, reason: '非安全规则，跳过安全验证' };
     }
 
+    // 使用统一配置的安全规则严重程度阈值
+    const approvalConfig = unifiedConfigManager.getApprovalConfig();
+    const securityThreshold = approvalConfig.securitySeverityThreshold || 'medium';
     const validSecuritySeverities = ['critical', 'high'];
+    
+    // 如果配置要求更严格（medium以上），则只接受critical和high
+    // 如果配置较宽松，接受medium及以上
+    if (securityThreshold === 'medium') {
+      validSecuritySeverities.push('medium');
+    }
+
     if (!validSecuritySeverities.includes(rule.severity)) {
-      return { 
-        valid: false, 
-        reason: `安全规则严重程度必须为critical或high，当前为: ${rule.severity}` 
+      return {
+        valid: false,
+        reason: `安全规则严重程度必须至少为${securityThreshold}，当前为: ${rule.severity}`
       };
     }
 
@@ -404,8 +416,8 @@ export class RuleValidator {
    * @param {Object} newConfig - 新配置
    */
   updateConfig(newConfig) {
-    updateValidationConfig(newConfig);
-    this.validationConfig = getValidationConfig();
+    unifiedConfigManager.updateValidationConfig(newConfig);
+    this.validationConfig = unifiedConfigManager.getValidationConfig();
     console.log(`[RuleValidator] 验证配置已更新`);
   }
 
@@ -434,7 +446,7 @@ export class RuleValidator {
    * @returns {Object} 当前验证配置
    */
   getConfig() {
-    return getValidationConfig();
+    return unifiedConfigManager.getValidationConfig();
   }
 }
 

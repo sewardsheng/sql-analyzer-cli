@@ -1,0 +1,240 @@
+### SQL Analyzer API 测试文件
+### - 建议先测试基础接口，再使用规则学习功能
+###
+### 🚀 快速开始：
+### 1. 确保服务器运行: bun run src/server.js
+### 2. 测试健康检查: GET {{baseUrl}}/api/system/health
+### 3. 使用规则学习: POST {{baseUrl}}/api/rule-learning/learn
+###
+### 基础配置
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### 1. 基础接口测试
+
+### 获取API根信息
+GET {{baseUrl}}/
+Accept: {{contentType}}
+
+### 获取API文档
+GET {{baseUrl}}/api/docs
+Accept: {{contentType}}
+
+### 2. 系统状态检查
+
+### 系统健康检查
+GET {{baseUrl}}/api/system/health
+Accept: {{contentType}}
+
+### 简单ping检查
+GET {{baseUrl}}/api/system/health/ping
+Accept: {{contentType}}
+
+### 获取系统状态
+GET {{baseUrl}}/api/system/status
+Accept: {{contentType}}
+
+### 获取分析器状态
+GET {{baseUrl}}/api/system/status/analyzer
+Accept: {{contentType}}
+
+### 3. SQL分析接口
+
+### 单条SQL分析
+POST {{baseUrl}}/api/analyze
+Content-Type: {{contentType}}
+
+{
+  "sql": "SELECT * FROM users WHERE id = 1",
+  "options": {
+    "performance": true,
+    "security": true,
+    "standards": true,
+    "learn": true
+  }
+}
+
+### 批量SQL分析
+POST {{baseUrl}}/api/analyze/batch
+Content-Type: {{contentType}}
+
+{
+  "sqls": [
+    { "sql": "SELECT * FROM users WHERE id = 1" },
+    { "sql": "SELECT * FROM orders WHERE user_id = 1" },
+    { "sql": "DELETE FROM users WHERE id = 1" }
+  ],
+  "options": {
+    "performance": true,
+    "security": true,
+    "standards": true,
+    "learn": false
+  }
+}
+
+### 获取分析器状态
+GET {{baseUrl}}/api/analyze/status
+Accept: {{contentType}}
+
+### 4. 历史记录管理
+
+### 获取所有历史记录
+GET {{baseUrl}}/api/history
+Accept: {{contentType}}
+
+### 获取历史记录详情
+GET {{baseUrl}}/api/history/1
+Accept: {{contentType}}
+
+### 搜索历史记录
+POST {{baseUrl}}/api/history/search
+Content-Type: {{contentType}}
+
+{
+  "sql": "SELECT",
+  "limit": 5
+}
+
+### 获取历史记录统计
+GET {{baseUrl}}/api/history/stats
+Accept: {{contentType}}
+
+### 导出历史记录 (JSON格式)
+GET {{baseUrl}}/api/history/export?format=json
+Accept: {{contentType}}
+
+### 5. 知识库管理
+
+### 获取知识库状态
+GET {{baseUrl}}/api/knowledge
+Accept: {{contentType}}
+
+### 搜索知识库
+POST {{baseUrl}}/api/knowledge/search
+Content-Type: {{contentType}}
+
+{
+  "query": "SQL注入",
+  "k": 3
+}
+
+### 触发知识库学习
+POST {{baseUrl}}/api/knowledge/learn
+Content-Type: {{contentType}}
+
+{
+  "rulesDir": "./rules",
+  "reset": false,
+  "priorityApproved": false
+}
+
+### 重置知识库
+POST {{baseUrl}}/api/knowledge/reset
+Content-Type: {{contentType}}
+
+### 导出知识库
+GET {{baseUrl}}/api/knowledge/export?format=json
+Accept: {{contentType}}
+
+### 6. 配置管理
+
+### 获取所有配置
+GET {{baseUrl}}/api/config
+Accept: {{contentType}}
+
+### 获取指定配置项
+GET {{baseUrl}}/api/config/api
+Accept: {{contentType}}
+
+### 更新配置项
+PUT {{baseUrl}}/api/config/learning
+Content-Type: {{contentType}}
+
+{
+  "value": {
+    "enabled": true,
+    "minConfidence": 0.8,
+    "minBatchSize": 10
+  }
+}
+
+### 重置配置项
+DELETE {{baseUrl}}/api/config/learning
+Accept: {{contentType}}
+
+### 重置所有配置
+POST {{baseUrl}}/api/config/reset
+Content-Type: {{contentType}}
+
+### 获取配置项列表
+GET {{baseUrl}}/api/config/llm
+Accept: {{contentType}}
+
+### 7. 规则学习管理
+
+### 获取规则学习配置
+GET {{baseUrl}}/api/rule-learning/config
+Accept: {{contentType}}
+
+### 更新规则学习配置
+PUT {{baseUrl}}/api/rule-learning/config
+Content-Type: {{contentType}}
+
+{
+  "config": {
+    "learning": {
+      "enabled": true,
+      "minConfidence": 0.7,
+      "minBatchSize": 5,
+      "enableRealTimeLearning": true,
+      "enableBatchLearning": true
+    },
+    "autoApproveThreshold": 0.8
+  }
+}
+
+### 重置规则学习配置
+POST {{baseUrl}}/api/rule-learning/config/reset
+Content-Type: {{contentType}}
+
+### 获取规则学习状态
+GET {{baseUrl}}/api/rule-learning/status
+Accept: {{contentType}}
+
+### 触发规则学习 - 核心功能
+POST {{baseUrl}}/api/rule-learning/learn
+Content-Type: {{contentType}}
+
+{
+  "options": {
+    "batchSize": 10,
+    "minConfidence": 0.7
+  }
+}
+
+### 获取阈值调整统计
+GET {{baseUrl}}/api/rule-learning/threshold-stats
+Accept: {{contentType}}
+
+### 8. 错误测试接口
+
+### 测试404错误
+GET {{baseUrl}}/api/nonexistent
+Accept: {{contentType}}
+
+### 测试参数错误
+POST {{baseUrl}}/api/analyze
+Content-Type: {{contentType}}
+
+{
+  "sql": ""
+}
+
+### 测试批量分析限制
+POST {{baseUrl}}/api/analyze/batch
+Content-Type: {{contentType}}
+
+{
+  "sqls": [],
+  "options": {}
+}

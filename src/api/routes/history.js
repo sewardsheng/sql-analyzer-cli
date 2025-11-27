@@ -14,13 +14,63 @@ import { formatSuccessResponse, formatErrorResponse, formatPaginatedResponse } f
  */
 export function registerHistoryRoutes(app) {
   /**
+   * GET /api/history/stats - 获取历史记录统计信息
+   * 返回历史记录的统计信息
+   * 注意：这个路由必须在 /api/history/:id 之前定义
+   */
+  app.get('/api/history/stats', async (c) => {
+    try {
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
+      const stats = await historyService.getHistoryStats();
+      
+      return c.json(formatSuccessResponse(stats, '获取历史记录统计成功'));
+    } catch (error) {
+      console.error(chalk.red(`[API] 获取历史记录统计失败: ${error.message}`));
+      
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
+    }
+  });
+
+  /**
+   * GET /api/history/export - 导出历史记录
+   * 导出历史记录数据
+   * 注意：这个路由必须在 /api/history/:id 之前定义
+   *
+   * Query Parameters:
+   * - format: 导出格式 (json|csv)，默认为json
+   */
+  app.get('/api/history/export', async (c) => {
+    try {
+      const format = c.req.query('format') || 'json';
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
+      const result = await historyService.exportHistory(format);
+      
+      if (format === 'csv') {
+        c.header('Content-Type', 'text/csv');
+        c.header('Content-Disposition', 'attachment; filename="history.csv"');
+        return c.text(result);
+      } else {
+        return c.json(formatSuccessResponse(result, '导出历史记录成功'));
+      }
+    } catch (error) {
+      console.error(chalk.red(`[API] 导出历史记录失败: ${error.message}`));
+      
+      // 错误会被中间件处理，这里重新抛出
+      throw error;
+    }
+  });
+
+  /**
    * GET /api/history - 获取历史记录列表
    * 返回所有历史记录的简要信息
    */
   app.get('/api/history', async (c) => {
     try {
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
       const history = await historyService.getAllHistory();
       
       return c.json(formatSuccessResponse(history, {
@@ -41,8 +91,8 @@ export function registerHistoryRoutes(app) {
   app.get('/api/history/:id', async (c) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
       const record = await historyService.getHistoryById(id);
       
       if (!record) {
@@ -65,8 +115,8 @@ export function registerHistoryRoutes(app) {
   app.delete('/api/history/:id', async (c) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
       const success = await historyService.deleteHistory(id);
       
       if (!success) {
@@ -90,9 +140,9 @@ export function registerHistoryRoutes(app) {
    */
   app.delete('/api/history', async (c) => {
     try {
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
-      const success = await historyService.clearAllHistory();
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
+      const success = await historyService.clearHistory();
       
       if (!success) {
         throw new Error(`清空历史记录失败`);
@@ -103,25 +153,6 @@ export function registerHistoryRoutes(app) {
       return c.json(formatSuccessResponse(null, '清空历史记录成功'));
     } catch (error) {
       console.error(chalk.red(`[API] 清空历史记录失败: ${error.message}`));
-      
-      // 错误会被中间件处理，这里重新抛出
-      throw error;
-    }
-  });
-
-  /**
-   * GET /api/history/stats - 获取历史记录统计信息
-   * 返回历史记录的统计信息
-   */
-  app.get('/api/history/stats', async (c) => {
-    try {
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
-      const stats = await historyService.getHistoryStats();
-      
-      return c.json(formatSuccessResponse(stats, '获取历史记录统计成功'));
-    } catch (error) {
-      console.error(chalk.red(`[API] 获取历史记录统计失败: ${error.message}`));
       
       // 错误会被中间件处理，这里重新抛出
       throw error;
@@ -144,42 +175,13 @@ export function registerHistoryRoutes(app) {
   app.post('/api/history/search', async (c) => {
     try {
       const body = await c.req.json();
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
-      const results = await historyService.searchHistory(body);
+      const { getHistoryService } = await import('../../services/history-service.js');
+      const historyService = await getHistoryService();
+      const results = await historyService.searchHistory(body.query || '', body);
       
       return c.json(formatSuccessResponse(results, '搜索历史记录成功'));
     } catch (error) {
       console.error(chalk.red(`[API] 搜索历史记录失败: ${error.message}`));
-      
-      // 错误会被中间件处理，这里重新抛出
-      throw error;
-    }
-  });
-
-  /**
-   * GET /api/history/export - 导出历史记录
-   * 导出历史记录数据
-   *
-   * Query Parameters:
-   * - format: 导出格式 (json|csv)，默认为json
-   */
-  app.get('/api/history/export', async (c) => {
-    try {
-      const format = c.req.query('format') || 'json';
-      const { getHistoryService } = await import('../../services/history/historyService.js');
-      const historyService = getHistoryService();
-      const result = await historyService.exportHistory({ format });
-      
-      if (format === 'csv') {
-        c.header('Content-Type', 'text/csv');
-        c.header('Content-Disposition', 'attachment; filename="history.csv"');
-        return c.text(result);
-      } else {
-        return c.json(formatSuccessResponse(result, '导出历史记录成功'));
-      }
-    } catch (error) {
-      console.error(chalk.red(`[API] 导出历史记录失败: ${error.message}`));
       
       // 错误会被中间件处理，这里重新抛出
       throw error;

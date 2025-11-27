@@ -5,9 +5,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { getRuleLearningConfig, resetRuleLearningConfig } from '../src/config/rule-learning-config.js';
-import { getIntelligentRuleLearner } from '../src/services/rule-learning/IntelligentRuleLearner.js';
+import { getIntelligentRuleLearner } from '../src/services/rule-learning/rule-learner.js';
 import { getLLMService } from '../src/core/llm-service.js';
-import { getHistoryService } from '../src/services/history/historyService.js';
+import { getHistoryService } from '../src/services/history-service.js';
 
 describe('智能规则学习系统测试', () => {
   let config;
@@ -22,7 +22,7 @@ describe('智能规则学习系统测试', () => {
     
     // 初始化服务
     llmService = getLLMService();
-    historyService = getHistoryService();
+    historyService = await getHistoryService();
     ruleLearner = getIntelligentRuleLearner(llmService, historyService);
   });
 
@@ -350,7 +350,7 @@ describe('性能测试', () => {
   it('规则学习应该在合理时间内完成', async () => {
     const config = getRuleLearningConfig();
     const llmService = getLLMService();
-    const historyService = getHistoryService();
+    const historyService = await getHistoryService();
     const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
     
     const startTime = Date.now();
@@ -380,7 +380,7 @@ describe('错误处理测试', () => {
   it('应该能够处理无效的分析结果', async () => {
     const config = getRuleLearningConfig();
     const llmService = getLLMService();
-    const historyService = getHistoryService();
+    const historyService = await getHistoryService();
     const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
     
     // 测试空结果

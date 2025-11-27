@@ -3,7 +3,7 @@
  * 记录所有API请求的详细信息
  */
 
-import { logInfo, logApiRequest, generateRequestId } from '../utils/logger.js';
+import { logApiRequest, generateRequestId } from '../utils/logger.js';
 
 /**
  * 请求日志中间件
@@ -66,17 +66,36 @@ export function requestLoggerMiddleware(options = {}) {
           statusCode = c.res.status;
         }
       } catch (error) {
-        console.log('[DEBUG] Error getting status code:', error.message);
         statusCode = 200;
       }
       
-      // 获取响应大小
+      // 获取响应大小 - 添加调试日志
       let responseSize = '0';
+      let debugInfo = {
+        hasRes: !!c.res,
+        resType: typeof c.res,
+        hasHeaders: !!(c.res?.headers),
+        headersType: typeof c.res?.headers,
+        hasGet: typeof c.res?.headers?.get === 'function',
+        allHeaders: {}
+      };
+      
       try {
-        responseSize = c.res?.headers?.get?.('content-length') || '0';
+        // 尝试多种方式获取 content-length
+        if (c.res?.headers) {
+          debugInfo.allHeaders = Object.fromEntries(c.res.headers.entries());
+          responseSize = c.res.headers.get('content-length') || '0';
+        }
+        
+        // 如果还是0，尝试从响应对象的其他属性获取
+        if (responseSize === '0' && c.res) {
+          debugInfo.resProperties = Object.getOwnPropertyNames(c.res);
+        }
       } catch (error) {
-        // 忽略错误
+        debugInfo.error = error.message;
       }
+
+      console.log('[DEBUG] 响应头调试信息:', JSON.stringify(debugInfo, null, 2));
 
       // 使用新的API日志记录方法
       await logApiRequest(req, { status: statusCode, headers: { get: () => responseSize } }, startTime, endTime);

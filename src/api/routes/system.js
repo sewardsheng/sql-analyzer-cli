@@ -145,8 +145,9 @@ export function registerSystemRoutes(app) {
       // 获取历史记录统计
       let historyStats = { total: 0, recent: 0 };
       try {
-        const { getHistoryStats } = await import('../../services/history-service.js');
-        historyStats = await getHistoryStats();
+        const { getHistoryService } = await import('../../services/history-service.js');
+        const historyService = await getHistoryService();
+        historyStats = await historyService.getHistoryStats();
       } catch (error) {
         historyStats.error = error.message;
       }

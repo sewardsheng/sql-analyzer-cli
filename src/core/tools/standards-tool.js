@@ -4,6 +4,7 @@
  */
 
 import { BaseTool } from './base-tool.js';
+import { buildPrompt } from '../../utils/format/prompt-loader.js';
 
 /**
  * 规范检查工具类
@@ -25,10 +26,10 @@ class StandardsTool extends BaseTool {
         throw new Error('无效的分析上下文');
       }
 
-      const prompt = this.buildPrompt(context);
+      const prompt = await this.buildPrompt(context);
       const llmResult = await this.llmService.call(prompt, {
         temperature: 0.1,
-        maxTokens: 1000, // 进一步减少token数量
+        maxTokens: 2000, // 增加token数量以支持更详细的分析
         timeout: 60000   // 更新超时时间
       });
 
@@ -46,12 +47,22 @@ class StandardsTool extends BaseTool {
   /**
    * 构建规范检查提示词
    * @param {Object} context - 分析上下文
-   * @returns {string} 提示词
+   * @returns {Promise<string>} 提示词
    */
-  buildPrompt(context) {
+  async buildPrompt(context) {
     const { sql, databaseType } = context;
-
-    return `检查${databaseType} SQL规范：
+    
+    try {
+      const { systemPrompt, userPrompt } = await buildPrompt('coding-standards-check.md', {
+        databaseType,
+        sql
+      }, { category: 'analyzers' });
+      
+      return `${systemPrompt}\n\n${userPrompt}\n\nSQL语句：\n\`\`\`sql\n${sql}\n\`\`\``;
+    } catch (error) {
+      // 如果加载提示词失败，回退到硬编码提示词
+      console.warn('加载编码规范检查提示词失败，使用回退提示词:', error.message);
+      return `检查${databaseType} SQL规范：
 \`\`\`sql
 ${sql}
 \`\`\`
@@ -67,6 +78,7 @@ ${sql}
   "standards": ["标准列表"],
   "metrics": {"readability": "可读性", "maintainability": "可维护性"}
 }`;
+    }
   }
 
   /**

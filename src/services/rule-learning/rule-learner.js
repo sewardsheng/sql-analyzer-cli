@@ -7,10 +7,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import { buildPrompt } from '../../utils/format/prompt-loader.js';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
-import { HistoryAnalyzer } from './HistoryAnalyzer.js';
-import { RuleGenerator } from './RuleGenerator.js';
-import { QualityEvaluator } from './QualityEvaluator.js';
-import { AutoApprover } from './AutoApprover.js';
+import { HistoryAnalyzer } from './history-analyzer.js';
+import { RuleGenerator } from './rule-generator.js';
+import { QualityEvaluator } from './quality-evaluator.js';
+import { AutoApprover } from './auto-approver.js';
+import { IntegratedRuleProcessor } from './rule-processor.js';
+import { getPerformanceMonitor } from './performance-monitor.js';
+import { smartThresholdAdjuster } from './threshold-adjuster.js';
 
 /**
  * 智能规则学习器类
@@ -23,11 +26,14 @@ export class IntelligentRuleLearner {
     this.ruleGenerator = new RuleGenerator(llmService);
     this.qualityEvaluator = new QualityEvaluator(llmService);
     this.autoApprover = new AutoApprover();
+    this.integratedProcessor = new IntegratedRuleProcessor(llmService);
+    this.performanceMonitor = getPerformanceMonitor();
+    this.thresholdAdjuster = smartThresholdAdjuster;
     
     // 配置参数
     this.config = {
       enabled: process.env.RULE_LEARNING_ENABLED !== 'false',
-      autoApproveThreshold: 0.8,
+      autoApproveThreshold: 0.7,  // 与统一配置保持一致
       minConfidence: 0.7,
       maxRulesPerDay: 50,
       learningFromHistory: {
@@ -62,28 +68,35 @@ export class IntelligentRuleLearner {
       // 2. 构建学习上下文
       const learningContext = await this.buildLearningContext(sqlQuery, analysisResult);
       
-      // 3. 生成候选规则
-      const candidateRules = await this.ruleGenerator.generateRules(learningContext);
+      // 3. 使用集成处理器一次性完成生成和评估（优化流程）
+      const evaluatedRules = await this.integratedProcessor.generateAndEvaluateRules(learningContext);
       
-      if (!candidateRules || candidateRules.length === 0) {
-        console.log(`[RuleLearner] 未生成候选规则`);
-        return { success: false, reason: '未生成候选规则' };
+      if (!evaluatedRules || evaluatedRules.length === 0) {
+        console.log(`[RuleLearner] 未生成有效规则`);
+        return { success: false, reason: '未生成有效规则' };
       }
 
-      // 4. 质量评估
-      const evaluatedRules = await this.qualityEvaluator.evaluateBatch(candidateRules, learningContext);
-      
-      // 5. 自动审批高质量规则（先审批，后保存）
+      // 4. 自动审批高质量规则（先审批，后保存）
       const approvedRules = await this.autoApprover.process(evaluatedRules);
+      
+      // 5. 记录质量数据并智能调整阈值
+      this.thresholdAdjuster.recordQualityData(evaluatedRules, approvedRules);
+      const thresholdAdjustment = this.thresholdAdjuster.applyAdjustment(this.config.autoApproveThreshold);
+      
+      if (thresholdAdjustment.adjustment !== 0) {
+        this.config.autoApproveThreshold = thresholdAdjustment.recommendedThreshold;
+        console.log(`[RuleLearner] 自动调整审批阈值: ${thresholdAdjustment.currentThreshold} -> ${thresholdAdjustment.recommendedThreshold}`);
+        console.log(`[RuleLearner] 调整原因: ${thresholdAdjustment.reason}`);
+      }
       
       // 6. 根据审批结果分别保存到不同目录
       await this.saveRulesByApproval(evaluatedRules, approvedRules, learningContext);
       
-      console.log(`[RuleLearner] 学习完成: 生成${candidateRules.length}条规则，审批${approvedRules.length}条`);
+      console.log(`[RuleLearner] 学习完成: 生成${evaluatedRules.length}条规则，审批${approvedRules.length}条`);
       
       return {
         success: true,
-        generated: candidateRules.length,
+        generated: evaluatedRules.length,
         evaluated: evaluatedRules.length,
         approved: approvedRules.length,
         rules: approvedRules
@@ -218,8 +231,8 @@ export class IntelligentRuleLearner {
       // 2. 构建历史分析上下文
       const historyContext = this.buildHistoryContext(historyRecords);
       
-      // 3. 使用智能规则学习器提示词
-      const { systemPrompt, userPrompt } = await buildPrompt('intelligent-rule-learner.md', learningContext, { category: 'analyzers' });
+      // 3. 使用优化后的智能规则学习器提示词
+      const { systemPrompt, userPrompt } = await buildPrompt('intelligent-rule-learner-optimized.md', learningContext, { category: 'analyzers' });
       
       // 4. 调用LLM进行深度学习
       const llmResult = await this.llmService.call(`${systemPrompt}\n\n请基于以下历史分析数据进行深度学习：\n\n${historyContext}`);
@@ -884,11 +897,36 @@ ${this.formatPatterns(context.patterns)}
   }
 
   /**
-   * 获取现有规则
+   * 获取现有规则（集成知识库检索）
    * @returns {Promise<string>} 现有规则内容
    */
   async getExistingRules() {
     try {
+      // 优先使用知识库检索
+      const { retrieveKnowledge } = await import('../../core/knowledge/index.js');
+      
+      // 搜索相关规则
+      const searchQueries = [
+        `${this.getMainDatabaseType([])} 性能优化`,
+        `${this.getMainDatabaseType([])} 安全检查`,
+        `${this.getMainDatabaseType([])} 编码规范`
+      ];
+      
+      let allRules = [];
+      for (const query of searchQueries) {
+        const result = await retrieveKnowledge(query, 2);
+        if (result.success && result.data.documents) {
+          allRules.push(...result.data.documents.map(doc => doc.pageContent));
+        }
+      }
+      
+      // 如果知识库中有规则，返回前10条最相关的
+      if (allRules.length > 0) {
+        return allRules.slice(0, 10).join('\n---\n');
+      }
+      
+      // 知识库中没有足够规则，回退到文件系统读取
+      // 只读取approved目录中的规则，确保质量
       const rulesDir = path.join(process.cwd(), 'rules', 'learning-rules', 'approved');
       const rules = [];
       
@@ -912,9 +950,10 @@ ${this.formatPatterns(context.patterns)}
       }
       
       return rules.join('\n\n---\n\n');
+      
     } catch (error) {
-      console.warn(`[RuleLearner] 获取现有规则失败: ${error.message}`);
-      return '';
+      console.warn(`[RuleLearner] 获取现有规则失败，使用默认摘要: ${error.message}`);
+      return '现有规则包括性能优化、安全检查和编码规范等类别的SQL审核规则。';
     }
   }
 
@@ -1097,7 +1136,43 @@ ${this.formatPatterns(context.patterns)}
    * @returns {string} 规则类型
    */
   extractRuleType(rule) {
-    return rule.type || rule.subcategory || rule.triggerCondition || '未定义';
+    // 优先使用明确的类型字段
+    if (rule.type && rule.type !== 'undefined') {
+      return rule.type;
+    }
+    
+    // 使用子类别作为类型
+    if (rule.subcategory) {
+      return rule.subcategory;
+    }
+    
+    // 从触发条件推断类型
+    if (rule.triggerCondition) {
+      // 简化触发条件作为类型
+      const condition = rule.triggerCondition.toLowerCase();
+      if (condition.includes('select *')) return '数据访问效率';
+      if (condition.includes('like')) return '模糊查询';
+      if (condition.includes('join')) return '连接查询';
+      if (condition.includes('where')) return '条件查询';
+      if (condition.includes('index')) return '索引优化';
+      if (condition.includes('format')) return '格式规范';
+      if (condition.includes('naming')) return '命名规范';
+      if (condition.includes('injection') || condition.includes('注入')) return 'SQL注入防护';
+      if (condition.includes('permission') || condition.includes('权限')) return '权限控制';
+      return rule.triggerCondition.substring(0, 20);
+    }
+    
+    // 从类别推断默认类型
+    if (rule.category) {
+      const categoryMap = {
+        'performance': '性能优化',
+        'security': '安全检查',
+        'standards': '编码规范'
+      };
+      return categoryMap[rule.category] || rule.category;
+    }
+    
+    return '通用规则';
   }
 
   /**

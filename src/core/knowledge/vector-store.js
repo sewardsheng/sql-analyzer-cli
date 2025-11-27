@@ -18,8 +18,9 @@ import path from "path";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import crypto from "crypto";
-import { getLLMConfig } from '../../config/ConfigAdapters.js';
-import { logError } from '../../utils/logger.js';
+import { unifiedConfigManager } from '../../config/config-manager.js';
+import { error } from '../../utils/logger.js';
+import { shouldIncludeDirectory, getValidRuleDirectories } from '../../services/rule-learning/directory-filter.js';
 
 // 全局向量存储实例
 let vectorStore = null;
@@ -40,7 +41,7 @@ async function initializeVectorStore() {
   // 直接从环境变量读取配置，而不是从配置文件
   const apiKey = process.env.VECTOR_STORE_API_KEY || process.env.CUSTOM_API_KEY;
   const baseURL = process.env.VECTOR_STORE_BASE_URL || process.env.CUSTOM_BASE_URL || 'https://api.openai.com/v1';
-  const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || process.env.CUSTOM_EMBEDDING_MODEL || 'text-embedding-ada-002';
+  const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || 'text-embedding-ada-002';
   
   if (!apiKey) {
     throw new Error("未配置向量存储API密钥，请在.env文件中设置VECTOR_STORE_API_KEY或CUSTOM_API_KEY");
@@ -113,6 +114,19 @@ async function loadDocumentsFromRulesDirectory(rulesDir = "./rules") {
       return { documentCount: 0, fileTypes: [] };
     }
 
+    // 过滤learning-rules目录，只加载白名单中的目录
+    const filteredContents = dirContents.filter(item => {
+      const itemPath = path.join(rulesDir, item);
+      return shouldIncludeDirectory(itemPath, rulesDir);
+    });
+
+    if (filteredContents.length === 0) {
+      console.log("[DirectoryFilter] 没有符合条件的规则目录需要加载");
+      return { documentCount: 0, fileTypes: [] };
+    }
+
+    console.log(`[DirectoryFilter] 将加载以下目录: ${filteredContents.join(', ')}`);
+
     // 创建目录加载器，支持多种文件类型
     const loader = new DirectoryLoader(rulesDir, {
       ".txt": (path) => new TextLoader(path),
@@ -177,7 +191,7 @@ async function loadDocumentsFromRulesDirectory(rulesDir = "./rules") {
       // 获取当前嵌入模型信息
       const apiKey = process.env.VECTOR_STORE_API_KEY || process.env.CUSTOM_API_KEY;
       const baseURL = process.env.VECTOR_STORE_BASE_URL || process.env.CUSTOM_BASE_URL || 'https://api.openai.com/v1';
-      const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || process.env.CUSTOM_EMBEDDING_MODEL || 'text-embedding-ada-002';
+      const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || 'text-embedding-ada-002';
       
       // 保存分割后的文档到磁盘
       const docsPath = path.join(VECTOR_STORE_PATH, 'documents.json');
@@ -295,7 +309,7 @@ async function loadVectorStoreFromDisk() {
     // 获取当前嵌入模型信息
     const apiKey = process.env.VECTOR_STORE_API_KEY || process.env.CUSTOM_API_KEY;
     const baseURL = process.env.VECTOR_STORE_BASE_URL || process.env.CUSTOM_BASE_URL || 'https://api.openai.com/v1';
-    const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || process.env.CUSTOM_EMBEDDING_MODEL || 'text-embedding-ada-002';
+    const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || 'text-embedding-ada-002';
     
     // 初始化向量存储
     await initializeVectorStore();
@@ -520,7 +534,7 @@ function createRetrieveTool() {
 
         return [formattedResult, documents];
       } catch (error) {
-        logError('检索文档时出错', error);
+        error('knowledge', '检索文档时出错', error);
         return `检索文档时出错: ${error.message}`;
       }
     },
@@ -556,7 +570,7 @@ async function retrieveKnowledge(query, k = 4) {
       data: result
     };
   } catch (error) {
-    logError('检索知识库失败', error);
+    error('knowledge', '检索知识库失败', error);
     return {
       success: false,
       error: error.message

@@ -1,10 +1,9 @@
 /**
- * 增强的错误处理器
- * 提供统一的错误处理、分类、恢复和日志记录
+ * 统一错误处理器
+ * 整合业务错误处理和HTTP错误处理中间件功能
  */
 
-import { logError, logWarning, logInfo } from '../logger.js';
-import { SqlAnalyzerError, createError } from '../logger.js';
+import { globalLogger, LogCategory } from './logger.js';
 
 /**
  * 错误类型枚举
@@ -69,22 +68,17 @@ export const RecoveryStrategy = {
 };
 
 /**
- * 增强的错误处理器类
+ * 统一错误处理器类
  */
 export class ErrorHandler {
   constructor(options = {}) {
     this.options = {
       maxRetries: 3,
       retryDelay: 1000,
-      enableFallback: true,
       enableRecovery: true,
       logErrors: true,
       ...options
     };
-    
-    // 错误统计
-    this.errorStats = new Map();
-    this.retryCounters = new Map();
   }
 
   /**
@@ -290,7 +284,7 @@ export class ErrorHandler {
           return { recovered: false, reason: `不支持的恢复策略: ${strategy}` };
       }
     } catch (recoveryError) {
-      await logError('错误恢复失败', recoveryError, {
+      await globalLogger.error(LogCategory.SYSTEM, '错误恢复失败', recoveryError, {
         originalErrorType: type,
         errorId,
         recoveryStrategy: strategy
@@ -313,45 +307,21 @@ export class ErrorHandler {
       return { recovered: false, reason: '未提供重试函数' };
     }
     
-    const retryKey = `${errorInfo.type}_${context.operation || 'unknown'}`;
-    const currentRetries = this.retryCounters.get(retryKey) || 0;
-    
-    if (currentRetries >= this.options.maxRetries) {
-      return { recovered: false, reason: '已达到最大重试次数' };
-    }
-    
-    // 计算重试延迟（指数退避）
-    const delay = this.options.retryDelay * Math.pow(2, currentRetries);
-    
-    await logInfo(`准备重试操作`, {
+    // 简单重试逻辑
+    await globalLogger.info(LogCategory.SYSTEM, '准备重试操作', {
       errorType: errorInfo.type,
-      retryCount: currentRetries + 1,
-      maxRetries: this.options.maxRetries,
-      delay,
       errorId
     });
     
-    // 等待延迟
-    await this.sleep(delay);
-    
-    // 更新重试计数
-    this.retryCounters.set(retryKey, currentRetries + 1);
-    
     try {
       const result = await retryFunction();
-      
-      // 重试成功，清除计数器
-      this.retryCounters.delete(retryKey);
-      
       return {
         recovered: true,
         result,
-        strategy: 'retry',
-        retryCount: currentRetries + 1
+        strategy: 'retry'
       };
     } catch (retryError) {
-      // 重试失败，继续尝试
-      return await this.attemptRecovery(errorInfo, context, retryFunction, null, errorId);
+      return { recovered: false, reason: '重试失败' };
     }
   }
 
@@ -368,7 +338,7 @@ export class ErrorHandler {
       return { recovered: false, reason: '未提供降级函数' };
     }
     
-    await logInfo(`执行降级处理`, {
+    await globalLogger.info(LogCategory.SYSTEM, '执行降级处理', {
       errorType: errorInfo.type,
       errorId
     });
@@ -394,7 +364,7 @@ export class ErrorHandler {
    * @returns {Promise<Object>} 降级结果
    */
   async performGracefulDegradation(errorInfo, context, errorId) {
-    await logInfo(`执行优雅降级`, {
+    await globalLogger.info(LogCategory.SYSTEM, '执行优雅降级', {
       errorType: errorInfo.type,
       errorId
     });
@@ -450,7 +420,7 @@ export class ErrorHandler {
       }
     };
     
-    await logError(`错误处理: ${errorInfo.type}`, error, logData);
+    await globalLogger.error(LogCategory.SYSTEM, `错误处理: ${errorInfo.type}`, logData);
   }
 
   /**
@@ -460,7 +430,7 @@ export class ErrorHandler {
    * @param {string} errorId - 错误ID
    */
   async logRecoverySuccess(errorInfo, recoveryResult, errorId) {
-    await logInfo(`错误恢复成功`, {
+    await globalLogger.info(LogCategory.SYSTEM, '错误恢复成功', {
       errorId,
       errorType: errorInfo.type,
       recoveryStrategy: recoveryResult.strategy,
@@ -492,7 +462,7 @@ export class ErrorHandler {
       }
     };
     
-    return createError(errorInfo.type, message, details);
+    return this.createError(errorInfo.type, message, details);
   }
 
   /**
@@ -507,49 +477,27 @@ export class ErrorHandler {
   }
 
   /**
+   * 创建错误对象
+   * @param {string} type - 错误类型
+   * @param {string} message - 错误消息
+   * @param {Object} details - 详细信息
+   * @returns {Error} 错误对象
+   */
+  createError(type, message, details = null) {
+    const error = new Error(message);
+    error.name = 'SqlAnalyzerError';
+    error.code = type;
+    error.details = details;
+    return error;
+  }
+
+  /**
    * 记录错误统计
    * @param {Object} errorInfo - 错误信息
    */
   recordErrorStats(errorInfo) {
-    const stats = this.errorStats.get(errorInfo.type) || {
-      count: 0,
-      firstOccurrence: new Date(),
-      lastOccurrence: new Date()
-    };
-    
-    stats.count++;
-    stats.lastOccurrence = new Date();
-    
-    this.errorStats.set(errorInfo.type, stats);
-  }
-
-  /**
-   * 获取错误统计
-   * @returns {Object} 错误统计信息
-   */
-  getErrorStats() {
-    const stats = {};
-    for (const [type, data] of this.errorStats.entries()) {
-      stats[type] = { ...data };
-    }
-    return stats;
-  }
-
-  /**
-   * 清除错误统计
-   */
-  clearErrorStats() {
-    this.errorStats.clear();
-    this.retryCounters.clear();
-  }
-
-  /**
-   * 睡眠函数
-   * @param {number} ms - 毫秒数
-   * @returns {Promise<void>}
-   */
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    // 这里可以添加错误统计逻辑
+    // 如：发送到监控系统，记录到数据库等
   }
 
   /**
@@ -571,16 +519,6 @@ export class ErrorHandler {
       }
     };
   }
-
-  /**
-   * 包装异步函数以提供错误处理
-   * @param {Function} fn - 要包装的异步函数
-   * @param {Object} options - 包装选项
-   * @returns {Function} 包装后的函数
-   */
-  wrapAsyncFunction(fn, options = {}) {
-    return this.wrapFunction(fn, options);
-  }
 }
 
 // 创建全局错误处理器实例
@@ -599,34 +537,156 @@ export async function handleError(error, context = {}, retryFunction = null, fal
 }
 
 /**
- * 创建错误处理装饰器
- * @param {Object} options - 装饰器选项
- * @returns {Function} 装饰器函数
+ * HTTP错误处理中间件
+ * @param {Object} options - 配置选项
+ * @returns {Function} 错误处理函数
  */
-export function withErrorHandling(options = {}) {
-  return function(target, propertyKey, descriptor) {
-    const originalMethod = descriptor.value;
+export function createErrorHandler(options = {}) {
+  const {
+    logErrors = true,
+    includeStack = process.env.NODE_ENV === 'development'
+  } = options;
+
+  return async (error, c) => {
+    // 获取请求ID
+    let requestId = 'unknown';
+    try {
+      requestId = c.get('requestId') || c.req.header('x-request-id') || 'unknown';
+    } catch (err) {
+      requestId = 'unknown';
+    }
     
-    descriptor.value = async function(...args) {
+    // 记录错误
+    if (logErrors) {
+      let method = 'unknown';
+      let url = 'unknown';
+      let userAgent = 'unknown';
+      let ip = 'unknown';
+      
       try {
-        return await originalMethod.apply(this, args);
-      } catch (error) {
-        const context = {
-          class: target.constructor.name,
-          method: propertyKey,
-          args: args.length,
-          ...options.context
-        };
-        
-        return await globalErrorHandler.handleError(
-          error, 
-          context, 
-          options.retry, 
-          options.fallback
-        );
+        if (c.req && typeof c.req === 'object') {
+          method = c.req.method || 'unknown';
+          url = c.req.url || 'unknown';
+          userAgent = c.req.header('user-agent') || 'unknown';
+          ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+        }
+      } catch (reqErr) {
+        // 忽略请求信息获取错误
       }
+      
+      const errorInfo = {
+        requestId,
+        method,
+        url,
+        userAgent,
+        ip
+      };
+
+      try {
+        await globalLogger.error(LogCategory.API, `HTTP错误: ${error.message}`, error, errorInfo);
+      } catch (logErr) {
+        console.error('记录错误日志失败:', logErr.message);
+      }
+    }
+
+    // 创建错误响应
+    const statusCode = error.statusCode || error.status || 500;
+    const message = error.message || '内部服务器错误';
+    
+    const errorResponse = {
+      success: false,
+      error: message,
+      type: error.type || 'INTERNAL_ERROR',
+      statusCode,
+      timestamp: new Date().toISOString()
     };
     
-    return descriptor;
+    // 在开发环境中包含堆栈信息
+    if (includeStack && error.stack) {
+      errorResponse.stack = error.stack;
+    }
+    
+    return c.json(errorResponse, statusCode);
+  };
+}
+
+/**
+ * 404处理中间件
+ * @returns {Function} 404处理函数
+ */
+export function createNotFoundHandler() {
+  return async (c) => {
+    const req = c.req;
+    
+    // 获取请求ID
+    let requestId = 'unknown';
+    try {
+      requestId = c.get('requestId') || c.req.header('x-request-id') || 'unknown';
+    } catch (err) {
+      requestId = 'unknown';
+    }
+    
+    const errorResponse = {
+      success: false,
+      error: '请求的端点不存在',
+      type: 'NOT_FOUND_ERROR',
+      statusCode: 404,
+      availableEndpoints: [
+        'GET /',
+        'GET /api/health',
+        'GET /api/health/ping',
+        'GET /api/health/status',
+        'POST /api/analyze',
+        'POST /api/analyze/batch',
+        'GET /api/config',
+        'GET /api/config/:key',
+        'PUT /api/config/:key',
+        'DELETE /api/config/:key',
+        'GET /api/history',
+        'GET /api/history/:id',
+        'DELETE /api/history/:id',
+        'GET /api/knowledge',
+        'POST /api/knowledge/search',
+        'POST /api/knowledge/learn',
+        'GET /api/status',
+        'GET /api/docs'
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    // 获取请求信息
+    let method = 'unknown';
+    let url = 'unknown';
+    let userAgent = 'unknown';
+    let ip = 'unknown';
+    
+    try {
+      if (req && typeof req === 'object') {
+        method = req.method || 'unknown';
+        url = req.url || 'unknown';
+        userAgent = req.header('user-agent') || 'unknown';
+        ip = req.header('x-forwarded-for') || req.header('x-real-ip') || 'unknown';
+      }
+    } catch (reqErr) {
+      // 忽略请求信息获取错误
+    }
+    
+    const error = new Error(`未找到端点: ${method} ${url}`);
+    const errorInfo = {
+      requestId,
+      method,
+      url,
+      userAgent,
+      ip
+    };
+
+    // 记录404错误
+    try {
+      await globalLogger.warn(LogCategory.API, '404错误', error, errorInfo);
+    } catch (logErr) {
+      console.error('记录404错误日志失败:', logErr.message);
+    }
+
+    return c.json(errorResponse, 404);
   };
 }

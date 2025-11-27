@@ -4,8 +4,6 @@
  */
 
 import dotenv from 'dotenv';
-import fs from 'fs/promises';
-import path from 'path';
 
 // 加载环境变量
 dotenv.config();
@@ -14,25 +12,14 @@ dotenv.config();
  * 默认配置
  */
 const DEFAULT_UNIFIED_CONFIG = {
-  // 服务器配置
-  server: {
-    port: parseInt(process.env.PORT) || 3001,
-    host: process.env.HOST || '0.0.0.0',
-    cors: process.env.CORS !== 'false',
-    corsOrigin: process.env.CORS_ORIGIN || '*',
-    nodeEnv: process.env.NODE_ENV || 'development',
-    logLevel: process.env.LOG_LEVEL || 'info'
-  },
-
-  // API配置
+  // API配置（统一的服务器配置）
   api: {
     port: parseInt(process.env.API_PORT) || 3001,
     host: process.env.API_HOST || '0.0.0.0',
     corsEnabled: process.env.API_CORS_ENABLED !== 'false',
     corsOrigin: process.env.API_CORS_ORIGIN || '*',
-    enableAISummary: process.env.ENABLE_AI_SUMMARY !== 'false',
-    enableColors: process.env.ENABLE_COLORS !== 'false',
-    summaryOutputFormat: process.env.SUMMARY_OUTPUT_FORMAT || 'pretty'
+    nodeEnv: process.env.NODE_ENV || 'development',
+    logLevel: process.env.LOG_LEVEL || 'info'
   },
 
   // LLM配置
@@ -40,7 +27,6 @@ const DEFAULT_UNIFIED_CONFIG = {
     apiKey: process.env.CUSTOM_API_KEY || '',
     model: process.env.CUSTOM_MODEL || 'zai-org/GLM-4.6',
     baseUrl: process.env.CUSTOM_BASE_URL || 'https://api.siliconflow.cn/v1',
-    embeddingModel: process.env.CUSTOM_EMBEDDING_MODEL || 'BAAI/bge-m3',
     temperature: 0.7,
     maxTokens: 4000,
     topP: 1,
@@ -141,10 +127,13 @@ const DEFAULT_UNIFIED_CONFIG = {
 
   // 审批器配置
   approval: {
-    autoApproveThreshold: 0.8,
-    minQualityScore: 70,
+    autoApproveThreshold: 0.7,  // 置信度阈值
+    minQualityScore: 60,        // 质量分数阈值
     maxRulesPerBatch: 20,
-    duplicateThreshold: 0.9
+    duplicateThreshold: 0.9,
+    // 统一验证阈值，确保一致性
+    completenessConfidenceThreshold: 0.7,  // 完整性验证置信度阈值
+    securitySeverityThreshold: 'medium'    // 安全规则最低严重程度
   },
 
   // 中间件配置
@@ -172,23 +161,18 @@ const DEFAULT_UNIFIED_CONFIG = {
     retries: 3
   },
 
-  // 知识库配置
+  // 知识库配置（用于规则文档的向量化和搜索）
   knowledge: {
     enabled: process.env.KNOWLEDGE_BASE_ENABLED !== 'false',
-    dataDir: process.env.KNOWLEDGE_DATA_DIR || 'data/knowledge',
+    rulesDir: process.env.KNOWLEDGE_RULES_DIR || 'rules',  // 知识库扫描的规则目录
     maxFileSize: parseInt(process.env.KNOWLEDGE_MAX_FILE_SIZE) || 10485760, // 10MB
-    supportedFormats: ['.md', '.txt', '.json'],
-    embeddingModel: process.env.CUSTOM_EMBEDDING_MODEL || 'BAAI/bge-m3'
+    supportedFormats: ['.md', '.txt', '.json']
   },
 
   // 系统配置
   system: {
     version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
-    debug: process.env.DEBUG === 'true',
-    maxMemoryUsage: parseInt(process.env.MAX_MEMORY_USAGE) || 1024, // MB
-    gcInterval: parseInt(process.env.GC_INTERVAL) || 300000, // 5分钟
-    tempDir: process.env.TEMP_DIR || 'temp'
+    environment: process.env.NODE_ENV || 'development'
   }
 };
 
@@ -199,7 +183,6 @@ export class UnifiedConfigManager {
   constructor(customConfig = {}) {
     this.config = this.mergeConfig(DEFAULT_UNIFIED_CONFIG, customConfig);
     this.validateConfig();
-    this.watchers = new Map();
   }
 
   /**
@@ -230,11 +213,11 @@ export class UnifiedConfigManager {
    * 验证配置
    */
   validateConfig() {
-    const { server, api, llm, ruleLearning, validation, approval, middleware } = this.config;
+    const { api, llm, ruleLearning, validation, approval, middleware } = this.config;
 
-    // 验证服务器配置
-    if (server.port < 1 || server.port > 65535) {
-      throw new Error('服务器端口必须在 1-65535 之间');
+    // 验证API配置（配置中使用的是 api，不是 server）
+    if (api && api.port && (api.port < 1 || api.port > 65535)) {
+      throw new Error('API端口必须在 1-65535 之间');
     }
 
     // 验证API配置
@@ -311,17 +294,8 @@ export class UnifiedConfigManager {
       target = target[key];
     }
     
-    const oldValue = target[lastKey];
     target[lastKey] = value;
-    
-    try {
-      this.validateConfig();
-      this.notifyWatchers(path, value, oldValue);
-    } catch (error) {
-      // 回滚更改
-      target[lastKey] = oldValue;
-      throw error;
-    }
+    this.validateConfig();
   }
 
   /**
@@ -329,6 +303,20 @@ export class UnifiedConfigManager {
    * @returns {Object} 完整配置对象
    */
   getAll() {
+    // 添加诊断日志
+    console.log('[DEBUG] ConfigManager.getAll() 被调用');
+    console.log('[DEBUG] this.config 类型:', typeof this.config);
+    console.log('[DEBUG] this.config 值:', this.config);
+    console.log('[DEBUG] this 是否为 ConfigManager 实例:', this instanceof UnifiedConfigManager);
+    
+    // 确保方法被正确调用
+    if (!this.config) {
+      console.error('[DEBUG] 配置未初始化：this.config 不存在');
+      console.error('[DEBUG] 当前实例属性:', Object.keys(this));
+      throw new Error('配置未初始化：this.config 不存在');
+    }
+    
+    console.log('[DEBUG] 配置获取成功，配置键数量:', Object.keys(this.config).length);
     return JSON.parse(JSON.stringify(this.config));
   }
 
@@ -346,26 +334,15 @@ export class UnifiedConfigManager {
    * @param {Object} newConfig - 新配置
    */
   update(newConfig) {
-    const oldConfig = JSON.parse(JSON.stringify(this.config));
     this.config = this.mergeConfig(this.config, newConfig);
-    
-    try {
-      this.validateConfig();
-      this.notifyWatchers('*', this.config, oldConfig);
-    } catch (error) {
-      // 回滚更改
-      this.config = oldConfig;
-      throw error;
-    }
+    this.validateConfig();
   }
 
   /**
    * 重置为默认配置
    */
   reset() {
-    const oldConfig = JSON.parse(JSON.stringify(this.config));
     this.config = JSON.parse(JSON.stringify(DEFAULT_UNIFIED_CONFIG));
-    this.notifyWatchers('*', this.config, oldConfig);
   }
 
   /**
@@ -389,13 +366,6 @@ export class UnifiedConfigManager {
   buildEnvConfig() {
     const envConfig = {};
 
-    // 服务器配置
-    if (process.env.PORT) {
-      envConfig.server = { ...envConfig.server, port: parseInt(process.env.PORT) };
-    }
-    if (process.env.HOST) {
-      envConfig.server = { ...envConfig.server, host: process.env.HOST };
-    }
 
     // LLM配置
     if (process.env.CUSTOM_API_KEY) {
@@ -419,143 +389,8 @@ export class UnifiedConfigManager {
     return envConfig;
   }
 
-  /**
-   * 保存配置到文件
-   * @param {string} filePath - 文件路径
-   */
-  async saveToFile(filePath) {
-    try {
-      const dir = path.dirname(filePath);
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(filePath, JSON.stringify(this.config, null, 2), 'utf8');
-    } catch (error) {
-      throw new Error(`保存配置文件失败: ${error.message}`);
-    }
-  }
 
-  /**
-   * 从文件加载配置
-   * @param {string} filePath - 文件路径
-   */
-  async loadFromFile(filePath) {
-    try {
-      const content = await fs.readFile(filePath, 'utf8');
-      const config = JSON.parse(content);
-      this.update(config);
-    } catch (error) {
-      throw new Error(`加载配置文件失败: ${error.message}`);
-    }
-  }
 
-  /**
-   * 监听配置变化
-   * @param {string} path - 配置路径，'*' 表示监听所有变化
-   * @param {Function} callback - 回调函数
-   * @returns {Function} 取消监听的函数
-   */
-  watch(path, callback) {
-    if (!this.watchers.has(path)) {
-      this.watchers.set(path, new Set());
-    }
-    
-    this.watchers.get(path).add(callback);
-    
-    // 返回取消监听的函数
-    return () => {
-      const watchers = this.watchers.get(path);
-      if (watchers) {
-        watchers.delete(callback);
-        if (watchers.size === 0) {
-          this.watchers.delete(path);
-        }
-      }
-    };
-  }
-
-  /**
-   * 通知监听器
-   * @param {string} path - 配置路径
-   * @param {*} newValue - 新值
-   * @param {*} oldValue - 旧值
-   */
-  notifyWatchers(path, newValue, oldValue) {
-    // 通知特定路径的监听器
-    const pathWatchers = this.watchers.get(path);
-    if (pathWatchers) {
-      pathWatchers.forEach(callback => {
-        try {
-          callback(newValue, oldValue, path);
-        } catch (error) {
-          console.error(`配置监听器错误 (${path}):`, error);
-        }
-      });
-    }
-
-    // 通知全局监听器
-    const globalWatchers = this.watchers.get('*');
-    if (globalWatchers) {
-      globalWatchers.forEach(callback => {
-        try {
-          callback(newValue, oldValue, path);
-        } catch (error) {
-          console.error(`全局配置监听器错误:`, error);
-        }
-      });
-    }
-  }
-
-  /**
-   * 获取配置统计信息
-   * @returns {Object} 统计信息
-   */
-  getStats() {
-    return {
-      totalKeys: this.countKeys(this.config),
-      modules: Object.keys(this.config),
-      watchers: Array.from(this.watchers.keys()),
-      environment: this.config.system.environment,
-      version: this.config.system.version
-    };
-  }
-
-  /**
-   * 递归计算配置键的数量
-   * @param {Object} obj - 对象
-   * @returns {number} 键的数量
-   */
-  countKeys(obj) {
-    let count = 0;
-    for (const key in obj) {
-      count++;
-      if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-        count += this.countKeys(obj[key]);
-      }
-    }
-    return count;
-  }
-
-  /**
-   * 导出配置为环境变量格式
-   * @returns {Object} 环境变量对象
-   */
-  exportToEnv() {
-    const env = {};
-    
-    function flatten(obj, prefix = '') {
-      for (const key in obj) {
-        const newKey = prefix ? `${prefix}_${key.toUpperCase()}` : key.toUpperCase();
-        
-        if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-          flatten(obj[key], newKey);
-        } else {
-          env[newKey] = obj[key];
-        }
-      }
-    }
-    
-    flatten(this.config);
-    return env;
-  }
 
   /**
    * 获取API配置
@@ -573,13 +408,6 @@ export class UnifiedConfigManager {
     return this.getModule('llm');
   }
 
-  /**
-   * 获取服务器配置
-   * @returns {Object} 服务器配置
-   */
-  getServerConfig() {
-    return this.getModule('server');
-  }
 
   /**
    * 获取知识库配置
@@ -654,6 +482,13 @@ export class UnifiedConfigManager {
   }
 
   /**
+   * 重置规则学习配置
+   */
+  resetLearningConfig() {
+    this.set('ruleLearning', JSON.parse(JSON.stringify(DEFAULT_UNIFIED_CONFIG.ruleLearning)));
+  }
+
+  /**
    * 更新审批器配置
    * @param {Object} newConfig - 新配置
    */
@@ -670,54 +505,7 @@ export class UnifiedConfigManager {
   }
 }
 
-// 全局配置实例
-let globalConfigManager = null;
-
-/**
- * 获取全局配置管理器实例
- * @param {Object} customConfig - 自定义配置
- * @returns {UnifiedConfigManager} 配置管理器实例
- */
-export function getUnifiedConfigManager(customConfig = {}) {
-  if (!globalConfigManager) {
-    globalConfigManager = new UnifiedConfigManager(customConfig);
-  }
-  return globalConfigManager;
-}
-
-/**
- * 重置全局配置管理器
- */
-export function resetUnifiedConfigManager() {
-  if (globalConfigManager) {
-    // 清理所有监听器
-    globalConfigManager.watchers.clear();
-  }
-  globalConfigManager = null;
-}
-
-/**
- * 便捷函数：获取配置值
- * @param {string} path - 配置路径
- * @param {*} defaultValue - 默认值
- * @returns {*} 配置值
- */
-export function getConfig(path, defaultValue) {
-  const manager = getUnifiedConfigManager();
-  return manager.get(path, defaultValue);
-}
-
-/**
- * 便捷函数：设置配置值
- * @param {string} path - 配置路径
- * @param {*} value - 配置值
- */
-export function setConfig(path, value) {
-  const manager = getUnifiedConfigManager();
-  manager.set(path, value);
-}
-
 // 创建并导出全局配置管理器实例
-export const unifiedConfigManager = getUnifiedConfigManager();
+export const unifiedConfigManager = new UnifiedConfigManager();
 
 export default UnifiedConfigManager;

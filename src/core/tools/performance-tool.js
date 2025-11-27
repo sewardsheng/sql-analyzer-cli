@@ -4,6 +4,7 @@
  */
 
 import { BaseTool } from './base-tool.js';
+import { buildPrompt } from '../../utils/format/prompt-loader.js';
 
 /**
  * 性能分析工具类
@@ -25,10 +26,10 @@ class PerformanceTool extends BaseTool {
         throw new Error('无效的分析上下文');
       }
 
-      const prompt = this.buildPrompt(context);
+      const prompt = await this.buildPrompt(context);
       const llmResult = await this.llmService.call(prompt, {
         temperature: 0.3,
-        maxTokens: 1000, // 进一步减少token数量
+        maxTokens: 2000, // 增加token数量以支持更详细的分析
         timeout: 60000   // 更新超时时间
       });
 
@@ -46,12 +47,22 @@ class PerformanceTool extends BaseTool {
   /**
    * 构建性能分析提示词
    * @param {Object} context - 分析上下文
-   * @returns {string} 提示词
+   * @returns {Promise<string>} 提示词
    */
-  buildPrompt(context) {
+  async buildPrompt(context) {
     const { sql, databaseType } = context;
-
-    return `分析${databaseType} SQL性能：
+    
+    try {
+      const { systemPrompt, userPrompt } = await buildPrompt('performance-analysis.md', {
+        databaseType,
+        sql
+      }, { category: 'analyzers' });
+      
+      return `${systemPrompt}\n\n${userPrompt}\n\nSQL语句：\n\`\`\`sql\n${sql}\n\`\`\``;
+    } catch (error) {
+      // 如果加载提示词失败，回退到硬编码提示词
+      console.warn('加载性能分析提示词失败，使用回退提示词:', error.message);
+      return `分析${databaseType} SQL性能：
 \`\`\`sql
 ${sql}
 \`\`\`
@@ -66,6 +77,7 @@ ${sql}
   "metrics": {"complexity": "复杂度", "estimatedCost": "成本"},
   "confidence": 0.8
 }`;
+    }
   }
 
   /**

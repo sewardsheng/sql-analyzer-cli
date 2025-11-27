@@ -5,8 +5,8 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { RuleValidator } from './RuleValidator.js';
-import { getApprovalConfig, updateApprovalConfig } from '../../config/ConfigAdapters.js';
+import { RuleValidator } from './rule-validator.js';
+import { unifiedConfigManager } from '../../config/config-manager.js';
 
 /**
  * 自动审批器类
@@ -14,7 +14,7 @@ import { getApprovalConfig, updateApprovalConfig } from '../../config/ConfigAdap
 export class AutoApprover {
   constructor() {
     // 使用统一配置管理器
-    this.config = getApprovalConfig();
+    this.config = unifiedConfigManager.getApprovalConfig();
     
     this.approvalStats = {
       totalProcessed: 0,
@@ -98,8 +98,9 @@ export class AutoApprover {
         return { action: 'manual_review', reason: `质量分数过低: ${evaluation.qualityScore}` };
       }
 
-      // 3. 检查置信度
-      if (rule.confidence < this.config.autoApproveThreshold) {
+      // 3. 检查置信度 - 使用统一配置
+      const confidenceThreshold = this.config.completenessConfidenceThreshold || this.config.autoApproveThreshold;
+      if (rule.confidence < confidenceThreshold) {
         return { action: 'manual_review', reason: `置信度过低: ${rule.confidence}` };
       }
 
@@ -639,8 +640,8 @@ ${this.getManualReviewReasons(rule)}
    * @param {Object} newConfig - 新配置
    */
   updateConfig(newConfig) {
-    updateApprovalConfig(newConfig);
-    this.config = getApprovalConfig();
+    unifiedConfigManager.updateApprovalConfig(newConfig);
+    this.config = unifiedConfigManager.getApprovalConfig();
     console.log(`[AutoApprover] 配置已更新:`, this.config);
   }
 }

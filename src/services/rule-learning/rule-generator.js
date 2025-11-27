@@ -67,11 +67,12 @@ export class RuleGenerator {
       const variables = {
         databaseType: learningContext.databaseType,
         sqlQuery: learningContext.sql,
-        analysisResults: this.formatAnalysisResults(learningContext.currentAnalysis)
+        analysisResults: this.formatAnalysisResults(learningContext.currentAnalysis),
+        existingRules: await this.getExistingRulesSummary()
       };
 
-      // 2. 构建提示词
-      const { systemPrompt, userPrompt } = await buildPrompt('rule-generation.md', variables, { category: 'rule-learning' });
+      // 2. 构建提示词（使用优化版本）
+      const { systemPrompt, userPrompt } = await buildPrompt('rule-generation-optimized.md', variables, { category: 'rule-learning' });
 
       // 3. 调用LLM
       const llmResult = await this.llmService.call(`${systemPrompt}\n\n${userPrompt}`);
@@ -374,17 +375,48 @@ export class RuleGenerator {
   }
 
   /**
-   * 获取现有规则摘要
+   * 获取现有规则摘要（集成知识库检索）
    * @returns {Promise<string>} 现有规则摘要
    */
   async getExistingRulesSummary() {
     try {
-      // 这里可以集成知识库服务获取现有规则
-      // 暂时返回基本摘要
+      // 集成知识库服务进行智能规则检索
+      const { retrieveKnowledge } = await import('../../core/knowledge/index.js');
+      
+      // 搜索相关规则
+      const searchQueries = [
+        'SQL性能优化规则',
+        'SQL安全检查规则',
+        'SQL编码规范规则'
+      ];
+      
+      let allRules = [];
+      for (const query of searchQueries) {
+        const result = await retrieveKnowledge(query, 2);
+        if (result.success && result.data.documents) {
+          allRules.push(...result.data.documents.map(doc => doc.pageContent));
+        }
+      }
+      
+      // 如果知识库中有规则，返回智能摘要
+      if (allRules.length > 0) {
+        const rulesSummary = allRules.slice(0, 5).map(content => {
+          // 提取规则标题和关键信息
+          const lines = content.split('\n');
+          const titleLine = lines.find(line => line.startsWith('# '));
+          const title = titleLine ? titleLine.replace('# ', '') : '未知规则';
+          return `- ${title}`;
+        }).join('\n');
+        
+        return `基于知识库检索到的现有规则：\n${rulesSummary}\n\n这些规则涵盖了性能优化、安全检查和编码规范等方面。`;
+      }
+      
+      // 知识库中没有规则，返回基本摘要
       return '现有规则包括性能优化、安全检查和编码规范等类别的SQL审核规则。';
+      
     } catch (error) {
       console.warn(`[RuleGenerator] 获取现有规则摘要失败: ${error.message}`);
-      return '';
+      return '现有规则包括性能优化、安全检查和编码规范等类别的SQL审核规则。';
     }
   }
 
@@ -521,6 +553,23 @@ export class RuleGenerator {
                 evaluationSummary: '基于实际分析结果生成的性能优化规则'
               }
             });
+          } else if (issue.type === '索引优化') {
+            rules.push({
+              title: '为查询条件添加合适索引',
+              description: '为WHERE条件中的字段添加索引可以显著提升查询性能',
+              category: 'performance',
+              type: '索引优化',
+              severity: issue.severity || 'high',
+              condition: '检测到缺少索引的查询条件',
+              example: learningContext.sql,
+              confidence: 0.85,
+              evaluation: {
+                qualityScore: 80,
+                qualityLevel: '良好',
+                shouldKeep: true,
+                evaluationSummary: '基于索引分析生成的性能优化规则'
+              }
+            });
           }
         }
       }
@@ -544,6 +593,23 @@ export class RuleGenerator {
                 qualityLevel: '良好',
                 shouldKeep: true,
                 evaluationSummary: '基于安全分析结果生成的SQL注入防护规则'
+              }
+            });
+          } else if (vuln.type === '权限控制') {
+            rules.push({
+              title: '实施最小权限原则',
+              description: '数据库用户应该只拥有执行其任务所需的最小权限',
+              category: 'security',
+              type: '权限控制',
+              severity: vuln.severity || 'medium',
+              condition: '检测到权限配置问题',
+              example: learningContext.sql,
+              confidence: 0.8,
+              evaluation: {
+                qualityScore: 78,
+                qualityLevel: '良好',
+                shouldKeep: true,
+                evaluationSummary: '基于权限分析生成的安全规则'
               }
             });
           }
@@ -571,8 +637,45 @@ export class RuleGenerator {
                 evaluationSummary: '基于编码规范分析生成的最佳实践规则'
               }
             });
+          } else if (violation.type === '格式规范') {
+            rules.push({
+              title: '遵循SQL代码格式化规范',
+              description: 'SQL语句应该有适当的缩进、换行和关键字大写，提高可读性',
+              category: 'standards',
+              type: '格式规范',
+              severity: violation.severity || 'low',
+              condition: '检测到SQL格式不规范',
+              example: learningContext.sql,
+              confidence: 0.6,
+              evaluation: {
+                qualityScore: 65,
+                qualityLevel: '一般',
+                shouldKeep: true,
+                evaluationSummary: '基于格式分析生成的编码规范规则'
+              }
+            });
           }
         }
+      }
+      
+      // 如果没有生成任何规则，创建一个通用规则
+      if (rules.length === 0) {
+        rules.push({
+          title: 'SQL查询需要进一步优化',
+          description: '基于分析结果，此SQL查询存在优化空间，建议进一步分析和优化',
+          category: 'performance',
+          type: '通用优化',
+          severity: 'low',
+          condition: '检测到SQL查询性能问题',
+          example: learningContext.sql,
+          confidence: 0.5,
+          evaluation: {
+            qualityScore: 60,
+            qualityLevel: '一般',
+            shouldKeep: true,
+            evaluationSummary: '基于通用分析生成的优化建议规则'
+          }
+        });
       }
       
       console.log(`[RuleGenerator] Fallback规则生成完成: ${rules.length}条规则`);

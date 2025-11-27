@@ -4,8 +4,8 @@
  */
 
 import { Hono } from 'hono';
-import { getAPIConfig } from '../config/ConfigAdapters.js';
-import { logInfo, logError, logApiRequest, logApiError, generateRequestId } from '../utils/logger.js';
+import { unifiedConfigManager } from '../config/config-manager.js';
+import { info as logInfo, error as logError, logApiRequest, logApiError, generateRequestId, LogCategory } from '../utils/logger.js';
 
 // 导入路由模块
 import { registerAnalyzeRoutes } from './routes/analyze.js';
@@ -37,7 +37,7 @@ import {
  * @returns {Promise<Object>} 服务器实例
  */
 export async function createApiServer(options = {}) {
-  const apiConfig = getAPIConfig();
+  const apiConfig = await unifiedConfigManager.get('api', {});
   
   // 合并配置
   const serverConfig = {
@@ -50,7 +50,7 @@ export async function createApiServer(options = {}) {
   };
   
   // 记录服务器启动日志
-  await logInfo('API服务器启动中', {
+  await logInfo(LogCategory.API, 'API服务器启动中', {
     type: 'server_start',
     port: serverConfig.port,
     host: serverConfig.host,
@@ -88,10 +88,7 @@ export async function createApiServer(options = {}) {
   // setupDocs(app); // 暂时禁用
   
   // 注册错误处理中间件（使用 Hono 的正确方式）
-  app.onError(async (error, c) => {
-    const errorHandler = createDefaultErrorHandlerMiddleware();
-    return errorHandler(error, c);
-  });
+  app.onError(createDefaultErrorHandlerMiddleware());
   
   // 提供静态文件服务（前端页面）
   app.get('/web', async (c) => {
@@ -269,17 +266,6 @@ export async function createApiServer(options = {}) {
   console.log('\n' + '='.repeat(60));
   console.log('🚀 SQL Analyzer API 服务器启动中...');
   console.log('='.repeat(60));
-  console.log(`\n📍 服务地址: http://${serverConfig.host}:${serverConfig.port}`);
-  console.log(`📖 API文档: http://${serverConfig.host}:${serverConfig.port}/api/docs/swagger`);
-  console.log(`📋 OpenAPI规范: http://${serverConfig.host}:${serverConfig.port}/api/docs/doc`);
-  console.log(`💚 健康检查: http://${serverConfig.host}:${serverConfig.port}/api/health`);
-  console.log(`\n环境: ${serverConfig.nodeEnv}`);
-  console.log(`日志级别: ${serverConfig.logLevel}`);
-  console.log(`CORS: ${serverConfig.corsEnabled ? '已启用' : '已禁用'}`);
-  if (serverConfig.corsEnabled) {
-    console.log(`允许源: ${serverConfig.corsOrigin}`);
-  }
-  console.log('\n' + '='.repeat(60));
   console.log('✓ 服务器已就绪，等待请求...\n');
   
   // 使用Bun的原生serve方法启动服务器
@@ -291,18 +277,10 @@ export async function createApiServer(options = {}) {
       fetch: app.fetch
     });
     
-    // 记录服务器启动成功日志
-    await logInfo('API服务器启动成功', {
-      type: 'server_started',
-      port: serverConfig.port,
-      host: serverConfig.host,
-      pid: process.pid
-    });
-    
     // 添加停止方法
     server.stop = async () => {
       console.log('正在停止API服务器...');
-      await logInfo('API服务器停止中', {
+      await logInfo(LogCategory.API, 'API服务器停止中', {
         type: 'server_stopping',
         port: serverConfig.port,
         host: serverConfig.host

@@ -133,6 +133,7 @@
     {
       "id": "唯一规则ID（UUID格式）",
       "title": "规则标题",
+      "type": "performance|security|standards",
       "category": "performance|security|standards",
       "severity": "low|medium|high|critical",
       "databaseType": "适用数据库类型",

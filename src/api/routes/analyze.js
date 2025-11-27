@@ -6,7 +6,12 @@
 import { sqlAnalyzer } from '../../core/index.js';
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
-import { getLearningConfig } from '../../config/ConfigAdapters.js';
+import { unifiedConfigManager } from '../../config/config-manager.js';
+
+// 从配置管理器获取学习配置
+function getLearningConfig() {
+  return unifiedConfigManager.getLearningConfig();
+}
 
 /**
  * 注册分析相关路由
@@ -51,8 +56,8 @@ export function registerAnalyzeRoutes(app) {
       // 异步历史记录保存 + 智能规则学习 - 不阻塞响应
       setImmediate(async () => {
         try {
-          const { getHistoryService } = await import('../../services/history/historyService.js');
-          const historyService = getHistoryService();
+          const { getHistoryService } = await import('../../services/history-service.js');
+          const historyService = await getHistoryService();
           
           // 保存历史记录
           const recordId = await historyService.saveAnalysis({
@@ -72,7 +77,7 @@ export function registerAnalyzeRoutes(app) {
               // 只对高质量分析结果进行学习
               if (avgConfidence >= minConfidence) {
                 try {
-                  const { getIntelligentRuleLearner } = await import('../../services/rule-learning/IntelligentRuleLearner.js');
+                  const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
                   const { getLLMService } = await import('../../core/llm-service.js');
                   
                   const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
@@ -155,8 +160,8 @@ export function registerAnalyzeRoutes(app) {
       // 异步批量历史记录保存 + 智能规则学习 - 不阻塞响应
       setImmediate(async () => {
         try {
-          const { getHistoryService } = await import('../../services/history/historyService.js');
-          const historyService = getHistoryService();
+          const { getHistoryService } = await import('../../services/history-service.js');
+          const historyService = await getHistoryService();
           
           // 为每条成功的SQL保存历史记录
           for (const result of results) {
@@ -178,7 +183,7 @@ export function registerAnalyzeRoutes(app) {
                     
                     if (avgConfidence >= minConfidence) {
                       try {
-                        const { getIntelligentRuleLearner } = await import('../../services/rule-learning/IntelligentRuleLearner.js');
+                        const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
                         const { getLLMService } = await import('../../core/llm-service.js');
                         
                         const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);

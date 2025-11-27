@@ -46,7 +46,7 @@ export function corsMiddleware(options = {}) {
  * @returns {Function} 中间件函数
  */
 export function createDefaultCorsMiddleware() {
-  const corsEnabled = process.env.API_CORS !== 'false';
+  const corsEnabled = process.env.API_CORS_ENABLED !== 'false';
   const corsOrigin = process.env.API_CORS_ORIGIN || '*';
   
   return corsMiddleware({

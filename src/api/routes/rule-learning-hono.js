@@ -4,13 +4,28 @@
  */
 
 import { Hono } from 'hono';
-import { getLearningConfig, updateLearningConfig, resetConfig } from '../../config/ConfigAdapters.js';
-import { getIntelligentRuleLearner } from '../../services/rule-learning/IntelligentRuleLearner.js';
+import { unifiedConfigManager } from '../../config/config-manager.js';
+import { getIntelligentRuleLearner } from '../../services/rule-learning/rule-learner.js';
 import { getLLMService } from '../../core/llm-service.js';
-import { getHistoryService } from '../../services/history/historyService.js';
-import { logInfo, logError, logApiRequest, logApiError } from '../../utils/logger.js';
+import { getHistoryService } from '../../services/history-service.js';
+import { info, error as logError, logApiRequest, logApiError, LogCategory } from '../../utils/logger.js';
 
 const router = new Hono();
+
+// 从配置管理器获取学习配置
+function getLearningConfig() {
+  return unifiedConfigManager.getLearningConfig();
+}
+
+// 更新学习配置
+function updateLearningConfig(newConfig) {
+  unifiedConfigManager.updateLearningConfig(newConfig);
+}
+
+// 重置配置
+function resetConfig() {
+  unifiedConfigManager.resetLearningConfig();
+}
 
 /**
  * 获取规则学习配置
@@ -116,7 +131,7 @@ router.post('/config/reset', async (c) => {
     const responseData = {
       success: true,
       data: {
-        config: config,
+        config: getLearningConfig(),
         timestamp: new Date().toISOString()
       },
       message: '重置规则学习配置成功',
@@ -150,10 +165,10 @@ router.get('/status', async (c) => {
   
   try {
     const config = getLearningConfig();
-    const historyService = getHistoryService();
+    const historyService = await getHistoryService();
     
     // 获取历史记录统计
-    const historyStats = await historyService.getStatistics();
+    const historyStats = await historyService.getHistoryStats();
     
     // 获取学习配置状态
     const learningStatus = {
@@ -222,7 +237,7 @@ router.post('/learn', async (c) => {
       }, 400);
     }
     
-    const historyService = getHistoryService();
+    const historyService = await getHistoryService();
     const llmService = getLLMService();
     const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
     
@@ -230,14 +245,14 @@ router.post('/learn', async (c) => {
     const learningTask = async () => {
       try {
         const result = await ruleLearner.performBatchLearning(options);
-        await logInfo('批量规则学习完成', {
+        await info(LogCategory.API, '批量规则学习完成', {
           type: 'batch_learning_completed',
           generatedRules: result.generatedRules,
           requestId
         });
         return result;
       } catch (error) {
-        await logError('批量规则学习失败', error, {
+        await logError(LogCategory.API, '批量规则学习失败', error, {
           type: 'batch_learning_failed',
           requestId
         });
@@ -279,113 +294,35 @@ router.post('/learn', async (c) => {
   }
 });
 
-/**
- * 获取学习历史
- * GET /api/rule-learning/history
- */
-router.get('/history', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  try {
-    const query = c.req.query();
-    const { 
-      page = 1, 
-      limit = 20, 
-      category, 
-      status,
-      startDate,
-      endDate 
-    } = query;
-    
-    const historyService = getHistoryService();
-    
-    // 构建查询条件
-    const filters = {};
-    if (category) filters.category = category;
-    if (status) filters.status = status;
-    if (startDate) filters.startDate = new Date(startDate);
-    if (endDate) filters.endDate = new Date(endDate);
-    
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sortBy: 'timestamp',
-      sortOrder: 'desc'
-    };
-    
-    const result = await historyService.getLearningHistory(filters, options);
-    
-    const responseData = {
-      success: true,
-      data: {
-        ...result,
-        timestamp: new Date().toISOString()
-      },
-      message: '获取学习历史成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('GET', '/api/rule-learning/history', error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'HISTORY_ERROR',
-        message: '获取学习历史失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
 
 /**
- * 获取生成的规则列表
- * GET /api/rule-learning/rules
+ * 获取智能阈值调整统计
+ * GET /api/rule-learning/threshold-stats
  */
-router.get('/rules', async (c) => {
+router.get('/threshold-stats', async (c) => {
   const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   try {
-    const query = c.req.query();
-    const { 
-      page = 1, 
-      limit = 20, 
-      category, 
-      status,
-      minQuality,
-      maxQuality 
-    } = query;
+    const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
+    const { getLLMService } = await import('../../core/llm-service.js');
+    const { getHistoryService } = await import('../../services/history-service.js');
     
-    const historyService = getHistoryService();
+    const llmService = getLLMService();
+    const historyService = await getHistoryService();
+    const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
     
-    // 构建查询条件
-    const filters = {};
-    if (category) filters.category = category;
-    if (status) filters.status = status;
-    if (minQuality) filters.minQuality = parseFloat(minQuality);
-    if (maxQuality) filters.maxQuality = parseFloat(maxQuality);
-    
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sortBy: 'timestamp',
-      sortOrder: 'desc'
-    };
-    
-    const result = await historyService.getGeneratedRules(filters, options);
+    const thresholdStats = ruleLearner.thresholdAdjuster.getQualityStats();
+    const adjustmentHistory = ruleLearner.thresholdAdjuster.getAdjustmentHistory();
     
     const responseData = {
       success: true,
       data: {
-        ...result,
+        currentThreshold: ruleLearner.config.autoApproveThreshold,
+        stats: thresholdStats,
+        adjustmentHistory: adjustmentHistory.slice(-10), // 最近10次调整
         timestamp: new Date().toISOString()
       },
-      message: '获取生成规则列表成功',
+      message: '获取阈值调整统计成功',
       requestId
     };
     
@@ -393,290 +330,13 @@ router.get('/rules', async (c) => {
     
     return c.json(responseData);
   } catch (error) {
-    await logApiError('GET', '/api/rule-learning/rules', error, { requestId });
+    await logApiError('GET', '/api/rule-learning/threshold-stats', error, { requestId });
     
     return c.json({
       success: false,
       error: {
-        code: 'RULES_ERROR',
-        message: '获取生成规则列表失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
-
-/**
- * 获取规则详情
- * GET /api/rule-learning/rules/:ruleId
- */
-router.get('/rules/:ruleId', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const { ruleId } = c.req.param();
-  
-  try {
-    const historyService = getHistoryService();
-    const rule = await historyService.getRuleById(ruleId);
-    
-    if (!rule) {
-      return c.json({
-        success: false,
-        error: {
-          code: 'RULE_NOT_FOUND',
-          message: '规则不存在',
-          details: { ruleId },
-          requestId
-        }
-      }, 404);
-    }
-    
-    const responseData = {
-      success: true,
-      data: {
-        rule,
-        timestamp: new Date().toISOString()
-      },
-      message: '获取规则详情成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('GET', `/api/rule-learning/rules/${ruleId}`, error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'RULE_DETAIL_ERROR',
-        message: '获取规则详情失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
-
-/**
- * 手动审批规则
- * POST /api/rule-learning/rules/:ruleId/approve
- */
-router.post('/rules/:ruleId/approve', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const { ruleId } = c.req.param();
-  
-  try {
-    const body = await c.req.json();
-    const { approved, reason } = body;
-    
-    if (typeof approved !== 'boolean') {
-      return c.json({
-        success: false,
-        error: {
-          code: 'INVALID_APPROVAL',
-          message: 'approved 字段必须是布尔值',
-          requestId
-        }
-      }, 400);
-    }
-    
-    const historyService = getHistoryService();
-    const result = await historyService.approveRule(ruleId, approved, reason);
-    
-    if (!result) {
-      return c.json({
-        success: false,
-        error: {
-          code: 'APPROVAL_ERROR',
-          message: '规则不存在或状态不允许审批',
-          details: { ruleId },
-          requestId
-        }
-      }, 404);
-    }
-    
-    const responseData = {
-      success: true,
-      data: {
-        rule: result,
-        action: approved ? 'approved' : 'rejected',
-        reason,
-        timestamp: new Date().toISOString()
-      },
-      message: '规则审批成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('POST', `/api/rule-learning/rules/${ruleId}/approve`, error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'APPROVAL_ERROR',
-        message: '规则审批失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
-
-/**
- * 删除生成的规则
- * DELETE /api/rule-learning/rules/:ruleId
- */
-router.delete('/rules/:ruleId', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const { ruleId } = c.req.param();
-  
-  try {
-    const historyService = getHistoryService();
-    const result = await historyService.deleteRule(ruleId);
-    
-    if (!result) {
-      return c.json({
-        success: false,
-        error: {
-          code: 'RULE_NOT_FOUND',
-          message: '规则不存在',
-          details: { ruleId },
-          requestId
-        }
-      }, 404);
-    }
-    
-    const responseData = {
-      success: true,
-      data: {
-        ruleId,
-        deleted: true,
-        timestamp: new Date().toISOString()
-      },
-      message: '删除规则成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('DELETE', `/api/rule-learning/rules/${ruleId}`, error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'DELETE_ERROR',
-        message: '删除规则失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
-
-/**
- * 获取学习统计信息
- * GET /api/rule-learning/statistics
- */
-router.get('/statistics', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  try {
-    const query = c.req.query();
-    const { period = '30d' } = query;
-    
-    const historyService = getHistoryService();
-    const statistics = await historyService.getLearningStatistics(period);
-    
-    const responseData = {
-      success: true,
-      data: {
-        statistics,
-        period,
-        timestamp: new Date().toISOString()
-      },
-      message: '获取学习统计信息成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('GET', '/api/rule-learning/statistics', error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'STATISTICS_ERROR',
-        message: '获取学习统计信息失败',
-        details: error.message,
-        requestId
-      }
-    }, 500);
-  }
-});
-
-/**
- * 清理学习数据
- * DELETE /api/rule-learning/cleanup
- */
-router.delete('/cleanup', async (c) => {
-  const requestId = c.get('requestId') || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  try {
-    const body = await c.req.json();
-    const { 
-      olderThan,
-      status,
-      keepApproved = true 
-    } = body;
-    
-    if (!olderThan) {
-      return c.json({
-        success: false,
-        error: {
-          code: 'MISSING_PARAMETER',
-          message: 'olderThan 参数是必需的',
-          requestId
-        }
-      }, 400);
-    }
-    
-    const historyService = getHistoryService();
-    const result = await historyService.cleanupLearningData({
-      olderThan: new Date(olderThan),
-      status,
-      keepApproved
-    });
-    
-    const responseData = {
-      success: true,
-      data: {
-        ...result,
-        timestamp: new Date().toISOString()
-      },
-      message: '清理学习数据成功',
-      requestId
-    };
-    
-    await logApiRequest(c.req, { status: 200 }, Date.now() - 100, Date.now());
-    
-    return c.json(responseData);
-  } catch (error) {
-    await logApiError('DELETE', '/api/rule-learning/cleanup', error, { requestId });
-    
-    return c.json({
-      success: false,
-      error: {
-        code: 'CLEANUP_ERROR',
-        message: '清理学习数据失败',
+        code: 'THRESHOLD_STATS_ERROR',
+        message: '获取阈值调整统计失败',
         details: error.message,
         requestId
       }

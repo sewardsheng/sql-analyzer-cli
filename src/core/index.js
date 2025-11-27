@@ -12,7 +12,7 @@ export { LLMService, llmService } from './llm-service.js';
 export * from './tools/index.js';
 
 // 数据库识别
-export { DatabaseIdentifier } from './identification/database-identifier.js';
+export { DatabaseIdentifier } from './identification/db-identifier.js';
 
 // 默认导出主分析器
 export { sqlAnalyzer as default } from './sql-analyzer.js';
