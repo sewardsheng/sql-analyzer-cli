@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 import { getIntelligentRuleLearner } from '../../services/rule-learning/rule-learner.js';
 import { getLLMService } from '../../core/llm-service.js';
 import { getHistoryService } from '../../services/history-service.js';
@@ -14,17 +14,17 @@ const router = new Hono();
 
 // 从配置管理器获取学习配置
 function getLearningConfig() {
-  return unifiedConfigManager.getLearningConfig();
+  return config.getRuleLearningConfig();
 }
 
 // 更新学习配置
 function updateLearningConfig(newConfig) {
-  unifiedConfigManager.updateLearningConfig(newConfig);
+  config.set('ruleLearning', config.deepMerge(config.getRuleLearningConfig(), newConfig));
 }
 
 // 重置配置
 function resetConfig() {
-  unifiedConfigManager.resetLearningConfig();
+  config.set('ruleLearning', config.getModule('ruleLearning'));
 }
 
 /**

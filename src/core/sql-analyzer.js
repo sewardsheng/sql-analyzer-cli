@@ -9,7 +9,7 @@ import { SecurityTool } from './tools/security-tool.js';
 import { StandardsTool } from './tools/standards-tool.js';
 import { LlmJsonParser } from './llm-json-parser.js';
 import { LLMService } from './llm-service.js';
-import { unifiedConfigManager } from '../config/config-manager.js';
+import { config } from '../config/index.js';
 
 /**
  * SQL分析器主控制器

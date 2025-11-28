@@ -6,7 +6,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { RuleValidator } from './rule-validator.js';
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 
 /**
  * 自动审批器类
@@ -14,7 +14,7 @@ import { unifiedConfigManager } from '../../config/config-manager.js';
 export class AutoApprover {
   constructor() {
     // 使用统一配置管理器
-    this.config = unifiedConfigManager.getApprovalConfig();
+    this.config = config.getModule('approval');
     
     this.approvalStats = {
       totalProcessed: 0,
@@ -640,8 +640,8 @@ ${this.getManualReviewReasons(rule)}
    * @param {Object} newConfig - 新配置
    */
   updateConfig(newConfig) {
-    unifiedConfigManager.updateApprovalConfig(newConfig);
-    this.config = unifiedConfigManager.getApprovalConfig();
+    config.set('approval', config.deepMerge(config.getModule('approval'), newConfig));
+    this.config = config.getModule('approval');
     console.log(`[AutoApprover] 配置已更新:`, this.config);
   }
 }

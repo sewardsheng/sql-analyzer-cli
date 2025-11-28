@@ -18,7 +18,7 @@ import path from "path";
 import fs from "fs";
 import { createWriteStream } from "fs";
 import crypto from "crypto";
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 import { error } from '../../utils/logger.js';
 import { shouldIncludeDirectory, getValidRuleDirectories } from '../../services/rule-learning/directory-filter.js';
 

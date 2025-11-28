@@ -6,11 +6,11 @@
 import { sqlAnalyzer } from '../../core/index.js';
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 
 // 从配置管理器获取学习配置
 function getLearningConfig() {
-  return unifiedConfigManager.getLearningConfig();
+  return config.getRuleLearningConfig();
 }
 
 /**

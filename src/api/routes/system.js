@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
+import { config } from '../../config/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -128,8 +129,7 @@ export function registerSystemRoutes(app) {
       const interactive = c.req.query('interactive') === 'true';
       
       // 获取配置信息
-      const { readConfig } = await import('../../config/index.js');
-      const config = await readConfig();
+      const configData = config.getAll();
       
       // 获取知识库状态
       let knowledgeBaseStatus = { enabled: false, initialized: false, rulesCount: 0 };
@@ -253,8 +253,7 @@ export function registerSystemRoutes(app) {
    */
   app.get('/api/system/status/knowledge', async (c) => {
     try {
-      const { readConfig } = await import('../../config/index.js');
-      const config = await readConfig();
+      const configData = config.getAll();
       
       if (!config.knowledgeBase?.enabled) {
         return c.json(formatSuccessResponse({

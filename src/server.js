@@ -5,7 +5,7 @@
  */
 
 import { createApiServer } from './api/index.js';
-import { unifiedConfigManager } from './config/config-manager.js';
+import { config } from './config/index.js';
 import { setupGlobalErrorHandlers, info as logInfo, error as logError, LogCategory } from './utils/logger.js';
 
 // 设置全局错误处理
@@ -14,16 +14,8 @@ setupGlobalErrorHandlers();
 // 记录服务器启动
 logInfo(LogCategory.SYSTEM, 'SQL Analyzer API 服务器启动中...');
 
-// 从环境变量和配置管理器获取配置
-const apiConfig = unifiedConfigManager.getAPIConfig();
-const serverConfig = {
-  port: parseInt(process.env.API_PORT) || apiConfig.port,
-  host: process.env.API_HOST || apiConfig.host,
-  cors: process.env.API_CORS_ENABLED !== 'false' && apiConfig.corsEnabled,
-  corsOrigin: process.env.API_CORS_ORIGIN || apiConfig.corsOrigin,
-  nodeEnv: process.env.NODE_ENV || apiConfig.nodeEnv || 'development',
-  logLevel: process.env.LOG_LEVEL || apiConfig.logLevel || 'info'
-};
+// 从配置管理器获取配置
+const serverConfig = config.getServerConfig();
 
 // 验证环境变量
 if (serverConfig.nodeEnv === 'production') {
@@ -62,7 +54,13 @@ try {
   });
   
   process.on('unhandledRejection', (reason, promise) => {
-    logError(LogCategory.SYSTEM, '未处理的Promise拒绝', new Error(reason));
+    let error;
+    if (reason instanceof Error) {
+      error = reason;
+    } else {
+      error = new Error(String(reason));
+    }
+    logError(LogCategory.SYSTEM, '未处理的Promise拒绝', error);
     process.exit(1);
   });
   

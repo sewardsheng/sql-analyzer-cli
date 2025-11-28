@@ -3,7 +3,7 @@
  * 消除QualityEvaluator和AutoApprover中的验证逻辑冗余
  */
 
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 
 /**
  * 规则验证器类
@@ -11,7 +11,7 @@ import { unifiedConfigManager } from '../../config/config-manager.js';
 export class RuleValidator {
   constructor() {
     // 使用统一配置管理器
-    this.validationConfig = unifiedConfigManager.getValidationConfig();
+    this.validationConfig = config.getModule('validation');
   }
 
   /**
@@ -109,7 +109,7 @@ export class RuleValidator {
       }
 
       // 4. 置信度严格检查 - 使用统一配置
-      const approvalConfig = unifiedConfigManager.getApprovalConfig();
+      const approvalConfig = config.getModule('approval');
       const confidenceThreshold = approvalConfig.completenessConfidenceThreshold || 0.7;
       if (rule.confidence < confidenceThreshold) {
         issues.push(`置信度过低，需要 >= ${confidenceThreshold}: ${rule.confidence}`);
@@ -289,7 +289,7 @@ export class RuleValidator {
     }
 
     // 使用统一配置的安全规则严重程度阈值
-    const approvalConfig = unifiedConfigManager.getApprovalConfig();
+    const approvalConfig = config.getModule('approval');
     const securityThreshold = approvalConfig.securitySeverityThreshold || 'medium';
     const validSecuritySeverities = ['critical', 'high'];
     
@@ -416,8 +416,8 @@ export class RuleValidator {
    * @param {Object} newConfig - 新配置
    */
   updateConfig(newConfig) {
-    unifiedConfigManager.updateValidationConfig(newConfig);
-    this.validationConfig = unifiedConfigManager.getValidationConfig();
+    config.set('validation', config.deepMerge(config.getModule('validation'), newConfig));
+    this.validationConfig = config.getModule('validation');
     console.log(`[RuleValidator] 验证配置已更新`);
   }
 
@@ -446,7 +446,7 @@ export class RuleValidator {
    * @returns {Object} 当前验证配置
    */
   getConfig() {
-    return unifiedConfigManager.getValidationConfig();
+    return config.getModule('validation');
   }
 }
 

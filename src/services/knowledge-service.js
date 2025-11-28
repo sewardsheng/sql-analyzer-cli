@@ -5,8 +5,8 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { unifiedConfigManager } from '../config/config-manager.js';
-import { 
+import { config } from '../config/index.js';
+import {
   loadDocumentsFromRulesDirectory, 
   resetVectorStore, 
   isVectorStoreInitialized, 
@@ -21,7 +21,7 @@ import {
  */
 class KnowledgeService {
   constructor() {
-    this.llmConfig = unifiedConfigManager.getLLMConfig();
+    this.llmConfig = config.getLLMConfig();
   }
 
   /**

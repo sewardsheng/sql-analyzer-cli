@@ -3,7 +3,7 @@
  * LLM调用服务
  */
 
-import { unifiedConfigManager } from '../config/config-manager.js';
+import { config } from '../config/index.js';
 
 /**
  * 信号量实现，用于控制并发数
@@ -41,9 +41,9 @@ class Semaphore {
  * 负责与LLM API的交互
  */
 class LLMService {
-  constructor(config = {}) {
-    this.config = config;
-    const defaultConfig = unifiedConfigManager.getLLMConfig();
+  constructor(customConfig = {}) {
+    this.config = customConfig;
+    const defaultConfig = config.getLLMConfig();
     
     // 从配置中获取LLM设置
     this.llmConfig = {

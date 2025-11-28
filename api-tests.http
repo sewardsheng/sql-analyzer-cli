@@ -83,7 +83,7 @@ GET {{baseUrl}}/api/history
 Accept: {{contentType}}
 
 ### 获取历史记录详情
-GET {{baseUrl}}/api/history/1
+GET {{baseUrl}}/api/history/2025-11-28T06-18-13_571de406
 Accept: {{contentType}}
 
 ### 搜索历史记录

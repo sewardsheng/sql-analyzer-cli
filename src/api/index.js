@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { unifiedConfigManager } from '../config/config-manager.js';
+import { config } from '../config/index.js';
 import { info as logInfo, error as logError, logApiRequest, logApiError, generateRequestId, LogCategory } from '../utils/logger.js';
 
 // 导入路由模块
@@ -37,27 +37,27 @@ import {
  * @returns {Promise<Object>} 服务器实例
  */
 export async function createApiServer(options = {}) {
-  const apiConfig = await unifiedConfigManager.get('api', {});
+  // 获取服务器配置
+  let serverConfig = config.getServerConfig();
   
-  // 合并配置
-  const serverConfig = {
-    port: options.port || apiConfig.port,
-    host: options.host || apiConfig.host,
-    corsEnabled: options.cors !== false && apiConfig.corsEnabled,
-    corsOrigin: options.corsOrigin || apiConfig.corsOrigin,
-    nodeEnv: options.nodeEnv || process.env.NODE_ENV || 'development',
-    logLevel: options.logLevel || process.env.LOG_LEVEL || 'info'
-  };
+  // 应用选项覆盖
+  if (options.port !== undefined) serverConfig.port = options.port;
+  if (options.host !== undefined) serverConfig.host = options.host;
+  if (options.cors !== undefined) serverConfig.cors.enabled = options.cors;
+  if (options.corsOrigin !== undefined) serverConfig.cors.origin = options.corsOrigin;
+  if (options.nodeEnv !== undefined) serverConfig.nodeEnv = options.nodeEnv;
+  if (options.logLevel !== undefined) serverConfig.logLevel = options.logLevel;
   
   // 记录服务器启动日志
-  await logInfo(LogCategory.API, 'API服务器启动中', {
+  const logData = {
     type: 'server_start',
     port: serverConfig.port,
     host: serverConfig.host,
-    corsEnabled: serverConfig.corsEnabled,
-    corsOrigin: serverConfig.corsOrigin,
-    environment: process.env.NODE_ENV || 'development'
-  });
+    corsEnabled: serverConfig.cors.enabled,
+    corsOrigin: serverConfig.cors.origin,
+    environment: serverConfig.nodeEnv
+  };
+  await logInfo(LogCategory.API, 'API服务器启动中', logData);
   
   // 创建Hono应用
   const app = new Hono();

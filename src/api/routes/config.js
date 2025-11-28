@@ -5,7 +5,7 @@
 
 import chalk from 'chalk';
 import { createValidationError } from '../../utils/api/api-error.js';
-import { unifiedConfigManager } from '../../config/config-manager.js';
+import { config } from '../../config/index.js';
 
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 
@@ -21,10 +21,10 @@ export function registerConfigRoutes(app) {
   app.get('/api/config', async (c) => {
     try {
       console.log('[DEBUG] /api/config 路由被调用');
-      console.log('[DEBUG] unifiedConfigManager 类型:', typeof unifiedConfigManager);
-      console.log('[DEBUG] unifiedConfigManager 实例:', unifiedConfigManager);
-      
-      const config = unifiedConfigManager.getAll();
+      console.log('[DEBUG] config 类型:', typeof config);
+      console.log('[DEBUG] config 实例:', config);
+
+      const configData = config.getAll();
       
       return c.json(formatSuccessResponse(config, '获取配置成功'));
     } catch (error) {
@@ -42,7 +42,7 @@ export function registerConfigRoutes(app) {
    */
   app.get('/api/config/modules', async (c) => {
     try {
-      const config = unifiedConfigManager.getAll();
+      const configData = config.getAll();
       
       const modules = Object.keys(config);
       
@@ -66,9 +66,9 @@ export function registerConfigRoutes(app) {
     try {
       const key = c.req.param('key');
       console.log('[DEBUG] /api/config/:key 路由被调用，key =', key);
-      console.log('[DEBUG] unifiedConfigManager 类型:', typeof unifiedConfigManager);
-      
-      const config = unifiedConfigManager.getAll();
+      console.log('[DEBUG] config 类型:', typeof config);
+
+      const configData = config.getAll();
       
       if (!(key in config)) {
         throw createValidationError(`配置项 "${key}" 不存在`);
@@ -105,7 +105,7 @@ export function registerConfigRoutes(app) {
         throw createValidationError('请求体必须包含 "value" 字段');
       }
       
-      unifiedConfigManager.set(key, body.value);
+      config.set(key, body.value);
       
       console.log(chalk.green(`[API] 配置项 "${key}" 已更新为: ${body.value}`));
       

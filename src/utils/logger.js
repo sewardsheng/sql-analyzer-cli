@@ -254,7 +254,18 @@ export class EnhancedLogger {
     
     // 如果有元数据，也输出
     if (Object.keys(metadata).length > 0) {
-      console.log('  Metadata:', JSON.stringify(metadata, null, 2));
+      try {
+        // 创建一个安全的元数据副本，只包含基本属性
+        const safeMetadata = {};
+        for (const [key, value] of Object.entries(metadata)) {
+          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            safeMetadata[key] = value;
+          }
+        }
+        console.log('  Metadata:', JSON.stringify(safeMetadata, null, 2));
+      } catch (error) {
+        console.log('  Metadata: [无法序列化，可能包含循环引用]');
+      }
     }
   }
 
@@ -264,7 +275,23 @@ export class EnhancedLogger {
    */
   async outputToFile(logEntry) {
     try {
-      const logLine = JSON.stringify(logEntry) + '\n';
+      // 创建一个安全的副本，避免循环引用
+      const safeLogEntry = {
+        id: logEntry.id,
+        timestamp: logEntry.timestamp,
+        level: logEntry.level,
+        levelValue: logEntry.levelValue,
+        category: logEntry.category,
+        message: logEntry.message,
+        // 只包含基本的元数据，避免可能的循环引用
+        metadata: logEntry.error ? {
+          name: logEntry.metadata?.error?.name,
+          message: logEntry.metadata?.error?.message,
+          code: logEntry.metadata?.error?.code
+        } : null
+      };
+      
+      const logLine = JSON.stringify(safeLogEntry) + '\n';
       const logFile = this.getLogFileName(logEntry.category, logEntry.level);
       const logPath = path.join(this.options.logDir, logFile);
       
