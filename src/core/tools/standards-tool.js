@@ -1,93 +1,64 @@
 /**
- * 规范检查工具
- * 专门检查SQL语句的编码规范和最佳实践
- */
+* 规范检查工具（重构版）
+* 专门检查SQL语句的编码规范和最佳实践
+* 重构：集成智能上下文管理，告别SB的字符串拼接
+*/
 
 import { BaseTool } from './base-tool.js';
-import { buildPrompt } from '../../utils/format/prompt-loader.js';
 
 /**
- * 规范检查工具类
- */
+* 规范检查工具类
+*/
 class StandardsTool extends BaseTool {
-  constructor(llmService) {
-    super(llmService);
-    this.name = 'standards';
-  }
+constructor(llmService, knowledgeBase = null) {
+super(llmService, knowledgeBase);
+this.name = 'StandardsTool';
+}
 
-  /**
-   * 执行规范检查
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<Object>} 分析结果
-   */
-  async execute(context) {
-    try {
-      if (!this.validateContext(context)) {
-        throw new Error('无效的分析上下文');
-      }
+/**
+* 获取分析类型
+* @returns {string} 分析类型
+*/
+getAnalysisType() {
+return 'standards';
+}
 
-      const prompt = await this.buildPrompt(context);
-      const llmResult = await this.llmService.call(prompt, {
-        temperature: 0.1,
-        maxTokens: 2000, // 增加token数量以支持更详细的分析
-        timeout: 60000   // 更新超时时间
-      });
+/**
+* 获取工具特定选项
+* @returns {Object} 工具选项
+*/
+getToolSpecificOptions() {
+return {
+focusAreas: ['coding_standards', 'naming_conventions', 'formatting'],
+strictMode: true,
+includeBestPractices: true,
+styleGuides: ['google_sql', 'company_standards']
+};
+}
 
-      if (!llmResult.success) {
-        throw new Error(llmResult.error);
-      }
+/**
+* 获取温度参数
+* @returns {number} 温度值
+*/
+getTemperature() {
+return 0.0; // 规范检查需要最严格的精确性
+}
 
-      return this.formatResult(llmResult, context);
+/**
+* 获取最大token数
+* @returns {number} 最大token数
+*/
+getMaxTokens() {
+return 2000; // 规范检查的标准输出
+}
 
-    } catch (error) {
-      return this.handleError(error, context);
-    }
-  }
-
-  /**
-   * 构建规范检查提示词
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<string>} 提示词
-   */
-  async buildPrompt(context) {
-    const { sql, databaseType } = context;
-    
-    try {
-      const { systemPrompt, userPrompt } = await buildPrompt('coding-standards-check.md', {
-        databaseType,
-        sql
-      }, { category: 'analyzers' });
-      
-      return `${systemPrompt}\n\n${userPrompt}\n\nSQL语句：\n\`\`\`sql\n${sql}\n\`\`\``;
-    } catch (error) {
-      // 如果加载提示词失败，回退到硬编码提示词
-      console.warn('加载编码规范检查提示词失败，使用回退提示词:', error.message);
-      return `检查${databaseType} SQL规范：
-\`\`\`sql
-${sql}
-\`\`\`
-
-检查要点：命名规范、代码风格、最佳实践、可维护性。
-
-返回JSON：
-{
-  "summary": "总结",
-  "violations": [{"type": "类型", "description": "描述", "severity": "error|warning|info", "suggestion": "建议"}],
-  "recommendations": [{"category": "类别", "action": "建议", "description": "说明"}],
-  "complianceScore": 0.8,
-  "standards": ["标准列表"],
-  "metrics": {"readability": "可读性", "maintainability": "可维护性"}
-}`;
-    }
-  }
-
-  /**
-   * 获取工具描述
-   * @returns {string} 描述
-   */
-  getDescription() {
-    return 'SQL规范检查工具，检查编码规范和最佳实践';
-  }
+/**
+* 获取工具描述
+* @returns {string} 描述
+*/
+getDescription() {
+return 'SQL规范检查工具，严格检查编码规范、命名约定和最佳实践';
+}
 }
 
 export { StandardsTool };

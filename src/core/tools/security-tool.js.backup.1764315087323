@@ -1,0 +1,64 @@
+/**
+ * 安全分析工具（重构版）
+ * 专门分析SQL语句的安全问题
+ * 重构：集成智能上下文管理，告别SB的字符串拼接
+ */
+
+import { BaseTool } from './base-tool.js';
+
+/**
+ * 安全分析工具类
+ */
+class SecurityTool extends BaseTool {
+  constructor(llmService, knowledgeBase = null) {
+    super(llmService, knowledgeBase);
+    this.name = 'SecurityTool';
+  }
+
+  /**
+   * 获取分析类型
+   * @returns {string} 分析类型
+   */
+  getAnalysisType() {
+    return 'security';
+  }
+
+  /**
+   * 获取工具特定选项
+   * @returns {Object} 工具选项
+   */
+  getToolSpecificOptions() {
+    return {
+      focusAreas: ['sql_injection', 'privilege_escalation', 'data_exposure'],
+      securityLevel: 'comprehensive',
+      includeThreatModeling: true,
+      complianceFrameworks: ['OWASP', 'NIST']
+    };
+  }
+
+  /**
+   * 获取温度参数
+   * @returns {number} 温度值
+   */
+  getTemperature() {
+    return 0.1; // 安全分析需要极高的精确性
+  }
+
+  /**
+   * 获取最大token数
+   * @returns {number} 最大token数
+   */
+  getMaxTokens() {
+    return 3000; // 安全分析需要更详细的威胁分析和建议
+  }
+
+  /**
+   * 获取工具描述
+   * @returns {string} 描述
+   */
+  getDescription() {
+    return 'SQL安全分析工具，深度识别安全威胁、漏洞并提供全面防护建议';
+  }
+}
+
+export { SecurityTool };

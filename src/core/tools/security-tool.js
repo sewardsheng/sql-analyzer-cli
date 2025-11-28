@@ -1,93 +1,64 @@
 /**
- * 安全分析工具
- * 专门分析SQL语句的安全问题
- */
+* 安全分析工具（重构版）
+* 专门分析SQL语句的安全问题
+* 重构：集成智能上下文管理，告别SB的字符串拼接
+*/
 
 import { BaseTool } from './base-tool.js';
-import { buildPrompt } from '../../utils/format/prompt-loader.js';
 
 /**
- * 安全分析工具类
- */
+* 安全分析工具类
+*/
 class SecurityTool extends BaseTool {
-  constructor(llmService) {
-    super(llmService);
-    this.name = 'security';
-  }
+constructor(llmService, knowledgeBase = null) {
+super(llmService, knowledgeBase);
+this.name = 'SecurityTool';
+}
 
-  /**
-   * 执行安全分析
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<Object>} 分析结果
-   */
-  async execute(context) {
-    try {
-      if (!this.validateContext(context)) {
-        throw new Error('无效的分析上下文');
-      }
+/**
+* 获取分析类型
+* @returns {string} 分析类型
+*/
+getAnalysisType() {
+return 'security';
+}
 
-      const prompt = await this.buildPrompt(context);
-      const llmResult = await this.llmService.call(prompt, {
-        temperature: 0.2,
-        maxTokens: 2000, // 增加token数量以支持更详细的分析
-        timeout: 60000   // 更新超时时间
-      });
+/**
+* 获取工具特定选项
+* @returns {Object} 工具选项
+*/
+getToolSpecificOptions() {
+return {
+focusAreas: ['sql_injection', 'privilege_escalation', 'data_exposure'],
+securityLevel: 'comprehensive',
+includeThreatModeling: true,
+complianceFrameworks: ['OWASP', 'NIST']
+};
+}
 
-      if (!llmResult.success) {
-        throw new Error(llmResult.error);
-      }
+/**
+* 获取温度参数
+* @returns {number} 温度值
+*/
+getTemperature() {
+return 0.1; // 安全分析需要极高的精确性
+}
 
-      return this.formatResult(llmResult, context);
+/**
+* 获取最大token数
+* @returns {number} 最大token数
+*/
+getMaxTokens() {
+return 3000; // 安全分析需要更详细的威胁分析和建议
+}
 
-    } catch (error) {
-      return this.handleError(error, context);
-    }
-  }
-
-  /**
-   * 构建安全分析提示词
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<string>} 提示词
-   */
-  async buildPrompt(context) {
-    const { sql, databaseType } = context;
-    
-    try {
-      const { systemPrompt, userPrompt } = await buildPrompt('security-audit.md', {
-        databaseType,
-        sql
-      }, { category: 'analyzers' });
-      
-      return `${systemPrompt}\n\n${userPrompt}\n\nSQL语句：\n\`\`\`sql\n${sql}\n\`\`\``;
-    } catch (error) {
-      // 如果加载提示词失败，回退到硬编码提示词
-      console.warn('加载安全审计提示词失败，使用回退提示词:', error.message);
-      return `分析${databaseType} SQL安全：
-\`\`\`sql
-${sql}
-\`\`\`
-
-分析要点：SQL注入、权限控制、数据泄露、加密需求、合规性。
-
-返回JSON：
-{
-  "summary": "总结",
-  "vulnerabilities": [{"type": "类型", "description": "描述", "severity": "critical|high|medium|low"}],
-  "recommendations": [{"action": "建议", "description": "说明", "priority": "high|medium|low"}],
-  "riskLevel": "风险等级",
-  "securityScore": 0.8,
-  "compliance": ["合规标准"]
-}`;
-    }
-  }
-
-  /**
-   * 获取工具描述
-   * @returns {string} 描述
-   */
-  getDescription() {
-    return 'SQL安全分析工具，识别安全漏洞和风险';
-  }
+/**
+* 获取工具描述
+* @returns {string} 描述
+*/
+getDescription() {
+return 'SQL安全分析工具，深度识别安全威胁、漏洞并提供全面防护建议';
+}
 }
 
 export { SecurityTool };

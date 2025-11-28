@@ -1,107 +1,346 @@
 /**
- * 基础分析工具
- * 所有分析工具的基类，定义通用接口
- */
+* 基础分析工具
+* 所有分析工具的基类，定义通用接口
+* 重构：集成智能上下文管理系统，告别SB的原始字符串拼接
+*/
+
+import { createContextManager, createSmartPromptBuilder } from '../context/index.js';
+import { logError } from '../../utils/logger.js';
 
 /**
- * 基础分析工具类
- */
+* 基础分析工具类
+*/
 class BaseTool {
-  constructor(llmService) {
-    this.llmService = llmService;
-    this.name = this.constructor.name;
-  }
+constructor(llmService, knowledgeBase = null) {
+this.llmService = llmService;
+this.knowledgeBase = knowledgeBase;
+this.name = this.constructor.name;
 
-  /**
-   * 执行分析
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<Object>} 分析结果
-   */
-  async execute(context) {
-    throw new Error(`子类必须实现execute方法: ${this.name}`);
-  }
+// 初始化智能上下文管理器
+this.contextManager = createContextManager(llmService, knowledgeBase);
+this.promptBuilder = createSmartPromptBuilder({
+enableOptimization: true,
+prioritizeByComplexity: true
+});
 
-  /**
-   * 构建提示词
-   * @param {Object} context - 分析上下文
-   * @returns {string} 提示词
-   */
-  buildPrompt(context) {
-    throw new Error(`子类必须实现buildPrompt方法: ${this.name}`);
-  }
+// 工具统计
+this.stats = {
+executionCount: 0,
+totalDuration: 0,
+cacheHits: 0,
+errors: 0
+};
+}
 
-  /**
-   * 验证上下文
-   * @param {Object} context - 分析上下文
-   * @returns {boolean} 是否有效
-   */
-  validateContext(context) {
-    return context && 
-           typeof context === 'object' && 
-           typeof context.sql === 'string' && 
-           context.sql.trim().length > 0;
-  }
+/**
+* 执行分析（重构版本）
+* @param {Object} context - 分析上下文
+* @returns {Promise<Object>} 分析结果
+*/
+async execute(context) {
+const startTime = Date.now();
+this.stats.executionCount++;
 
-  /**
-   * 获取工具信息
-   * @returns {Object} 工具信息
-   */
-  getInfo() {
-    return {
-      name: this.name,
-      version: '1.0.0',
-      description: this.getDescription(),
-      timestamp: new Date().toISOString()
-    };
-  }
+try {
+// 验证上下文
+if (!this.validateContext(context)) {
+throw new Error('无效的分析上下文');
+}
 
-  /**
-   * 获取工具描述
-   * @returns {string} 描述
-   */
-  getDescription() {
-    return '基础分析工具';
-  }
+// 获取工具特定的分析类型
+const analysisType = this.getAnalysisType();
+if (!analysisType) {
+throw new Error(`工具 ${this.name} 必须定义分析类型`);
+}
 
-  /**
-   * 处理错误
-   * @param {Error} error - 错误对象
-   * @param {Object} context - 上下文
-   * @returns {Object} 错误结果
-   */
-  handleError(error, context) {
-    console.error(`${this.name} 执行错误:`, error);
-    
-    return {
-      success: false,
-      error: error.message,
-      tool: this.name,
-      context: {
-        sqlLength: context?.sql?.length || 0,
-        databaseType: context?.databaseType || 'unknown'
-      }
-    };
-  }
+// 构建增强的分析上下文
+const enhancedContext = await this.contextManager.buildAnalysisContext({
+sql: context.sql,
+databaseType: context.databaseType,
+analysisTypes: [analysisType],
+options: {
+...context.options,
+toolSpecific: this.getToolSpecificOptions()
+},
+cacheKey: this.generateCacheKey(context)
+});
 
-  /**
-   * 格式化分析结果
-   * @param {Object} llmResult - LLM结果
-   * @param {Object} context - 上下文
-   * @returns {Object} 格式化结果
-   */
-  formatResult(llmResult, context) {
-    return {
-      success: true,
-      tool: this.name,
-      rawContent: llmResult.content,
-      duration: llmResult.duration,
-      usage: llmResult.usage,
-      context: {
-        databaseType: context.databaseType,
-        sqlLength: context.sql.length
-      }
-    };
-  }
+// 构建智能提示词
+const { systemPrompt, userPrompt } = await this.promptBuilder.buildPrompt(
+enhancedContext,
+{
+toolName: this.name,
+analysisType
+}
+);
+
+// 合并提示词并调用LLM
+const fullPrompt = this.combinePrompts(systemPrompt, userPrompt);
+const llmResult = await this.llmService.call(fullPrompt, {
+temperature: this.getTemperature(),
+maxTokens: this.getMaxTokens()
+});
+
+// 格式化结果
+const result = this.formatResult(llmResult, enhancedContext);
+
+// 更新统计
+const duration = Date.now() - startTime;
+this.stats.totalDuration += duration;
+this.stats.cacheHits += enhancedContext.metadata?.cached ? 1 : 0;
+
+return {
+...result,
+tool: this.name,
+analysisType,
+duration,
+enhancedContext: {
+metadata: enhancedContext.metadata,
+cacheStats: this.contextManager.getCacheStats()
+}
+};
+
+} catch (error) {
+this.stats.errors++;
+return this.handleError(error, context);
+}
+}
+
+/**
+* 构建提示词（已弃用，使用智能提示词构建器）
+* @param {Object} context - 分析上下文
+* @returns {string} 提示词
+* @deprecated 使用智能提示词构建器替代
+*/
+buildPrompt(context) {
+logError(`工具 ${this.name} 调用了已弃用的buildPrompt方法`, {
+tool: this.name,
+recommendation: '请使用execute方法，它会自动调用智能提示词构建器'
+});
+
+// 为了兼容性，返回基础提示词
+return `请分析SQL: ${context.sql}`;
+}
+
+/**
+* 验证上下文
+* @param {Object} context - 分析上下文
+* @returns {boolean} 是否有效
+*/
+validateContext(context) {
+return context &&
+typeof context === 'object' &&
+typeof context.sql === 'string' &&
+context.sql.trim().length > 0;
+}
+
+/**
+* 获取工具信息
+* @returns {Object} 工具信息
+*/
+getInfo() {
+return {
+name: this.name,
+version: '1.0.0',
+description: this.getDescription(),
+timestamp: new Date().toISOString()
+};
+}
+
+/**
+* 获取工具描述
+* @returns {string} 描述
+*/
+getDescription() {
+return '基础分析工具';
+}
+
+/**
+* 获取分析类型（子类必须实现）
+* @returns {string} 分析类型
+*/
+getAnalysisType() {
+return null;
+}
+
+/**
+* 获取工具特定选项
+* @returns {Object} 工具选项
+*/
+getToolSpecificOptions() {
+return {};
+}
+
+/**
+* 获取温度参数
+* @returns {number} 温度值
+*/
+getTemperature() {
+return 0.3;
+}
+
+/**
+* 获取最大token数
+* @returns {number} 最大token数
+*/
+getMaxTokens() {
+return 2000;
+}
+
+/**
+* 合并系统提示词和用户提示词
+* @param {string} systemPrompt - 系统提示词
+* @param {string} userPrompt - 用户提示词
+* @returns {string} 合并后的提示词
+*/
+combinePrompts(systemPrompt, userPrompt) {
+return `${systemPrompt}\n\n${userPrompt}`;
+}
+
+/**
+* 生成缓存键
+* @param {Object} context - 分析上下文
+* @returns {string} 缓存键
+*/
+generateCacheKey(context) {
+return `${this.name}:${context.databaseType || 'unknown'}:${this.simpleHash(context.sql)}`;
+}
+
+/**
+* 简单哈希函数
+* @param {string} str - 输入字符串
+* @returns {string} 哈希值
+*/
+simpleHash(str) {
+if (!str) return '';
+let hash = 0;
+for (let i = 0; i < str.length; i++) {
+const char = str.charCodeAt(i);
+hash = ((hash << 5) - hash) + char;
+hash = hash & hash;
+}
+return hash.toString(36);
+}
+
+/**
+* 处理错误（增强版）
+* @param {Error} error - 错误对象
+* @param {Object} context - 上下文
+* @returns {Object} 错误结果
+*/
+handleError(error, context) {
+logError(`${this.name} 执行错误`, {
+error: error.message,
+stack: error.stack,
+context: {
+sqlLength: context?.sql?.length || 0,
+databaseType: context?.databaseType || 'unknown',
+toolName: this.name
+}
+});
+
+return {
+success: false,
+error: error.message,
+tool: this.name,
+errorType: error.constructor.name,
+context: {
+sqlLength: context?.sql?.length || 0,
+databaseType: context?.databaseType || 'unknown'
+},
+timestamp: new Date().toISOString()
+};
+}
+
+/**
+* 格式化分析结果（增强版）
+* @param {Object} llmResult - LLM结果
+* @param {Object} context - 增强上下文
+* @returns {Object} 格式化结果
+*/
+formatResult(llmResult, context) {
+try {
+// 尝试解析JSON格式的LLM响应
+let parsedContent;
+try {
+parsedContent = JSON.parse(llmResult.content);
+} catch (parseError) {
+// 如果不是JSON格式，包装为标准格式
+parsedContent = {
+summary: llmResult.content,
+issues: [],
+recommendations: [],
+confidence: 0.5,
+rawResponse: llmResult.content
+};
+}
+
+return {
+success: true,
+tool: this.name,
+analysisType: this.getAnalysisType(),
+rawContent: llmResult.content,
+parsedContent: parsedContent,
+duration: llmResult.duration,
+usage: llmResult.usage,
+context: {
+databaseType: context.core?.databaseType || context.databaseType,
+sqlLength: context.core?.sql?.length || context.sql?.length || 0,
+complexity: context.metadata?.complexity || 'unknown'
+},
+timestamp: new Date().toISOString()
+};
+} catch (error) {
+logError('格式化结果失败', error);
+return {
+success: false,
+error: `结果格式化失败: ${error.message}`,
+tool: this.name,
+rawContent: llmResult.content,
+timestamp: new Date().toISOString()
+};
+}
+}
+
+/**
+* 获取工具统计信息
+* @returns {Object} 统计信息
+*/
+getStats() {
+return {
+...this.stats,
+averageDuration: this.stats.executionCount > 0 ?
+Math.round(this.stats.totalDuration / this.stats.executionCount) : 0,
+errorRate: this.stats.executionCount > 0 ?
+(this.stats.errors / this.stats.executionCount * 100).toFixed(2) + '%' : '0%',
+cacheHitRate: this.stats.executionCount > 0 ?
+(this.stats.cacheHits / this.stats.executionCount * 100).toFixed(2) + '%' : '0%'
+};
+}
+
+/**
+* 重置统计信息
+*/
+resetStats() {
+this.stats = {
+executionCount: 0,
+totalDuration: 0,
+cacheHits: 0,
+errors: 0
+};
+}
+
+/**
+* 清理缓存
+*/
+cleanup() {
+if (this.contextManager) {
+this.contextManager.clearCache();
+}
+if (this.promptBuilder) {
+this.promptBuilder.clearCache();
+}
+}
 }
 
 export { BaseTool };

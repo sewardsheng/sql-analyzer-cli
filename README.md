@@ -188,9 +188,10 @@ sql-analyzer-api/
 │   ├── api/                    # API路由
 │   ├── config/                 # 配置管理
 │   ├── core/                   # 核心功能
-│   │   ├── analyzers/          # SQL分析器
+│   │   ├── identification/     # 数据库识别
 │   │   ├── knowledge/          # 知识库管理
-│   │   └── tools/              # 分析工具
+│   │   ├── tools/              # 分析工具
+│   │   └── llm-service/        # LLM服务
 │   ├── prompts/                # LLM提示词
 │   ├── services/               # 业务服务
 │   │   └── rule-learning/      # 规则学习服务

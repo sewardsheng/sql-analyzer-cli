@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Analyzer API - 智能SQL分析工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .sql-input {
+            margin-bottom: 20px;
+        }
+
+        .sql-input label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .sql-input textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        .sql-input textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .option-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .option-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .option-item label {
+            cursor: pointer;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e1e5e9;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.loading {
+            background: #e2e3e5;
+            border: 1px solid #ced4da;
+            color: #383d41;
+        }
+
+        .api-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .api-info h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .endpoint-list {
+            list-style: none;
+        }
+
+        .endpoint-list li {
+            background: white;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 SQL Analyzer API</h1>
+            <p>基于大语言模型的智能SQL语句分析与扫描工具</p>
+        </div>
+
+        <div class="main-card">
+            <div class="sql-input">
+                <label for="sqlQuery">输入SQL语句进行分析：</label>
+                <textarea id="sqlQuery" placeholder="请输入您要分析的SQL语句...
+
+例如：
+SELECT * FROM users WHERE email = 'example@email.com'"></textarea>
+            </div>
+
+            <div class="options">
+                <div class="option-item">
+                    <input type="checkbox" id="performance" checked>
+                    <label for="performance">性能分析</label>
+                </div>
+                <div class="option-item">
+                    <input type="checkbox" id="security" checked>
+                    <label for="security">安全审计</label>
+                </div>
+                <div class="option-item">
+                    <input type="checkbox" id="standards" checked>
+                    <label for="standards">编码规范</label>
+                </div>
+                <div class="option-item">
+                    <input type="checkbox" id="learn">
+                    <label for="learn">规则学习</label>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-primary" onclick="analyzeSQL()">
+                    分析SQL
+                </button>
+                <button class="btn btn-secondary" onclick="clearForm()">
+                    清空
+                </button>
+            </div>
+
+            <div id="result" class="result"></div>
+        </div>
+
+        <div class="api-info">
+            <h3>📚 API 端点</h3>
+            <ul class="endpoint-list">
+                <li><strong>GET /</strong> - 获取API信息</li>
+                <li><strong>POST /api/analyze</strong> - 分析单条SQL</li>
+                <li><strong>POST /api/analyze/batch</strong> - 批量分析SQL</li>
+                <li><strong>GET /api/docs</strong> - API文档</li>
+                <li><strong>GET /api/health</strong> - 健康检查</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function showLoading() {
+            const result = document.getElementById('result');
+            result.className = 'result loading';
+            result.innerHTML = `
+                <div class="loading-spinner"></div>
+                <span style="margin-left: 10px;">正在分析SQL语句，请稍候...</span>
+            `;
+            result.style.display = 'block';
+        }
+
+        function showSuccess(data) {
+            const result = document.getElementById('result');
+            const analysis = data.analysisResults || {};
+
+            let html = '<h4>✅ 分析完成</h4>';
+            html += `<p><strong>数据库类型：</strong> ${data.databaseType || '未知'}</p>`;
+            html += `<p><strong>分析耗时：</strong> ${data.metadata?.duration || 0}ms</p>`;
+
+            if (analysis.performance) {
+                html += '<div style="margin-top: 10px;"><strong>🔧 性能分析：</strong></div>';
+                html += `<pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">${JSON.stringify(analysis.performance, null, 2)}</pre>`;
+            }
+
+            if (analysis.security) {
+                html += '<div style="margin-top: 10px;"><strong>🔒 安全审计：</strong></div>';
+                html += `<pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">${JSON.stringify(analysis.security, null, 2)}</pre>`;
+            }
+
+            if (analysis.standards) {
+                html += '<div style="margin-top: 10px;"><strong>📝 编码规范：</strong></div>';
+                html += `<pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">${JSON.stringify(analysis.standards, null, 2)}</pre>`;
+            }
+
+            result.className = 'result success';
+            result.innerHTML = html;
+            result.style.display = 'block';
+        }
+
+        function showError(message) {
+            const result = document.getElementById('result');
+            result.className = 'result error';
+            result.innerHTML = `<h4>❌ 分析失败</h4><p>${message}</p>`;
+            result.style.display = 'block';
+        }
+
+        async function analyzeSQL() {
+            const sqlQuery = document.getElementById('sqlQuery').value.trim();
+
+            if (!sqlQuery) {
+                showError('请输入SQL语句');
+                return;
+            }
+
+            showLoading();
+
+            const options = {
+                performance: document.getElementById('performance').checked,
+                security: document.getElementById('security').checked,
+                standards: document.getElementById('standards').checked,
+                learn: document.getElementById('learn').checked
+            };
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sql: sqlQuery,
+                        options: options
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showSuccess(data.data);
+                } else {
+                    showError(data.error || '分析失败');
+                }
+            } catch (error) {
+                showError('网络错误：' + error.message);
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('sqlQuery').value = '';
+            document.getElementById('result').style.display = 'none';
+        }
+
+        // 按Enter键触发分析
+        document.getElementById('sqlQuery').addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'Enter') {
+                analyzeSQL();
+            }
+        });
+
+        // 页面加载完成后设置焦点
+        window.addEventListener('load', function() {
+            document.getElementById('sqlQuery').focus();
+        });
+    </script>
+</body>
+</html>

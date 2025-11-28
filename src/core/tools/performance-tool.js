@@ -1,92 +1,63 @@
 /**
- * 性能分析工具
- * 专门分析SQL语句的性能问题
- */
+* 性能分析工具（重构版）
+* 专门分析SQL语句的性能问题
+* 重构：集成智能上下文管理，告别SB的字符串拼接
+*/
 
 import { BaseTool } from './base-tool.js';
-import { buildPrompt } from '../../utils/format/prompt-loader.js';
 
 /**
- * 性能分析工具类
- */
+* 性能分析工具类
+*/
 class PerformanceTool extends BaseTool {
-  constructor(llmService) {
-    super(llmService);
-    this.name = 'performance';
-  }
+constructor(llmService, knowledgeBase = null) {
+super(llmService, knowledgeBase);
+this.name = 'PerformanceTool';
+}
 
-  /**
-   * 执行性能分析
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<Object>} 分析结果
-   */
-  async execute(context) {
-    try {
-      if (!this.validateContext(context)) {
-        throw new Error('无效的分析上下文');
-      }
+/**
+* 获取分析类型
+* @returns {string} 分析类型
+*/
+getAnalysisType() {
+return 'performance';
+}
 
-      const prompt = await this.buildPrompt(context);
-      const llmResult = await this.llmService.call(prompt, {
-        temperature: 0.3,
-        maxTokens: 2000, // 增加token数量以支持更详细的分析
-        timeout: 60000   // 更新超时时间
-      });
+/**
+* 获取工具特定选项
+* @returns {Object} 工具选项
+*/
+getToolSpecificOptions() {
+return {
+focusAreas: ['query_efficiency', 'index_usage', 'resource_consumption'],
+analysisDepth: 'deep',
+includeMetrics: true
+};
+}
 
-      if (!llmResult.success) {
-        throw new Error(llmResult.error);
-      }
+/**
+* 获取温度参数
+* @returns {number} 温度值
+*/
+getTemperature() {
+return 0.2; // 性能分析需要更精确，降低随机性
+}
 
-      return this.formatResult(llmResult, context);
+/**
+* 获取最大token数
+* @returns {number} 最大token数
+*/
+getMaxTokens() {
+return 2500; // 性能分析需要更详细的输出
+}
 
-    } catch (error) {
-      return this.handleError(error, context);
-    }
-  }
-
-  /**
-   * 构建性能分析提示词
-   * @param {Object} context - 分析上下文
-   * @returns {Promise<string>} 提示词
-   */
-  async buildPrompt(context) {
-    const { sql, databaseType } = context;
-    
-    try {
-      const { systemPrompt, userPrompt } = await buildPrompt('performance-analysis.md', {
-        databaseType,
-        sql
-      }, { category: 'analyzers' });
-      
-      return `${systemPrompt}\n\n${userPrompt}\n\nSQL语句：\n\`\`\`sql\n${sql}\n\`\`\``;
-    } catch (error) {
-      // 如果加载提示词失败，回退到硬编码提示词
-      console.warn('加载性能分析提示词失败，使用回退提示词:', error.message);
-      return `分析${databaseType} SQL性能：
-\`\`\`sql
-${sql}
-\`\`\`
-
-分析要点：索引使用、全表扫描、JOIN效率、性能瓶颈、优化建议。
-
-返回JSON：
-{
-  "summary": "总结",
-  "issues": [{"type": "类型", "description": "描述", "severity": "high|medium|low"}],
-  "recommendations": [{"action": "建议", "description": "说明"}],
-  "metrics": {"complexity": "复杂度", "estimatedCost": "成本"},
-  "confidence": 0.8
-}`;
-    }
-  }
-
-  /**
-   * 获取工具描述
-   * @returns {string} 描述
-   */
-  getDescription() {
-    return 'SQL性能分析工具，识别性能问题并提供优化建议';
-  }
+/**
+* 获取工具描述
+* @returns {string} 描述
+*/
+getDescription() {
+return 'SQL性能分析工具，深度识别性能瓶颈并提供智能优化建议';
+}
 }
 
 export { PerformanceTool };
