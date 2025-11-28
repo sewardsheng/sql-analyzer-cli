@@ -67,5 +67,8 @@
     "**/*.backup.*",
     "**/*.test.ts",
     "**/*.spec.ts"
-  ]
+  ],
+  "compilerOptions": {
+    "typeRoots": ["./node_modules/@types", "./src/**/*.d.ts"]
+  }
 }
