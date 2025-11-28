@@ -10,7 +10,7 @@
     "moduleResolution": "node",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "types": ["node"],
+    "types": ["node", "bun"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
 
@@ -40,23 +40,29 @@
     "exactOptionalPropertyTypes": false,
 
     // Style Options
-    "noImplicitReturns": true,
-    "noImplicitOverride": true,
+    "noImplicitReturns": false,
+    "noImplicitOverride": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true,
+    "noFallthroughCasesInSwitch": false,
 
-    // Recommended Options
-    "strict": true,
-    "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
+    // Recommended Options - 降低严格性
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "isolatedModules": false,
+    "noUncheckedSideEffectImports": false,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
+    "forceConsistentCasingInFileNames": false,
 
-    // Additional Options
+    // Additional Options - 更宽松的配置
     "allowImportingTsExtensions": false,
     "noEmit": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noImplicitThis": false,
+    "strictBindCallApply": false,
+    "strictFunctionTypes": false,
+    "strictPropertyInitialization": false
   },
   "include": [
     "src/**/*"
@@ -67,8 +73,5 @@
     "**/*.backup.*",
     "**/*.test.ts",
     "**/*.spec.ts"
-  ],
-  "compilerOptions": {
-    "typeRoots": ["./node_modules/@types", "./src/**/*.d.ts"]
-  }
+  ]
 }

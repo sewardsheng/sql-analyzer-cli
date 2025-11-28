@@ -1,46 +1,29 @@
-### SQL Analyzer API 测试文件
-### - 建议先测试基础接口，再使用规则学习功能
-###
-### 🚀 快速开始：
-### 1. 确保服务器运行: bun run src/server.js
-### 2. 测试健康检查: GET {{baseUrl}}/api/system/health
-### 3. 使用规则学习: POST {{baseUrl}}/api/rule-learning/learn
-###
-### 基础配置
+### SQL Analyzer API 测试集合
+### 基础URL: http://localhost:3000
+
 @baseUrl = http://localhost:3000
 @contentType = application/json
 
-### 1. 基础接口测试
+### ===== 系统检查 =====
 
-### 获取API根信息
-GET {{baseUrl}}/
-Accept: {{contentType}}
-
-### 获取API文档
-GET {{baseUrl}}/api/docs
-Accept: {{contentType}}
-
-### 2. 系统状态检查
-
-### 系统健康检查
+### 1. 健康检查
 GET {{baseUrl}}/api/system/health
-Accept: {{contentType}}
 
-### 简单ping检查
+### 2. Ping检查
 GET {{baseUrl}}/api/system/health/ping
-Accept: {{contentType}}
 
-### 获取系统状态
+### 3. 系统状态
 GET {{baseUrl}}/api/system/status
-Accept: {{contentType}}
 
-### 获取分析器状态
+### 4. 知识库状态
+GET {{baseUrl}}/api/system/status/knowledge
+
+### 5. 分析器状态
 GET {{baseUrl}}/api/system/status/analyzer
-Accept: {{contentType}}
 
-### 3. SQL分析接口
+### ===== SQL分析 =====
 
-### 单条SQL分析
+### 1. 单条SQL分析
 POST {{baseUrl}}/api/analyze
 Content-Type: {{contentType}}
 
@@ -54,71 +37,71 @@ Content-Type: {{contentType}}
   }
 }
 
-### 批量SQL分析
+### 2. 批量SQL分析
 POST {{baseUrl}}/api/analyze/batch
 Content-Type: {{contentType}}
 
 {
   "sqls": [
-    { "sql": "SELECT * FROM users WHERE id = 1" },
-    { "sql": "SELECT * FROM orders WHERE user_id = 1" },
-    { "sql": "DELETE FROM users WHERE id = 1" }
+    "SELECT * FROM users WHERE id = 1",
+    "UPDATE users SET name = 'test' WHERE id = 1",
+    "DELETE FROM orders WHERE created_at < '2024-01-01'"
   ],
   "options": {
     "performance": true,
     "security": true,
-    "standards": true,
-    "learn": false
+    "standards": true
   }
 }
 
-### 获取分析器状态
+### 3. 分析状态检查
 GET {{baseUrl}}/api/analyze/status
-Accept: {{contentType}}
 
-### 4. 历史记录管理
+### ===== 历史记录 =====
 
-### 获取所有历史记录
+### 1. 获取统计信息
+GET {{baseUrl}}/api/history/stats
+
+### 2. 获取历史列表
 GET {{baseUrl}}/api/history
-Accept: {{contentType}}
 
-### 获取历史记录详情
-GET {{baseUrl}}/api/history/2025-11-28T06-18-13_571de406
-Accept: {{contentType}}
+### 3. 按ID获取历史记录
+GET {{baseUrl}}/api/history/1
 
-### 搜索历史记录
+### 4. 导出历史记录
+GET {{baseUrl}}/api/history/export
+
+### 5. 删除历史记录
+DELETE {{baseUrl}}/api/history/1
+
+### 6. 清空历史记录
+DELETE {{baseUrl}}/api/history
+
+### 7. 搜索历史记录
 POST {{baseUrl}}/api/history/search
 Content-Type: {{contentType}}
 
 {
-  "sql": "SELECT",
-  "limit": 5
+  "query": "SELECT",
+  "limit": 10,
+  "offset": 0
 }
 
-### 获取历史记录统计
-GET {{baseUrl}}/api/history/stats
-Accept: {{contentType}}
+### ===== 知识库管理 =====
 
-### 导出历史记录 (JSON格式)
-GET {{baseUrl}}/api/history/export?format=json
-Accept: {{contentType}}
-
-### 5. 知识库管理
-
-### 获取知识库状态
+### 1. 获取知识库概览
 GET {{baseUrl}}/api/knowledge
-Accept: {{contentType}}
 
-### 搜索知识库
+### 2. 搜索知识
 POST {{baseUrl}}/api/knowledge/search
 Content-Type: {{contentType}}
 
 {
-  "query": "SQL注入",
-  "k": 3
+  "query": "索引优化",
+  "limit": 10
 }
 
-### 触发知识库学习
+### 3. 学习新知识
 POST {{baseUrl}}/api/knowledge/learn
 Content-Type: {{contentType}}
 
@@ -128,113 +111,104 @@ Content-Type: {{contentType}}
   "priorityApproved": false
 }
 
-### 重置知识库
+### 4. 重置知识库
 POST {{baseUrl}}/api/knowledge/reset
-Content-Type: {{contentType}}
 
-### 导出知识库
-GET {{baseUrl}}/api/knowledge/export?format=json
-Accept: {{contentType}}
+### 5. 导出知识库
+GET {{baseUrl}}/api/knowledge/export
 
-### 6. 配置管理
 
-### 获取所有配置
+### ===== 配置管理 =====
+
+### 1. 获取分析器配置
 GET {{baseUrl}}/api/config
-Accept: {{contentType}}
 
-### 获取指定配置项
-GET {{baseUrl}}/api/config/api
-Accept: {{contentType}}
+### 2. 获取模块状态
+GET {{baseUrl}}/api/config/modules
 
-### 更新配置项
-PUT {{baseUrl}}/api/config/learning
+### 3. 获取服务器配置
+GET {{baseUrl}}/api/config/server
+
+### 4. 更新服务器端口
+PUT {{baseUrl}}/api/config/server.port
 Content-Type: {{contentType}}
 
 {
-  "value": {
-    "enabled": true,
-    "minConfidence": 0.8,
-    "minBatchSize": 10
-  }
+  "value": 3001
 }
 
-### 重置配置项
-DELETE {{baseUrl}}/api/config/learning
-Accept: {{contentType}}
+### ===== 调试接口 =====
 
-### 重置所有配置
-POST {{baseUrl}}/api/config/reset
-Content-Type: {{contentType}}
+### 1. API测试
+GET {{baseUrl}}/api/test
 
-### 获取配置项列表
-GET {{baseUrl}}/api/config/llm
-Accept: {{contentType}}
+### 2. 调试页面
+GET {{baseUrl}}/debug
 
-### 7. 规则学习管理
+### 3. Web界面
+GET {{baseUrl}}/web
 
-### 获取规则学习配置
-GET {{baseUrl}}/api/rule-learning/config
-Accept: {{contentType}}
+### 4. 首页
+GET {{baseUrl}}/
 
-### 更新规则学习配置
-PUT {{baseUrl}}/api/rule-learning/config
-Content-Type: {{contentType}}
+### 5. API文档
+GET {{baseUrl}}/api/docs
 
-{
-  "config": {
-    "learning": {
-      "enabled": true,
-      "minConfidence": 0.7,
-      "minBatchSize": 5,
-      "enableRealTimeLearning": true,
-      "enableBatchLearning": true
-    },
-    "autoApproveThreshold": 0.8
-  }
-}
+### ===== 综合测试案例 =====
 
-### 重置规则学习配置
-POST {{baseUrl}}/api/rule-learning/config/reset
-Content-Type: {{contentType}}
-
-### 获取规则学习状态
-GET {{baseUrl}}/api/rule-learning/status
-Accept: {{contentType}}
-
-### 触发规则学习 - 核心功能
-POST {{baseUrl}}/api/rule-learning/learn
-Content-Type: {{contentType}}
-
-{
-  "options": {
-    "batchSize": 10,
-    "minConfidence": 0.7
-  }
-}
-
-### 获取阈值调整统计
-GET {{baseUrl}}/api/rule-learning/threshold-stats
-Accept: {{contentType}}
-
-### 8. 错误测试接口
-
-### 测试404错误
-GET {{baseUrl}}/api/nonexistent
-Accept: {{contentType}}
-
-### 测试参数错误
+### 复杂JOIN测试
 POST {{baseUrl}}/api/analyze
 Content-Type: {{contentType}}
 
 {
-  "sql": ""
+  "sql": "SELECT u.*, o.* FROM users u JOIN orders o ON u.id = o.user_id WHERE u.status = 'active' ORDER BY o.created_at DESC",
+  "options": {
+    "performance": true,
+    "security": false,
+    "standards": false
+  }
 }
 
-### 测试批量分析限制
+### SQL注入测试
+POST {{baseUrl}}/api/analyze
+Content-Type: {{contentType}}
+
+{
+  "sql": "SELECT * FROM users WHERE name = '" + userName + "' AND password = '" + password + "'",
+  "options": {
+    "performance": false,
+    "security": true,
+    "standards": false
+  }
+}
+
+### 标准规范测试
+POST {{baseUrl}}/api/analyze
+Content-Type: {{contentType}}
+
+{
+  "sql": "select * from users",
+  "options": {
+    "performance": false,
+    "security": false,
+    "standards": true
+  }
+}
+
+### 批量综合测试
 POST {{baseUrl}}/api/analyze/batch
 Content-Type: {{contentType}}
 
 {
-  "sqls": [],
-  "options": {}
+  "sqls": [
+    "CREATE TABLE temp_users AS SELECT * FROM users",
+    "INSERT INTO audit_log (action) VALUES ('user_created')",
+    "UPDATE user_stats SET login_count = login_count + 1 WHERE user_id = 1"
+  ],
+  "options": {
+    "performance": true,
+    "security": true,
+    "standards": true,
+    "learn": true
+  }
 }
