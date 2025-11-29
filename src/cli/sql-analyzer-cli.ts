@@ -15,10 +15,66 @@ import { resolve, extname } from 'path';
 class SQLAnalyzerCLI {
   private program: Command;
   private analyzer: any;
+  private log: {
+    analysis: (msg: string) => void;
+    success: (msg: string) => void;
+    error: (msg: string) => void;
+    info: (msg: string) => void;
+  };
+  private colors: {
+    cyan: (text: string) => string;
+    green: (text: string) => string;
+    yellow: (text: string) => string;
+    red: (text: string) => string;
+    blue: (text: string) => string;
+    magenta: (text: string) => string;
+    gray: (text: string) => string;
+  };
+  private time: {
+    dayjs: () => dayjs.Dayjs;
+    format: (date: Date) => string;
+    formatDuration: (ms: number) => string;
+  };
+  private fileAnalyzer: any;
 
   constructor() {
+    this.setupUtils();
     this.setupAnalyzer();
     this.setupProgram();
+  }
+
+  /**
+   * 初始化工具类和辅助方法
+   */
+  private setupUtils(): void {
+    // 初始化日志工具
+    this.log = {
+      analysis: (msg: string) => console.log(msg),
+      success: (msg: string) => console.log(msg),
+      error: (msg: string) => console.error(msg),
+      info: (msg: string) => console.info(msg)
+    };
+
+    // 初始化颜色工具 (ansis已经导入)
+    this.colors = {
+      cyan: (text: string) => cyan(text),
+      green: (text: string) => green(text),
+      yellow: (text: string) => yellow(text),
+      red: (text: string) => red(text),
+      blue: (text: string) => blue(text),
+      magenta: (text: string) => magenta(text),
+      gray: (text: string) => gray(text)
+    };
+
+    // 初始化时间工具 (dayjs已经导入)
+    this.time = {
+      dayjs: () => dayjs(),
+      format: (date: Date) => date.toISOString(),
+      formatDuration: (ms: number) => `${ms}ms`
+    };
+
+    // fileAnalyzer 初始化为 analyzer (后面在 setupAnalyzer 中设置)
+    this.fileAnalyzer = null;
   }
 
   /**
@@ -31,10 +87,12 @@ class SQLAnalyzerCLI {
         enableKnowledgeBase: true,
         maxConcurrency: 3
       });
+      this.fileAnalyzer = this.analyzer; // 设置fileAnalyzer为同一个分析器实例
     } catch (error: any) {
       console.error(red`❌ 分析器初始化失败: ${error.message}`);
       console.error(yellow`⚠️  将使用演示模式`);
       this.analyzer = null;
+      this.fileAnalyzer = null;
     }
   }
 
@@ -303,24 +361,24 @@ class SQLAnalyzerCLI {
   async handleDirectory(dirPath: string, options: any): Promise<void> {
     const analysisOptions = this.processOptions(options);
 
-    cli.log.analysis(`正在分析目录: ${cli.colors.cyan(dirPath)}`);
-    const startTime = cli.time.dayjs();
+    this.log.analysis(`正在分析目录: ${this.colors.cyan(dirPath)}`);
+    const startTime = this.time.dayjs();
 
     try {
       const result = await this.fileAnalyzer.analyzeDirectory(dirPath, analysisOptions);
 
       if (result.success) {
         this.displayDirectoryResults(result);
-        const endTime = cli.time.dayjs();
+        const endTime = this.time.dayjs();
         const duration = endTime.diff(startTime);
-        cli.log.success(`目录分析完成，耗时: ${cli.time.formatDuration(duration)}`);
-        cli.log.info(`完成时间: ${cli.time.format(endTime.toDate())}`);
+        this.log.success(`目录分析完成，耗时: ${this.time.formatDuration(duration)}`);
+        this.log.info(`完成时间: ${this.time.format(endTime.toDate())}`);
       } else {
-        cli.log.error(`目录分析失败: ${result.error}`);
+        this.log.error(`目录分析失败: ${result.error}`);
         process.exit(1);
       }
     } catch (error: any) {
-      cli.log.error(`目录分析失败: ${error.message}`);
+      this.log.error(`目录分析失败: ${error.message}`);
       process.exit(1);
     }
   }
@@ -523,24 +581,24 @@ class SQLAnalyzerCLI {
    */
   displayDirectoryResults(result) {
     console.log('');
-    console.log(cli.colors.blue`📁 目录分析结果`);
-    console.log(cli.colors.gray('='.repeat(50)));
-    console.log(`目录: ${cli.colors.cyan(result.directory)}`);
-    console.log(`文件数量: ${cli.colors.yellow(result.fileCount)}`);
+    console.log(this.colors.blue('📁 目录分析结果'));
+    console.log(this.colors.gray('='.repeat(50)));
+    console.log(`目录: ${this.colors.cyan(result.directory)}`);
+    console.log(`文件数量: ${this.colors.yellow(result.fileCount)}`);
     console.log('');
 
     if (result.stats) {
-      console.log(cli.colors.blue`📊 统计信息:`);
-      console.log(`成功文件: ${cli.colors.green(result.stats.successfulFiles)}`);
-      console.log(`失败文件: ${cli.colors.red(result.stats.failedFiles)}`);
-      console.log(`SQL语句总数: ${cli.colors.yellow(result.stats.totalStatements)}`);
-      console.log(`问题总数: ${cli.colors.yellow(result.stats.totalIssues)}`);
-      console.log(`建议总数: ${cli.colors.magenta(result.stats.totalRecommendations)}`);
+      console.log(this.colors.blue('📊 统计信息:'));
+      console.log(`成功文件: ${this.colors.green(result.stats.successfulFiles)}`);
+      console.log(`失败文件: ${this.colors.red(result.stats.failedFiles)}`);
+      console.log(`SQL语句总数: ${this.colors.yellow(result.stats.totalStatements)}`);
+      console.log(`问题总数: ${this.colors.yellow(result.stats.totalIssues)}`);
+      console.log(`建议总数: ${this.colors.magenta(result.stats.totalRecommendations)}`);
 
       const avgScore = result.stats.averageScore;
-      let scoreColor = cli.colors.green;
-      if (avgScore < 60) scoreColor = cli.colors.red;
-      else if (avgScore < 80) scoreColor = cli.colors.yellow;
+      let scoreColor = this.colors.green;
+      if (avgScore < 60) scoreColor = this.colors.red;
+      else if (avgScore < 80) scoreColor = this.colors.yellow;
 
       console.log(`平均评分: ${scoreColor(`${avgScore}分`)}`);
       console.log('');
@@ -548,20 +606,20 @@ class SQLAnalyzerCLI {
 
     // 显示每个文件的结果概要
     if (result.results && result.results.length > 0) {
-      console.log(cli.colors.blue`📄 文件分析概要:`);
+      console.log(this.colors.blue('📄 文件分析概要:'));
       result.results.forEach((fileResult, index) => {
         if (fileResult.success) {
           const score = fileResult.analysis?.overallScore || 0;
           const issues = (fileResult.analysis?.issues || []).length;
-          let scoreColor = cli.colors.green;
-          if (score < 60) scoreColor = cli.colors.red;
-          else if (score < 80) scoreColor = cli.colors.yellow;
+          let scoreColor = this.colors.green;
+          if (score < 60) scoreColor = this.colors.red;
+          else if (score < 80) scoreColor = this.colors.yellow;
 
           const fileName = fileResult.fileInfo?.fileName || 'Unknown';
-          console.log(`${cli.colors.cyan(index + 1)}. ${cli.colors.cyan(fileName)} - ${scoreColor(`${score}分`)} (${cli.colors.yellow(issues + '个问题')})`);
+          console.log(`${this.colors.cyan(index + 1)}. ${this.colors.cyan(fileName)} - ${scoreColor(`${score}分`)} (${this.colors.yellow(issues + '个问题')})`);
         } else {
           const fileName = fileResult.fileName || 'Unknown';
-          console.log(`${cli.colors.cyan(index + 1)}. ${cli.colors.red(fileName)} - ${cli.colors.red('分析失败')}`);
+          console.log(`${this.colors.cyan(index + 1)}. ${this.colors.red(fileName)} - ${this.colors.red('分析失败')}`);
         }
       });
     }

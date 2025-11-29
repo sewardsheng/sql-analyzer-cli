@@ -7,13 +7,22 @@
 * 数据库类型识别器类
 */
 class DatabaseIdentifier {
+private config: any;
+private cache: Map<string, any>;
+private cacheMaxSize: number;
+private cacheTTL: number;
+private cacheHits: number;
+private cacheMisses: number;
+private corePatterns: { [key: string]: RegExp[] };
+private databasePriority: string[];
+
 constructor(config = {}) {
 this.config = config;
 
 // 缓存机制
 this.cache = new Map();
-this.cacheMaxSize = config.cacheMaxSize || 500;
-this.cacheTTL = config.cacheTTL || 3600000; // 1小时
+this.cacheMaxSize = (config as any).cacheMaxSize || 500;
+this.cacheTTL = (config as any).cacheTTL || 3600000; // 1小时
 this.cacheHits = 0;
 this.cacheMisses = 0;
 
@@ -73,12 +82,12 @@ this.databasePriority = ['mysql', 'postgresql', 'sqlserver', 'oracle', 'sqlite',
 * @param {Object} options - 识别选项
 * @returns {Object} 识别结果
 */
-identify(sql, options = {}) {
+identify(sql: string, options: any = {}) {
 const startTime = Date.now();
 
 try {
 // 1. 快速缓存检查
-if (!options.skipCache) {
+if (!(options as any).skipCache) {
 const cacheKey = this.generateHash(sql);
 const cached = this.getFromCache(cacheKey);
 if (cached) {
@@ -97,7 +106,7 @@ this.cacheMisses++;
 const result = this.quickMatch(sql);
 
 // 3. 缓存结果
-if (!options.skipCache) {
+if (!(options as any).skipCache) {
 const cacheKey = this.generateHash(sql);
 this.saveToCache(cacheKey, result);
 }
@@ -159,21 +168,21 @@ return this.getDefaultDatabaseType(normalizedSql);
 
 // 找出最高分数的数据库
 const sortedDatabases = Object.entries(scores)
-.sort(([,a], [,b]) => b.score - a.score);
+.sort(([,a], [,b]) => (b as any).score - (a as any).score);
 
 const bestMatch = sortedDatabases[0];
 const dbType = bestMatch[0];
 const scoreData = bestMatch[1];
 
 // 计算置信度
-const confidence = Math.min(0.9, 0.4 + (scoreData.score * 0.15));
+const confidence = Math.min(0.9, 0.4 + ((scoreData as any).score * 0.15));
 
 return {
 type: dbType,
 confidence: confidence,
 method: 'rule-based',
-scores: { [dbType]: scoreData.score },
-matches: scoreData.matches,
+scores: { [dbType]: (scoreData as any).score },
+matches: (scoreData as any).matches,
 candidates: [dbType]
 };
 }

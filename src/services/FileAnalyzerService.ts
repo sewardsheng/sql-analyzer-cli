@@ -8,11 +8,29 @@ import { resolve, join, dirname, extname, basename, isAbsolute } from 'pathe';
 import { createEnhancedSQLAnalyzer } from '../core/EnhancedSQLAnalyzer.js';
 import { logError } from '../utils/logger.js';
 
+// 分析选项接口
+interface FileAnalysisOptions {
+  batchSize?: number;
+  recursive?: boolean;
+  [key: string]: any;
+}
+
 /**
  * SQL文件分析服务类
  * 专门处理SQL文件的分析、批量处理和结果管理
  */
 export class FileAnalyzerService {
+  private options: {
+    analysisTypes: string[];
+    batchSize: number;
+    maxFileSize: number;
+    enableCache: boolean;
+    enableKnowledgeBase: boolean;
+  };
+
+  private analyzer: any;
+  private supportedExtensions: string[];
+
   constructor(options = {}) {
     this.options = {
       // 默认分析配置
@@ -93,7 +111,7 @@ export class FileAnalyzerService {
    * @param {Object} options - 分析选项
    * @returns {Promise<Array>} 分析结果数组
    */
-  async analyzeFiles(filePaths, options = {}) {
+  async analyzeFiles(filePaths: string[], options: FileAnalysisOptions = {}) {
     const results = [];
     const batchSize = options.batchSize || this.options.batchSize;
 
@@ -130,7 +148,7 @@ export class FileAnalyzerService {
    * @param {Object} options - 分析选项
    * @returns {Promise<Object>} 分析结果
    */
-  async analyzeDirectory(dirPath, options = {}) {
+  async analyzeDirectory(dirPath: string, options: FileAnalysisOptions = {}) {
     try {
       // 查找所有SQL文件
       const sqlFiles = await this.findSQLFiles(dirPath, options.recursive !== false);

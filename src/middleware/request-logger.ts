@@ -13,7 +13,7 @@ import { logApiRequest, generateRequestId } from '../utils/logger.js';
 * @param {Array} options.excludePaths - 排除的路径
 * @returns {Function} 中间件函数
 */
-export function requestLoggerMiddleware(options = {}) {
+export function requestLoggerMiddleware(options: any = {}) {
 const {
 logBody = false,
 logResponse = true,
@@ -89,10 +89,10 @@ responseSize = c.res.headers.get('content-length') || '0';
 
 // 如果还是0，尝试从响应对象的其他属性获取
 if (responseSize === '0' && c.res) {
-debugInfo.resProperties = Object.getOwnPropertyNames(c.res);
+(debugInfo as any).resProperties = Object.getOwnPropertyNames(c.res);
 }
 } catch (error) {
-debugInfo.error = error.message;
+(debugInfo as any).error = (error as Error).message;
 }
 
 

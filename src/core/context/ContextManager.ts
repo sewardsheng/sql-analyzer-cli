@@ -22,24 +22,36 @@ const contextCache = new Map();
 * 采用缓存策略优化性能，支持上下文复用和智能裁剪
 */
 export class ContextManager {
+  private llmService: any;
+  private knowledgeBase: any;
+  private cacheConfig: {
+    maxTemplateCacheSize: number;
+    maxContextCacheSize: number;
+    ttl: number;
+  };
+  private contextRules: {
+    maxTokens: number;
+    maxContextAge: number;
+    includeRecentHistory: boolean;
+  };
+  private _projectRoot: string;
+
 constructor(llmService, knowledgeBase) {
 this.llmService = llmService;
 this.knowledgeBase = knowledgeBase;
 
 // 缓存配置
 this.cacheConfig = {
-maxTemplateCache: 100,
-maxContextCache: 50,
-templateTTL: 5 * 60 * 1000, // 5分钟
-contextTTL: 2 * 60 * 1000   // 2分钟
+maxTemplateCacheSize: 100,
+maxContextCacheSize: 50,
+ttl: 5 * 60 * 1000, // 5分钟
 };
 
 // 上下文构建规则
 this.contextRules = {
-maxTokenLimit: 8000,
-minTokenLimit: 1000,
-priorityKeywords: ['security', 'performance', 'critical'],
-contextCompressionThreshold: 0.8
+maxTokens: 8000,
+maxContextAge: 24 * 60 * 60 * 1000, // 24小时
+includeRecentHistory: true
 };
 
 // 初始化缓存清理定时器
@@ -81,7 +93,7 @@ const cacheKey = `${category}:${templateName}`;
 
 // 检查缓存
 const cached = templateCache.get(cacheKey);
-if (cached && (Date.now() - cached.timestamp) < this.cacheConfig.templateTTL) {
+if (cached && (Date.now() - cached.timestamp) < this.cacheConfig.ttl) {
 return cached.content;
 }
 
@@ -129,7 +141,7 @@ const contextCacheKey = cacheKey || this.generateContextCacheKey(params);
 
 // 检查上下文缓存
 const cachedContext = contextCache.get(contextCacheKey);
-if (cachedContext && (Date.now() - cachedContext.timestamp) < this.cacheConfig.contextTTL) {
+if (cachedContext && (Date.now() - cachedContext.timestamp) < this.cacheConfig.ttl) {
 return cachedContext.context;
 }
 
@@ -350,12 +362,12 @@ return optimized;
 async optimizeForTokenLimit(context) {
 const estimatedTokens = this.estimateTokenCount(context);
 
-if (estimatedTokens <= this.contextRules.maxTokenLimit) {
+if (estimatedTokens <= this.contextRules.maxTokens) {
 return context;
 }
 
 // 需要裁剪上下文
-const compressionRatio = this.contextRules.maxTokenLimit / estimatedTokens;
+const compressionRatio = this.contextRules.maxTokens / estimatedTokens;
 const optimized = { ...context };
 
 // 按优先级裁剪不同部分
@@ -418,8 +430,9 @@ return Math.ceil(jsonString.length / 4);
 * @returns {number} 优先级分数
 */
 calculatePriority(analysisTypes) {
+const priorityKeywords = ['security', 'performance', 'critical'];
 return analysisTypes.reduce((score, type) => {
-if (this.contextRules.priorityKeywords.includes(type)) {
+if (priorityKeywords.includes(type)) {
 return score + 10;
 }
 return score + 5;
@@ -547,14 +560,14 @@ const now = Date.now();
 
 // 清理模板缓存
 for (const [key, value] of templateCache.entries()) {
-if (now - value.timestamp > this.cacheConfig.templateTTL) {
+if (now - value.timestamp > this.cacheConfig.ttl) {
 templateCache.delete(key);
 }
 }
 
 // 清理上下文缓存
 for (const [key, value] of contextCache.entries()) {
-if (now - value.timestamp > this.cacheConfig.contextTTL) {
+if (now - value.timestamp > this.cacheConfig.ttl) {
 contextCache.delete(key);
 }
 }
@@ -568,11 +581,11 @@ getCacheStats() {
 return {
 templateCache: {
 size: templateCache.size,
-maxSize: this.cacheConfig.maxTemplateCache
+maxSize: this.cacheConfig.maxTemplateCacheSize
 },
 contextCache: {
 size: contextCache.size,
-maxSize: this.cacheConfig.maxContextCache
+maxSize: this.cacheConfig.maxContextCacheSize
 }
 };
 }

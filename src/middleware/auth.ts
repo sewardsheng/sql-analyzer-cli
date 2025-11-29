@@ -36,7 +36,7 @@ providedKey = queryKey;
 
 // 验证密钥
 if (!providedKey || providedKey !== apiKey) {
-throw new ApiError(ErrorTypes.UNAUTHORIZED, '无效的API密钥');
+throw new ApiError('无效的API密钥', ErrorTypes.UNAUTHORIZED, 401);
 }
 
 await next();
@@ -70,7 +70,7 @@ providedKey = queryKey;
 }
 
 if (!providedKey || providedKey !== adminKey) {
-throw new ApiError(ErrorTypes.FORBIDDEN, '需要管理员权限');
+throw new ApiError('需要管理员权限', ErrorTypes.FORBIDDEN, 403);
 }
 
 await next();

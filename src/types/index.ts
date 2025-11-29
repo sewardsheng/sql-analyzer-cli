@@ -457,3 +457,51 @@ export type AnalysisResult =
 export type ResultWithSuccess<T = any> =
   | { success: true; data: T }
   | { success: false; error: string; data?: null };
+
+// ============================================================================
+// API和系统接口定义 (用于修复TypeScript错误)
+// ============================================================================
+
+/**
+ * 分析统计结果接口
+ */
+export interface AnalysisStats {
+  total: number;
+  recent: number;  // 新增recent属性
+  databaseTypes: Record<string, number>;
+  types: Record<string, number>;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  averageDuration: number;
+  totalRecords?: number;  // 可选的totalRecords属性
+}
+
+/**
+ * 知识库状态接口
+ */
+export interface KnowledgeBaseStatus {
+  enabled: boolean;
+  initialized: boolean;
+  rulesCount: number;
+  error?: string;  // 可选的错误信息
+}
+
+/**
+ * 配置管理器接口
+ */
+export interface ConfigManager {
+  version?: string;      // 可选的版本号
+  initialized?: boolean;  // 可选的初始化状态
+}
+
+/**
+ * 错误信息对象接口
+ */
+export interface ErrorInfo {
+  name?: string;
+  message?: string;
+  code?: string;
+  stack?: string;
+}

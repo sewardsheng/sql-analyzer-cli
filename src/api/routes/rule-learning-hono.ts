@@ -195,7 +195,7 @@ enableBatchLearning: config.learning?.enableBatchLearning ?? true
 
 // 计算是否满足学习条件
 const canLearn = learningStatus.enabled &&
-historyStats.totalRecords >= learningStatus.minBatchSize;
+historyStats.total >= learningStatus.minBatchSize;
 
 const responseData = {
 success: true,

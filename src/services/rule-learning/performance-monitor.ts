@@ -3,7 +3,68 @@
 * 监控规则学习过程的性能指标
 */
 
+// 定义接口
+interface SessionLog {
+  sessionId: string;
+  startTime: number;
+  endTime?: number;
+  processingTime?: number;
+  duration?: number;
+  status: 'running' | 'success' | 'failed' | 'completed';
+  llmCalls?: number | any[];
+  id?: string;
+  context?: {
+    databaseType: any;
+    sqlLength: any;
+    patternCount: unknown;
+  };
+  llmCallDetails?: any[];
+  cacheHit?: boolean;
+  rulesGenerated?: number;
+  error?: string;
+}
+
+interface LLMMetrics {
+  promptLength?: number;
+  responseLength?: number;
+  duration?: number;
+}
+
+interface PerformanceMetrics {
+  totalLearningSessions: number;
+  successfulSessions: number;
+  failedSessions: number;
+  averageProcessingTime: number;
+  llmCallCounts: {
+    total: number;
+    byType: {
+      ruleGeneration: number;
+      qualityEvaluation: number;
+      deepLearning: number;
+    };
+  };
+  cacheStats: {
+    hits: number;
+    misses: number;
+    hitRate: number;
+  };
+  ruleGenerationStats: {
+    totalRulesGenerated: number;
+    averageRulesPerSession: number;
+    qualityDistribution: {
+      excellent: number;
+      good: number;
+      average: number;
+      poor: number;
+    };
+  };
+}
+
 export class PerformanceMonitor {
+  private metrics: PerformanceMetrics;
+  private sessionLogs: SessionLog[];
+  private startTime: number;
+
 constructor() {
 this.metrics = {
 totalLearningSessions: 0,
@@ -35,30 +96,32 @@ poor: 0
 }
 };
 
+// 初始化会话日志
 this.sessionLogs = [];
 this.startTime = Date.now();
 }
 
 /**
 * 记录学习会话开始
-* @param {Object} context - 学习上下文
+* @param {any} context - 学习上下文
 * @returns {string} 会话ID
 */
-startLearningSession(context) {
+startLearningSession(context: any): string {
 const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-const session = {
+const session: SessionLog = {
+sessionId: sessionId,
 id: sessionId,
 startTime: Date.now(),
+status: 'running' as const,
 context: {
 databaseType: context.databaseType,
 sqlLength: context.sql?.length || 0,
 patternCount: this.countPatterns(context.patterns)
 },
-llmCalls: [],
+llmCallDetails: [],
 cacheHit: false,
-rulesGenerated: 0,
-status: 'started'
+rulesGenerated: 0
 };
 
 this.sessionLogs.push(session);
@@ -71,11 +134,11 @@ return sessionId;
 * 记录LLM调用
 * @param {string} sessionId - 会话ID
 * @param {string} callType - 调用类型
-* @param {Object} details - 详细信息
+* @param {LLMMetrics} details - 详细信息
 */
-recordLLMCall(sessionId, callType, details = {}) {
-const session = this.sessionLogs.find(s => s.id === sessionId);
-if (!session) return;
+recordLLMCall(sessionId: string, callType: string, details: LLMMetrics = {}): void {
+const session = this.sessionLogs.find(s => s.id === sessionId || s.sessionId === sessionId);
+if (!session || !session.llmCallDetails) return;
 
 const callInfo = {
 type: callType,
@@ -85,7 +148,12 @@ responseLength: details.responseLength || 0,
 duration: details.duration || 0
 };
 
-session.llmCalls.push(callInfo);
+session.llmCallDetails.push(callInfo);
+if (typeof session.llmCalls === 'number') {
+  session.llmCalls++;
+} else {
+  session.llmCalls = 1;
+}
 this.metrics.llmCallCounts.total++;
 this.metrics.llmCallCounts.byType[callType] =
 (this.metrics.llmCallCounts.byType[callType] || 0) + 1;
@@ -96,7 +164,7 @@ this.metrics.llmCallCounts.byType[callType] =
 * @param {string} sessionId - 会话ID
 * @param {boolean} hit - 是否命中
 */
-recordCacheHit(sessionId, hit) {
+recordCacheHit(sessionId: string, hit: boolean): void {
 const session = this.sessionLogs.find(s => s.id === sessionId);
 if (!session) return;
 
@@ -111,21 +179,21 @@ this.metrics.cacheStats.misses++;
 // 更新命中率
 const total = this.metrics.cacheStats.hits + this.metrics.cacheStats.misses;
 this.metrics.cacheStats.hitRate = total > 0 ?
-(this.metrics.cacheStats.hits / total * 100).toFixed(2) : 0;
+Number((this.metrics.cacheStats.hits / total * 100).toFixed(2)) : 0;
 }
 
 /**
 * 记录规则生成结果
 * @param {string} sessionId - 会话ID
-* @param {Array} rules - 生成的规则
+* @param {any[]} rules - 生成的规则
 */
-recordRuleGeneration(sessionId, rules) {
+recordRuleGeneration(sessionId: string, rules: any[]): void {
 const session = this.sessionLogs.find(s => s.id === sessionId);
 if (!session) return;
 
 session.rulesGenerated = rules.length;
 session.endTime = Date.now();
-session.duration = session.endTime - session.startTime;
+session.processingTime = session.endTime - session.startTime;
 
 this.metrics.ruleGenerationStats.totalRulesGenerated += rules.length;
 
@@ -147,9 +215,9 @@ this.metrics.ruleGenerationStats.totalRulesGenerated / this.metrics.totalLearnin
 * 记录会话完成
 * @param {string} sessionId - 会话ID
 * @param {boolean} success - 是否成功
-* @param {string} error - 错误信息（可选）
+* @param {string | null} error - 错误信息（可选）
 */
-endLearningSession(sessionId, success, error = null) {
+endLearningSession(sessionId: string, success: boolean, error: string | null = null): void {
 const session = this.sessionLogs.find(s => s.id === sessionId);
 if (!session) return;
 
@@ -171,7 +239,7 @@ this.updateAverageProcessingTime();
 /**
 * 更新平均处理时间
 */
-updateAverageProcessingTime() {
+updateAverageProcessingTime(): void {
 const completedSessions = this.sessionLogs.filter(s => s.status === 'completed');
 if (completedSessions.length === 0) return;
 
@@ -183,13 +251,18 @@ this.metrics.averageProcessingTime = Math.round(totalTime / completedSessions.le
 
 /**
 * 计算模式数量
-* @param {Object} patterns - 模式对象
+* @param {any} patterns - 模式对象
 * @returns {number} 模式总数
 */
-countPatterns(patterns) {
+countPatterns(patterns: any): number {
 if (!patterns) return 0;
-return Object.values(patterns).reduce((sum, patternList) =>
-sum + (Array.isArray(patternList) ? patternList.length : 0), 0);
+let total = 0;
+for (const patternList of Object.values(patterns)) {
+  if (Array.isArray(patternList)) {
+    total += patternList.length;
+  }
+}
+return total;
 }
 
 /**
@@ -250,7 +323,7 @@ status: session.status,
 duration: this.formatDuration(session.duration || 0),
 rulesGenerated: session.rulesGenerated,
 cacheHit: session.cacheHit,
-llmCalls: session.llmCalls.length,
+llmCalls: Array.isArray(session.llmCalls) ? session.llmCalls.length : (typeof session.llmCalls === 'number' ? session.llmCalls : 0),
 databaseType: session.context.databaseType,
 error: session.error
 }));

@@ -5,35 +5,105 @@
 
 import { config } from '../config/index.js';
 
+// 定义接口
+interface LLMConfig {
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  headers?: Record<string, string>;
+}
+
+interface CallOptions {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stream?: boolean;
+}
+
+interface LLMResponse {
+  success: boolean;
+  content?: string;
+  rawContent?: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  duration: number;
+  model: string;
+  timestamp: string;
+  error?: string;
+  finishReason?: string;
+}
+
+interface CallRequest {
+  prompt: string;
+  options?: CallOptions;
+}
+
+interface ParallelCallOptions {
+  maxConcurrency?: number;
+  timeout?: number;
+}
+
+interface TestResult {
+  success: boolean;
+  message: string;
+  duration?: number;
+  model?: string;
+  error?: string;
+}
+
+interface ServiceStatus {
+  service: string;
+  model: string;
+  baseUrl?: string;
+  hasApiKey: boolean;
+  timestamp: string;
+}
+
 /**
 * 信号量实现，用于控制并发数
 */
 class Semaphore {
-constructor(maxConcurrency) {
-this.maxConcurrency = maxConcurrency;
-this.currentConcurrency = 0;
-this.queue = [];
-}
+  private maxConcurrency: number;
+  private currentConcurrency: number;
+  private queue: (() => void)[];
 
-async acquire() {
-return new Promise((resolve) => {
-if (this.currentConcurrency < this.maxConcurrency) {
-this.currentConcurrency++;
-resolve();
-} else {
-this.queue.push(resolve);
-}
-});
-}
+  constructor(maxConcurrency: number) {
+    this.maxConcurrency = maxConcurrency;
+    this.currentConcurrency = 0;
+    this.queue = [];
+  }
 
-release() {
-this.currentConcurrency--;
-if (this.queue.length > 0) {
-const next = this.queue.shift();
-this.currentConcurrency++;
-next();
-}
-}
+  async acquire(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.currentConcurrency < this.maxConcurrency) {
+        this.currentConcurrency++;
+        resolve();
+      } else {
+        this.queue.push(resolve);
+      }
+    });
+  }
+
+  release(): void {
+    this.currentConcurrency--;
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next) {
+        this.currentConcurrency++;
+        next();
+      }
+    }
+  }
 }
 
 /**
@@ -41,47 +111,60 @@ next();
 * 负责与LLM API的交互
 */
 class LLMService {
-constructor(customConfig = {}) {
-this.config = customConfig;
-const defaultConfig = config.getLLMConfig();
+  private config: any;
+  private llmConfig: LLMConfig;
+  private apiKey: string;
+  private baseUrl: string;
+  private defaultModel: string;
+  private semaphores: Map<number, Semaphore>;
+  private stats: {
+    totalRequests: number;
+    successfulRequests: number;
+    failedRequests: number;
+    totalTokens: number;
+  };
 
-// 从配置中获取LLM设置
-this.llmConfig = {
-apiKey: config.apiKey || defaultConfig.apiKey,
-model: config.model || defaultConfig.model,
-baseUrl: config.baseURL || defaultConfig.baseUrl,
-temperature: config.temperature || 0.7,
-maxTokens: config.maxTokens || 4000,
-topP: config.topP || 1,
-frequencyPenalty: config.frequencyPenalty || 0,
-presencePenalty: config.presencePenalty || 0,
-headers: config.headers || {}
-};
+  constructor(customConfig: any = {}) {
+    this.config = customConfig;
+    const defaultConfig = config.getLlmConfig();
 
-// 验证必要配置
-this.validateConfig();
-}
+    // 从配置中获取LLM设置
+    this.llmConfig = {
+      apiKey: this.config.apiKey || defaultConfig.apiKey,
+      model: this.config.model || defaultConfig.model,
+      baseUrl: this.config.baseURL || defaultConfig.baseUrl,
+      temperature: this.config.temperature || 0.7,
+      maxTokens: this.config.maxTokens || 4000,
+      topP: this.config.topP || 1,
+      frequencyPenalty: this.config.frequencyPenalty || 0,
+      presencePenalty: this.config.presencePenalty || 0,
+      headers: this.config.headers || {}
+    };
+
+    // 验证必要配置
+    this.validateConfig();
+  }
 
 /**
 * 验证LLM配置
 */
-validateConfig() {
-if (!this.llmConfig.apiKey) {
-throw new Error('LLM API密钥未配置');
-}
+private validateConfig(): void {
+  if (!this.llmConfig.apiKey) {
+    throw new Error('LLM API密钥未配置');
+  }
 
-if (!this.llmConfig.model) {
-throw new Error('LLM模型未配置');
-}
+  if (!this.llmConfig.model) {
+    throw new Error('LLM模型未配置');
+  }
 }
 
 /**
 * 调用LLM API
 * @param {string} prompt - 提示词
-* @param {Object} options - 调用选项
-* @returns {Promise<Object>} LLM响应
+* @param {CallOptions} options - 调用选项
+* @returns {Promise<LLMResponse>} LLM响应
 */
-async call(prompt, options = {}) {
+async call(prompt: string, options: CallOptions = {}): Promise<LLMResponse> {
 const startTime = Date.now();
 
 try {
@@ -125,10 +208,10 @@ timestamp: new Date().toISOString()
 /**
 * 构建请求参数
 * @param {string} prompt - 提示词
-* @param {Object} options - 选项
-* @returns {Object} 请求参数
+* @param {CallOptions} options - 选项
+* @returns {any} 请求参数
 */
-buildRequestParams(prompt, options) {
+private buildRequestParams(prompt: string, options: CallOptions): any {
 const baseParams = {
 model: this.llmConfig.model,
 messages: [
@@ -150,7 +233,7 @@ presence_penalty: options.presencePenalty || this.llmConfig.presencePenalty || 0
 
 // 如果是流式请求，添加stream参数
 if (options.stream) {
-baseParams.stream = true;
+(baseParams as any).stream = true;
 }
 
 return baseParams;
@@ -160,7 +243,7 @@ return baseParams;
 * 获取系统提示词
 * @returns {string} 系统提示词
 */
-getSystemPrompt() {
+private getSystemPrompt(): string {
 return `你是SQL分析助手。始终返回有效JSON格式：
 {
 "summary": "分析总结",
@@ -172,10 +255,10 @@ return `你是SQL分析助手。始终返回有效JSON格式：
 
 /**
 * 发送HTTP请求
-* @param {Object} params - 请求参数
-* @returns {Promise<Object>} 响应数据
+* @param {any} params - 请求参数
+* @returns {Promise<any>} 响应数据
 */
-async makeRequest(params) {
+private async makeRequest(params: any): Promise<any> {
 const baseUrl = this.llmConfig.baseUrl || 'https://api.openai.com/v1';
 const url = baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
 
@@ -189,20 +272,20 @@ headers: {
 body: JSON.stringify(params)
 });
 
-if (!response.ok) {
-const errorData = await response.json().catch(() => ({}));
-throw new Error(`LLM API请求失败: ${response.status} ${response.statusText} - ${errorData.error?.message || '未知错误'}`);
+if (!(response as any).ok) {
+const errorData = await (response as any).json().catch(() => ({}));
+throw new Error(`LLM API请求失败: ${(response as any).status} ${(response as any).statusText} - ${errorData.error?.message || '未知错误'}`);
 }
 
-return await response.json();
+return await (response as any).json();
 }
 
 /**
 * 解析LLM响应
-* @param {Object} response - 原始响应
-* @returns {Object} 解析后的响应
+* @param {any} response - 原始响应
+* @returns {any} 解析后的响应
 */
-parseResponse(response) {
+private parseResponse(response: any): any {
 try {
 const choice = response.choices?.[0];
 
@@ -234,11 +317,11 @@ throw new Error(`解析LLM响应失败: ${error.message}`);
 
 /**
 * 并行调用多个LLM请求
-* @param {Array<Object>} requests - 请求数组，每个包含prompt和options
-* @param {Object} globalOptions - 全局选项
-* @returns {Promise<Array>} 响应数组
+* @param {CallRequest[]} requests - 请求数组，每个包含prompt和options
+* @param {ParallelCallOptions} globalOptions - 全局选项
+* @returns {Promise<any[]>} 响应数组
 */
-async callParallel(requests, globalOptions = {}) {
+async callParallel(requests: CallRequest[], globalOptions: ParallelCallOptions = {}): Promise<any[]> {
 if (!Array.isArray(requests)) {
 throw new Error('并行调用需要传入请求数组');
 }
@@ -261,11 +344,11 @@ setTimeout(() => reject(new Error(`请求 ${index} 超时`)), timeout)
 );
 
 const result = await Promise.race([
-this.call(request.prompt, { ...globalOptions, ...request.options }),
+this.call(request.prompt, { ...(globalOptions || {}), ...(request.options || {}) }),
 timeoutPromise
 ]);
 
-return { index, ...result };
+return { index, ...(result && typeof result === 'object' ? result : {}) };
 } catch (error) {
 return {
 index,
@@ -313,9 +396,9 @@ return processedResults;
 
 /**
 * 测试LLM连接
-* @returns {Promise<Object>} 测试结果
+* @returns {Promise<TestResult>} 测试结果
 */
-async testConnection() {
+async testConnection(): Promise<TestResult> {
 try {
 const testPrompt = '请回复"连接测试成功"';
 const result = await this.call(testPrompt, { maxTokens: 50 });
@@ -338,9 +421,9 @@ error: error.message
 
 /**
 * 获取服务状态
-* @returns {Object} 状态信息
+* @returns {ServiceStatus} 状态信息
 */
-getStatus() {
+getStatus(): ServiceStatus {
 return {
 service: 'ready',
 model: this.llmConfig.model,
@@ -352,9 +435,9 @@ timestamp: new Date().toISOString()
 
 /**
 * 更新配置
-* @param {Object} newConfig - 新配置
+* @param {any} newConfig - 新配置
 */
-updateConfig(newConfig) {
+updateConfig(newConfig: any): void {
 this.llmConfig = { ...this.llmConfig, ...newConfig };
 this.validateConfig();
 }
@@ -367,7 +450,7 @@ const llmService = new LLMService();
 * 获取LLM服务实例
 * @returns {LLMService} LLM服务实例
 */
-export function getLLMService() {
+export function getLLMService(): LLMService {
 return llmService;
 }
 

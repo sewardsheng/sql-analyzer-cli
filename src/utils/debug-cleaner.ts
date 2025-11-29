@@ -11,6 +11,22 @@ import path from 'path';
 * 专门清理生产环境不需要的调试日志
 */
 export class DebugCleaner {
+  private options: {
+    dryRun: boolean;
+    backup: boolean;
+    preserveComments: boolean;
+  };
+
+  private patterns: RegExp[];
+
+  private preservePatterns: RegExp[];
+
+  private stats: {
+    filesProcessed: number;
+    linesRemoved: number;
+    errors: number;
+  };
+
 constructor(options = {}) {
 this.options = {
 dryRun: false,  // 是否只显示将要删除的行

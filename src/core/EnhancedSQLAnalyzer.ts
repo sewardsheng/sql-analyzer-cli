@@ -10,10 +10,40 @@ import { retrieveKnowledge } from './knowledge/knowledge-base.js';
 import { logError } from '../utils/logger.js';
 import { config } from '../config/index.js';
 
+// 分析选项接口
+interface AnalysisOptions {
+  databaseType?: string;
+  [key: string]: any;
+}
+
+interface BatchAnalysisOptions {
+  batchSize?: number;
+  [key: string]: any;
+}
+
 /**
 * 增强型SQL分析器类
 */
 export class EnhancedSQLAnalyzer {
+  private options: {
+    enableCaching: boolean;
+    enableKnowledgeBase: boolean;
+    maxConcurrency: number;
+  };
+
+  private llmService: any;
+  private knowledgeBase: any;
+  private toolFactory: any;
+  private contextManager: any;
+  private promptBuilder: any;
+  private stats: {
+    totalAnalyses: number;
+    successfulAnalyses: number;
+    errors: number;
+    totalDuration: number;
+    cacheHits: number;
+  };
+
 constructor(options = {}) {
 this.options = {
 enableCaching: true,
@@ -25,6 +55,15 @@ maxConcurrency: 3,
 // 初始化核心服务
 this.llmService = getLLMService();
 this.knowledgeBase = null;
+
+// 初始化统计信息
+this.stats = {
+  totalAnalyses: 0,
+  successfulAnalyses: 0,
+  errors: 0,
+  totalDuration: 0,
+  cacheHits: 0
+};
 
 // 初始化工具工厂
 this.toolFactory = new ToolFactory(
@@ -68,7 +107,7 @@ logError('知识库初始化失败', error);
 * @param {Object} options - 分析选项
 * @returns {Promise<Object>} 分析结果
 */
-async analyzeSQL(sql, options = {}) {
+async analyzeSQL(sql: string, options: AnalysisOptions = {}) {
 const startTime = Date.now();
 this.stats.totalAnalyses++;
 
@@ -129,7 +168,7 @@ return this.handleAnalysisError(error, sql, options);
 * @param {Object} options - 分析选项
 * @returns {Promise<Array>} 分析结果数组
 */
-async analyzeBatch(sqls, options = {}) {
+async analyzeBatch(sqls: string[], options: BatchAnalysisOptions = {}) {
 if (!Array.isArray(sqls)) {
 throw new Error('批量分析需要SQL数组');
 }

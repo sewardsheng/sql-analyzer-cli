@@ -4,4 +4,5 @@
 */
 
 // 导出报告整合器
-export { default as ReportIntegrator } from './report-integrator.js';
+import ReportIntegrator from './report-builder.js';
+export { ReportIntegrator };

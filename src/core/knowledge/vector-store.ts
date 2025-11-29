@@ -247,9 +247,9 @@ writeStream.write('  ]\n');
 writeStream.write('}\n');
 
 // 等待写入完成
-await new Promise((resolve, reject) => {
+await new Promise<void>((resolve, reject) => {
 writeStream.end();
-writeStream.on('finish', resolve);
+writeStream.on('finish', () => resolve());
 writeStream.on('error', reject);
 });
 

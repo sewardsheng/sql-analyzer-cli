@@ -11,6 +11,18 @@ import { logError } from '../../utils/logger.js';
 * 基础分析工具类
 */
 class BaseTool {
+protected llmService: any;
+protected knowledgeBase: any;
+protected name: string;
+protected contextManager: any;
+protected promptBuilder: any;
+protected stats: {
+executionCount: number;
+totalDuration: number;
+cacheHits: number;
+errors: number;
+};
+
 constructor(llmService, knowledgeBase = null) {
 this.llmService = llmService;
 this.knowledgeBase = knowledgeBase;
@@ -113,7 +125,7 @@ return this.handleError(error, context);
 * @deprecated 使用智能提示词构建器替代
 */
 buildPrompt(context) {
-logError(`工具 ${this.name} 调用了已弃用的buildPrompt方法`, {
+logError('TOOL_DEPRECATED', `工具 ${this.name} 调用了已弃用的buildPrompt方法，请使用execute方法，它会自动调用智能提示词构建器`, undefined, {
 tool: this.name,
 recommendation: '请使用execute方法，它会自动调用智能提示词构建器'
 });
@@ -229,14 +241,11 @@ return hash.toString(36);
 * @returns {Object} 错误结果
 */
 handleError(error, context) {
-logError(`${this.name} 执行错误`, {
-error: error.message,
+logError('TOOL_ERROR', `${this.name} 执行错误: ${error.message}`, error, {
 stack: error.stack,
-context: {
 sqlLength: context?.sql?.length || 0,
 databaseType: context?.databaseType || 'unknown',
 toolName: this.name
-}
 });
 
 return {
