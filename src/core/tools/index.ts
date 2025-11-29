@@ -44,7 +44,10 @@ priority: 3
 * @param {Object} knowledgeBase - 知识库实例（可选）
 * @returns {BaseTool} 工具实例
 */
-export function createTool(type, llmService, options = {}, knowledgeBase = null) {
+export function createTool(type, llmService, options: {
+temperature?: number;
+maxTokens?: number;
+} = {}, knowledgeBase = null) {
 const toolType = type.toLowerCase();
 const config = TOOL_CONFIG[toolType];
 
@@ -75,7 +78,7 @@ return tool;
 * @param {Object} knowledgeBase - 知识库实例（可选）
 * @returns {Object} 工具映射
 */
-export function createAllTools(llmService, options = {}, knowledgeBase = null) {
+export function createAllTools(llmService: any, options: any = {}, knowledgeBase: any = null) {
 const tools = {};
 
 Object.entries(TOOL_CONFIG).forEach(([type, config]) => {
@@ -134,12 +137,17 @@ return TOOL_CONFIG.hasOwnProperty(type.toLowerCase());
 * 工具工厂类（更高级的工具管理）
 */
 export class ToolFactory {
-constructor(llmService, knowledgeBase = null, defaultOptions = {}) {
-this.llmService = llmService;
-this.knowledgeBase = knowledgeBase;
-this.defaultOptions = defaultOptions;
-this.toolCache = new Map();
-}
+  private llmService: any;
+  private knowledgeBase: any;
+  private defaultOptions: any;
+  private toolCache: Map<string, any>;
+
+  constructor(llmService: any, knowledgeBase: any = null, defaultOptions: any = {}) {
+    this.llmService = llmService;
+    this.knowledgeBase = knowledgeBase;
+    this.defaultOptions = defaultOptions;
+    this.toolCache = new Map();
+  }
 
 /**
 * 获取工具实例（支持缓存）

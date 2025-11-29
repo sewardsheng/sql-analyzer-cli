@@ -200,7 +200,7 @@ export const exec = {
    * 统计行数
    */
   countLines: async (filePath: string) => {
-    const result = await exec.run('wc', ['-l', filePath])
+    const result = await exec.run('wc', ['-l', filePath]) as any
     return result.success ? parseInt(result.stdout.trim()) : 0
   }
 }

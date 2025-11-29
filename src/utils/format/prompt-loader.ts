@@ -128,7 +128,7 @@ userPrompt
 * @param {Object} options - 可选配置 {category}
 * @returns {Promise<Object>} {systemPrompt, userPrompt}
 */
-export async function buildPrompt(templateName, variables = {}, options = {}) {
+export async function buildPrompt(templateName: string, variables: any = {}, options: any = {}) {
 const { category = 'rule-learning' } = options;
 
 // 加载模板

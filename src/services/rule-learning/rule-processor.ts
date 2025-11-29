@@ -11,6 +11,11 @@ import { getPerformanceMonitor } from './performance-monitor.js';
 * 集成规则处理器类
 */
 export class IntegratedRuleProcessor {
+private llmService: any;
+private ruleCache: Map<string, any>;
+private processingCache: Map<string, any>;
+private performanceMonitor: any;
+
 constructor(llmService) {
 this.llmService = llmService;
 this.ruleCache = new Map(); // 规则缓存

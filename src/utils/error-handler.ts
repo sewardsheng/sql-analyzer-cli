@@ -71,6 +71,13 @@ SKIP: 'skip'
 * 统一错误处理器类
 */
 export class ErrorHandler {
+  private options: {
+    maxRetries: number;
+    retryDelay: number;
+    enableRecovery: boolean;
+    logErrors: boolean;
+  };
+
 constructor(options = {}) {
 this.options = {
 maxRetries: 3,
@@ -113,7 +120,7 @@ errorId
 
 if (recoveryResult.recovered) {
 await this.logRecoverySuccess(errorInfo, recoveryResult, errorId);
-return recoveryResult.result;
+return (recoveryResult as any).result || null;  // 类型断言处理联合类型
 }
 }
 
@@ -420,7 +427,7 @@ memory: process.memoryUsage()
 }
 };
 
-await globalLogger.error(LogCategory.SYSTEM, `错误处理: ${errorInfo.type}`, logData);
+await globalLogger.error(LogCategory.SYSTEM, `错误处理: ${errorInfo.type}`, error, logData);
 }
 
 /**
@@ -506,7 +513,11 @@ recordErrorStats(errorInfo) {
 * @param {Object} options - 包装选项
 * @returns {Function} 包装后的函数
 */
-wrapFunction(fn, options = {}) {
+wrapFunction(fn: Function, options: {
+  context?: any;
+  retry?: Function;
+  fallback?: Function;
+} = {}) {
 const context = options.context || {};
 const retryFunction = options.retry;
 const fallbackFunction = options.fallback;
@@ -541,7 +552,10 @@ return await globalErrorHandler.handleError(error, context, retryFunction, fallb
 * @param {Object} options - 配置选项
 * @returns {Function} 错误处理函数
 */
-export function createErrorHandler(options = {}) {
+export function createErrorHandler(options: {
+  logErrors?: boolean;
+  includeStack?: boolean;
+} = {}) {
 const {
 logErrors = true,
 includeStack = process.env.NODE_ENV === 'development'
@@ -593,7 +607,14 @@ globalLogger.error(LogCategory.API, `HTTP错误: ${error.message}`, error, error
 const statusCode = error.statusCode || error.status || 500;
 const message = error.message || '内部服务器错误';
 
-const errorResponse = {
+const errorResponse: {
+  success: boolean;
+  error: string;
+  type: string;
+  statusCode: number;
+  timestamp: string;
+  stack?: string;  // 可选的堆栈信息
+} = {
 success: false,
 error: message,
 type: error.type || 'INTERNAL_ERROR',
@@ -682,7 +703,7 @@ ip
 
 // 记录404错误
 try {
-globalLogger.warn(LogCategory.API, '404错误', error, errorInfo);
+globalLogger.warn(LogCategory.API, '404错误', { ...errorInfo, error: { name: error.name, message: error.message } });
 } catch (logErr) {
       console.error('记录404错误日志失败:', logErr.message);
 }

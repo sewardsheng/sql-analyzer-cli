@@ -9,16 +9,19 @@ import { warn as logWarning } from '../utils/logger.js';
 * 内存存储的限流器
 */
 class MemoryStore {
-constructor() {
-this.requests = new Map();
-}
+  private requests: Map<string, number[]>;
+
+  constructor() {
+    this.requests = new Map();
+  }
 
 /**
 * 增加请求计数
 * @param {string} key - 限流键
 * @param {number} windowMs - 时间窗口（毫秒）
+* @returns {number} 当前窗口内的请求数
 */
-increment(key, windowMs) {
+increment(key: string, windowMs: number): number {
 const now = Date.now();
 const windowStart = now - windowMs;
 
@@ -79,7 +82,7 @@ globalStore.cleanup(windowMs);
 * @param {Function} options.keyGenerator - 键生成函数
 * @returns {Function} 中间件函数
 */
-export function rateLimitMiddleware(options = {}) {
+export function rateLimitMiddleware(options: any = {}) {
 const config = {
 windowMs: parseInt(options.windowMs) || parseInt(process.env.RATE_LIMIT_WINDOW) || 900000, // 15分钟
 max: parseInt(options.max) || parseInt(process.env.RATE_LIMIT_MAX) || 100,
@@ -113,12 +116,7 @@ const currentRequests = globalStore.increment(key, config.windowMs);
 
 // 检查是否超过限制
 if (currentRequests > config.max) {
-logWarning(`请求限流触发: ${key}`, {
-ip: req.ip,
-currentRequests,
-limit: config.max,
-windowMs: config.windowMs
-});
+logWarning('请求限流触发', `${String(key)} - IP: ${String(req.ip)}, 请求数: ${currentRequests}/${config.max}`);
 
 return c.json({
 success: false,

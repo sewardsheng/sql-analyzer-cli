@@ -76,7 +76,7 @@ export interface LogMetadata {
   method?: string;
   url?: string;
   statusCode?: number;
-  duration?: string;
+  duration?: string | number;  // 支持字符串和数字类型
   userAgent?: string;
   ip?: string;
   contentLength?: string;
@@ -96,6 +96,7 @@ export interface LogEntry {
   category: LogCategoryType;
   message: string;
   metadata: LogMetadata;
+  error?: Error;  // 可选的错误属性
   process: {
     pid: number;
     uptime: number;
@@ -381,7 +382,7 @@ export class EnhancedLogger {
    */
   private outputToConsole(logEntry: LogEntry): void {
     const { level, category, message, timestamp } = logEntry;
-    const colorCode = this.getColorCode(logEntry.levelValue);
+    const colorCode = this.getColorCode(logEntry.levelValue as LogLevelType);
     const resetCode = '\x1b[0m';
 
     const formattedMessage = `${colorCode}[${timestamp}] ${level} [${category}] ${message}${resetCode}`;
@@ -1045,7 +1046,7 @@ export function withLogging(options: WithLoggingOptions = {}) {
 
         info(category, `操作完成: ${operation}`, {
           args: args.length,
-          duration: endTimer(),
+          duration: `${endTimer()}ms`,  // 转换为字符串
           success: true
         });
 

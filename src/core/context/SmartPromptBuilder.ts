@@ -47,6 +47,21 @@ constraints: ['check_naming_consistency', 'verify_format_standards']
 * 支持动态组件组合、上下文感知和智能优化
 */
 export class SmartPromptBuilder {
+private options: {
+maxSystemTokens: number;
+maxUserTokens: number;
+enableOptimization: boolean;
+prioritizeByComplexity: boolean;
+};
+
+private componentCache: Map<string, any>;
+
+private stats: {
+buildCount: number;
+cacheHits: number;
+optimizations: number;
+};
+
 constructor(options = {}) {
 this.options = {
 maxSystemTokens: 2000,

@@ -11,11 +11,34 @@ import { LlmJsonParser } from './llm-json-parser.js';
 import { LLMService } from './llm-service.js';
 import { config } from '../config/index.js';
 
+// 分析选项接口
+interface AnalyzerOptions {
+  performance?: boolean;
+  security?: boolean;
+  standards?: boolean;
+  [key: string]: any;
+}
+
+// 工具接口
+interface Tool {
+  execute(context: any): Promise<any>;
+}
+
 /**
 * SQL分析器主控制器
 * 负责整体分析流程的协调和控制
 */
 class SQLAnalyzer {
+private config: any;
+private llmService: any;
+private parser: any;
+private databaseIdentifier: any;
+private tools: {
+performance: any;
+security: any;
+standards: any;
+};
+
 constructor(config = {}) {
 this.config = config;
 
@@ -108,8 +131,8 @@ error: error.message
 * @param {Object} options - 分析选项
 * @returns {Object} 启用的工具映射
 */
-getEnabledTools(options) {
-const enabled = {};
+getEnabledTools(options: AnalyzerOptions = {}) {
+const enabled: { [key: string]: any } = {};
 
 // 默认启用所有维度
 const defaults = {
@@ -142,7 +165,7 @@ return enabled;
 * @param {Object} context - 分析上下文
 * @returns {Promise<Object>} 分析结果
 */
-async executeTools(tools, context) {
+async executeTools(tools: { [key: string]: Tool }, context: any) {
 const startTime = Date.now();
 
 // 创建真正的并行执行Promise数组
@@ -204,7 +227,7 @@ return Object.fromEntries(results);
 * @param {Object} results - 分析结果
 * @returns {number} LLM调用次数
 */
-countLLMCalls(results) {
+countLLMCalls(results: { [key: string]: any }) {
 return Object.values(results).filter(result => result.success).length;
 }
 

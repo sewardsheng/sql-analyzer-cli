@@ -2,20 +2,57 @@ import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
+// 定义接口
+interface HistoryRecord {
+  id: string;
+  timestamp: string;
+  databaseType: string;
+  type: string;
+  sql: string;
+  sqlPreview?: string;
+  result: any;
+  metadata?: any;
+}
+
+interface GetAllHistoryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+interface SearchOptions {
+  sql?: string;
+  databaseType?: string;
+  type?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  offset?: number;
+}
+
+interface StatisticsData {
+  total: number;
+  byType: Record<string, number>;
+  byDatabase: Record<string, number>;
+  byMonth: Record<string, number>;
+}
+
 /**
 * 历史服务实现类
 * 使用 history/ 目录按年月组织文件
 */
 export class HistoryService {
-constructor() {
-this.initialized = false;
-this.historyDir = path.join(process.cwd(), 'history');
-}
+  private initialized: boolean;
+  private historyDir: string;
+
+  constructor() {
+    this.initialized = false;
+    this.historyDir = path.join(process.cwd(), 'history');
+  }
 
 /**
 * 初始化历史服务
 */
-async initialize() {
+async initialize(): Promise<void> {
 if (this.initialized) return;
 
 try {
@@ -31,7 +68,7 @@ throw error;
 /**
 * 获取所有历史记录
 */
-async getAllHistory(options = {}) {
+async getAllHistory(options: GetAllHistoryOptions = {}): Promise<HistoryRecord[]> {
 await this.initialize();
 const { limit = 100, offset = 0 } = options;
 
@@ -39,7 +76,7 @@ try {
 const allRecords = await this.loadAllHistoryRecords();
 
 // 按时间戳倒序排列
-allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
 // 应用分页
 return allRecords.slice(offset, offset + limit);
@@ -52,7 +89,7 @@ return [];
 /**
 * 根据ID获取历史记录
 */
-async getHistoryById(id) {
+async getHistoryById(id: string): Promise<HistoryRecord | null> {
 await this.initialize();
 
 try {
@@ -67,7 +104,7 @@ return null;
 /**
 * 保存分析结果
 */
-async saveAnalysis(analysisResult) {
+async saveAnalysis(analysisResult: any): Promise<string> {
 await this.initialize();
 
 try {
@@ -98,7 +135,7 @@ source: 'sql-analyzer-cli',
 const filePath = path.join(yearMonthDir, filename);
 await fs.writeFile(filePath, JSON.stringify(historyRecord, null, 2), 'utf8');
 
-return historyRecord;
+return historyRecord.id;
 } catch (error) {
 console.error('保存分析结果失败:', error);
 throw error;
@@ -187,7 +224,7 @@ const types = {};
 let totalDuration = 0;
 let durationCount = 0;
 
-const timestamps = allRecords.map(record => new Date(record.timestamp));
+const timestamps = allRecords.map(record => new Date(record.timestamp).getTime());
 const minDate = new Date(Math.min(...timestamps));
 const maxDate = new Date(Math.max(...timestamps));
 
@@ -232,7 +269,7 @@ averageDuration: 0
 /**
 * 搜索历史记录
 */
-async searchHistory(query, options = {}) {
+async searchHistory(query: string, options: SearchOptions = {}) {
 await this.initialize();
 const { limit = 50, offset = 0 } = options;
 
@@ -248,7 +285,7 @@ record.type?.toLowerCase().includes(lowerQuery);
 });
 
 // 按时间戳倒序排列
-filteredRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+filteredRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
 // 应用分页
 return filteredRecords.slice(offset, offset + limit);
@@ -302,7 +339,7 @@ throw error;
 /**
 * 加载所有历史记录
 */
-async loadAllHistoryRecords() {
+async loadAllHistoryRecords(): Promise<HistoryRecord[]> {
 await this.initialize();
 
 try {

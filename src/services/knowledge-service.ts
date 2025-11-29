@@ -20,8 +20,10 @@ retrieveDocuments
 * 知识库业务服务类
 */
 class KnowledgeService {
+private llmConfig: any;
+
 constructor() {
-this.llmConfig = config.getLLMConfig();
+this.llmConfig = config.getLlmConfig();
 }
 
 /**
@@ -29,17 +31,17 @@ this.llmConfig = config.getLLMConfig();
 * @param {Object} options - 加载选项
 * @returns {Promise<Object>} 加载结果
 */
-async learnDocuments(options = {}) {
+async learnDocuments(options: any = {}) {
 try {
 // 读取配置
 const config = this.llmConfig;
 
 // 合并选项和配置
 const mergedOptions = {
-apiKey: options.apiKey || config.apiKey,
-baseURL: options.baseURL || config.baseURL,
-model: options.model || config.model,
-embeddingModel: options.embeddingModel || config.embeddingModel,
+apiKey: options.apiKey || config?.apiKey || '',
+baseURL: options.baseURL || config?.baseURL || '',
+model: options.model || config?.model || '',
+embeddingModel: options.embeddingModel || config?.embeddingModel || '',
 rulesDir: options.rulesDir || './rules',
 priorityApproved: options.priorityApproved || false,
 reset: options.reset || false
@@ -110,7 +112,7 @@ error: error.message
 * 获取知识库状态
 * @returns {Promise<Object>} 知识库状态信息
 */
-async getKnowledgeStatus() {
+async getKnowledgeStatus(): Promise<{ enabled: boolean; initialized: boolean; rulesCount: number; error?: string }> {
 try {
 const status = {
 initialized: isVectorStoreInitialized(),
@@ -126,15 +128,26 @@ status.statistics = this.calculateStatistics(docInfo);
 }
 
 return {
-success: true,
-data: status
+enabled: true,
+initialized: status.initialized,
+rulesCount: status.documents?.total || 0
 };
-} catch (error) {
+} catch (error: any) {
 return {
-success: false,
+enabled: false,
+initialized: false,
+rulesCount: 0,
 error: error.message
 };
 }
+}
+
+/**
+* 获取知识库状态（别名方法）
+* @returns {Promise<Object>} 知识库状态信息
+*/
+async getStatus(): Promise<{ enabled: boolean; initialized: boolean; rulesCount: number; error?: string }> {
+return this.getKnowledgeStatus();
 }
 
 /**
@@ -196,7 +209,7 @@ throw new Error('知识库未初始化');
 }
 
 const docInfo = await this.getDocumentInfo();
-const { format = 'json' } = options;
+const { format = 'json' } = options as any;
 
 if (format === 'json') {
 return {
@@ -271,8 +284,8 @@ const result = await loadDocumentsFromRulesDirectory(tempDir);
 
 if (result.documentCount > 0) {
 totalDocumentCount += result.documentCount;
-result.fileTypes.forEach(type => allFileTypes.add(type));
-allLoadedFiles.push(...(result.loadedFiles || []));
+(result.fileTypes as any[]).forEach((type: any) => allFileTypes.add(type));
+allLoadedFiles.push(...((result as any).loadedFiles || []));
 
 loadOrder.push({
 type: dirInfo.name,
@@ -303,8 +316,8 @@ const result = await loadDocumentsFromRulesDirectory(dirPath);
 
 if (result.documentCount > 0) {
 totalDocumentCount += result.documentCount;
-result.fileTypes.forEach(type => allFileTypes.add(type));
-allLoadedFiles.push(...(result.loadedFiles || []));
+(result.fileTypes as any[]).forEach((type: any) => allFileTypes.add(type));
+allLoadedFiles.push(...((result as any).loadedFiles || []));
 
 loadOrder.push({
 type: dir,
@@ -342,12 +355,12 @@ const serializedDocs = JSON.parse(await fs.readFile(docsPath, 'utf8'));
 return this.processDocumentInfo(serializedDocs);
 } else {
 // 从内存中的向量存储获取信息
-const { getVectorStore } = await import('../core/vector-store.js');
-const vectorStore = getVectorStore();
-
-if (vectorStore && vectorStore.docstore && vectorStore.docstore._docs) {
-const docs = Object.values(vectorStore.docstore._docs);
-return this.processDocumentInfo(docs);
+if (await isVectorStoreInitialized()) {
+return {
+documentCount: 0,
+fileTypes: [],
+loadedFiles: []
+};
 }
 }
 } catch (error) {
@@ -500,3 +513,6 @@ return new KnowledgeService();
 
 // 导出服务类
 export { KnowledgeService };
+
+// 导出知识库服务实例（用于兼容API调用）
+export const knowledgeService = new KnowledgeService();

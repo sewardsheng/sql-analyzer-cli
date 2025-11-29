@@ -10,6 +10,8 @@ import { llmJsonParser } from '../../core/llm-json-parser.js';
 * 规则生成器类
 */
 export class RuleGenerator {
+private llmService: any;
+
 constructor(llmService) {
 this.llmService = llmService;
 }
@@ -82,8 +84,9 @@ const result = this.parseLLMResponse(llmResult.content);
 
 if (result.success) {
 // 尝试多种可能的字段名
-const rules = result.learnedRules || result.rules || result.data?.rules || [];
-if (rules.length > 0) {
+const resultData = result as any;
+const rules = resultData.learnedRules || resultData.rules || resultData.data?.rules || [];
+if (rules && rules.length > 0) {
 return rules;
 }
 }
@@ -351,9 +354,10 @@ context.push('');
 if (learningContext.patterns) {
 context.push(`## 识别的模式`);
 Object.entries(learningContext.patterns).forEach(([category, patterns]) => {
-if (patterns && patterns.length > 0) {
+const patternList = patterns as any[];
+if (patternList && patternList.length > 0) {
 context.push(`### ${category.toUpperCase()} 模式`);
-patterns.forEach(pattern => {
+patternList.forEach(pattern => {
 context.push(`- **${pattern.type}**: ${pattern.description}`);
 });
 context.push('');

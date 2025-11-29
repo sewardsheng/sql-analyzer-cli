@@ -78,7 +78,6 @@ declare global {
     getModule(module: string, defaultValue?: any): any;
     getServerConfig(): any;
     getLlmConfig(): any;
-    getLLMConfig(): any;
     getRuleLearningConfig(): any;
     getKnowledgeConfig(): any;
     deepMerge(target: any, source: any): any;

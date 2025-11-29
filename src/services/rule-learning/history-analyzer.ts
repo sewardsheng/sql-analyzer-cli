@@ -10,7 +10,9 @@ import path from 'path';
 * 历史数据分析器类
 */
 export class HistoryAnalyzer {
-constructor(historyService) {
+private historyService: any;
+
+constructor(historyService: any) {
 this.historyService = historyService;
 }
 
@@ -184,7 +186,7 @@ trends.timeDistribution[date] = (trends.timeDistribution[date] || 0) + 1;
 });
 
 // 置信度趋势分析
-const sortedRecords = historyRecords.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+const sortedRecords = historyRecords.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 trends.confidenceTrend = sortedRecords.map(record => ({
 timestamp: record.timestamp,
 confidence: this.calculateAverageConfidence(record.result)
@@ -235,7 +237,7 @@ patternFrequency[key] = (patternFrequency[key] || 0) + 1;
 
 // 筛选高频模式
 const highFrequencyPatterns = Object.entries(patternFrequency)
-.filter(([_, frequency]) => frequency >= minFrequency)
+.filter(([_, frequency]) => (frequency as any) >= minFrequency)
 .map(([key, frequency]) => {
 const [category, type, severity] = key.split('-');
 return {

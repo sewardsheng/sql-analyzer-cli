@@ -12,6 +12,15 @@ import { config } from '../../config/index.js';
 * 自动审批器类
 */
 export class AutoApprover {
+private config: any;
+private approvalStats: {
+totalProcessed: number;
+autoApproved: number;
+manualReview: number;
+rejected: number;
+};
+private validator: any;
+
 constructor() {
 // 使用统一配置管理器
 this.config = config.getModule('approval');

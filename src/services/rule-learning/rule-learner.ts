@@ -19,6 +19,26 @@ import { smartThresholdAdjuster } from './threshold-adjuster.js';
 * 智能规则学习器类
 */
 export class IntelligentRuleLearner {
+private llmService: any;
+private historyService: any;
+private historyAnalyzer: any;
+private ruleGenerator: any;
+private qualityEvaluator: any;
+private autoApprover: any;
+private integratedProcessor: any;
+private performanceMonitor: any;
+private thresholdAdjuster: any;
+private config: {
+enabled: boolean;
+autoApproveThreshold: number;
+minConfidence: number;
+maxRulesPerDay: number;
+learningFromHistory: {
+enabled: boolean;
+batchSize: number;
+};
+};
+
 constructor(llmService, historyService) {
 this.llmService = llmService;
 this.historyService = historyService;
@@ -119,7 +139,8 @@ if (!this.config.enabled) {
 return { success: false, reason: '规则学习已禁用' };
 }
 
-const { batchSize = 10, minConfidence = this.config.minConfidence } = options;
+const batchSize = (options as any)?.batchSize || 10;
+const minConfidence = (options as any)?.minConfidence || (this.config as any)?.minConfidence || 0.7;
 
 
 
@@ -868,9 +889,9 @@ formatPatterns(patterns) {
 let content = '';
 
 Object.entries(patterns).forEach(([category, patternList]) => {
-if (patternList && patternList.length > 0) {
+if (patternList && (patternList as any[]).length > 0) {
 content += `### ${category.toUpperCase()} 模式\n\n`;
-patternList.forEach(pattern => {
+(patternList as any[]).forEach((pattern: any) => {
 content += `- **${pattern.type}**: ${pattern.description}\n`;
 });
 content += '\n';
@@ -1047,8 +1068,8 @@ sqlGroups[pattern].push(record);
 context.push(`## SQL模式分析`);
 Object.entries(sqlGroups).forEach(([pattern, records]) => {
 context.push(`### 模式: ${pattern}`);
-context.push(`- 出现次数: ${records.length}`);
-context.push(`- 平均置信度: ${this.calculateAverageConfidence(records[0].result).toFixed(2)}`);
+context.push(`- 出现次数: ${(records as any[]).length}`);
+context.push(`- 平均置信度: ${this.calculateAverageConfidence((records as any[])[0]?.result).toFixed(2)}`);
 
 // 提取共同问题
 const commonIssues = this.extractCommonIssues(records);
@@ -1094,9 +1115,9 @@ issueCount[key] = (issueCount[key] || 0) + 1;
 });
 
 // 返回出现次数超过一半的问题
-const threshold = Math.ceil(records.length / 2);
+const threshold = Math.ceil((records as any[]).length / 2);
 return Object.entries(issueCount)
-.filter(([_, count]) => count >= threshold)
+.filter(([_, count]) => (count as any) >= threshold)
 .map(([key, _]) => {
 const [type, description] = key.split('-');
 return { type, description };

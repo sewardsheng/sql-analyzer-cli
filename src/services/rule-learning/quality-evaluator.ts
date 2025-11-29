@@ -11,6 +11,10 @@ import { RuleValidator } from './rule-validator.js';
 * 规则质量评估器类
 */
 export class QualityEvaluator {
+private llmService: any;
+private evaluationCache: Map<string, any>;
+private validator: any;
+
 constructor(llmService) {
 this.llmService = llmService;
 this.evaluationCache = new Map();
@@ -283,9 +287,10 @@ formatPatterns(patterns) {
 const sections = [];
 
 Object.entries(patterns).forEach(([category, patternList]) => {
-if (patternList && patternList.length > 0) {
+const patterns = patternList as any[];
+if (patterns && patterns.length > 0) {
 sections.push(`#### ${category.toUpperCase()} 模式`);
-patternList.forEach(pattern => {
+patterns.forEach(pattern => {
 sections.push(`- **${pattern.type}**: ${pattern.description}`);
 });
 sections.push('');

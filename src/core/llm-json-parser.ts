@@ -19,6 +19,9 @@ bestEffortParse = null;
 * 专门处理LLM返回的JSON格式数据
 */
 class LlmJsonParser {
+private bestEffortParse: any;
+private fallbackData: any;
+
 constructor() {
 this.bestEffortParse = bestEffortParse;
 

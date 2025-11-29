@@ -12,13 +12,13 @@
 * @param {boolean} options.credentials - 是否允许凭据
 * @returns {Function} 中间件函数
 */
-export function corsMiddleware(options = {}) {
+export function corsMiddleware(options: any = {}) {
 const config = {
-origin: options.origin || '*',
-methods: options.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-headers: options.headers || ['Content-Type', 'Authorization'],
-credentials: options.credentials || false,
-maxAge: options.maxAge || 600
+origin: (options as any).origin || '*',
+methods: (options as any).methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+headers: (options as any).headers || ['Content-Type', 'Authorization'],
+credentials: (options as any).credentials || false,
+maxAge: (options as any).maxAge || 600
 };
 
 return async (c, next) => {

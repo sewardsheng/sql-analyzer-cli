@@ -4,6 +4,19 @@
 */
 
 export class SmartThresholdAdjuster {
+private qualityHistory: any[];
+private adjustmentHistory: any[];
+private config: {
+enabled: boolean;
+windowSize: number;
+targetAutoApproveRate: number;
+minThreshold: number;
+maxThreshold: number;
+adjustmentStep: number;
+qualityWeight: number;
+approvalRateWeight: number;
+};
+
 constructor() {
 this.qualityHistory = [];
 this.adjustmentHistory = [];

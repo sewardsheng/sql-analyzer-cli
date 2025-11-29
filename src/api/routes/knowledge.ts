@@ -20,15 +20,10 @@ export function registerKnowledgeRoutes(app: Hono): void {
    */
   app.get('/knowledge', async (c: Context) => {
     try {
-      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
-      const knowledgeService = getKnowledgeService();
-      const result = await knowledgeService.getKnowledgeStatus();
+      const { knowledgeService } = await import('../../services/knowledge-service.js');
+      const result = await knowledgeService.getStatus();
 
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      return c.json(formatSuccessResponse(result.data, '获取知识库状态成功'));
+      return c.json(formatSuccessResponse(result, '获取知识库状态成功'));
     } catch (error: any) {
       console.error(chalk.red(`[API] 获取知识库状态失败: ${error.message}`));
 

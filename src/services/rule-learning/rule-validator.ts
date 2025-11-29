@@ -5,21 +5,62 @@
 
 import { config } from '../../config/index.js';
 
+// 定义接口
+interface ValidationConfig {
+  requiredFields: {
+    basic: string[];
+    complete?: string[];
+  };
+  fieldLengths: Record<string, { min: number }>;
+  ranges: Record<string, { min: number; max: number; recommended?: number }>;
+  validValues: Record<string, string[]>;
+  sqlKeywords: string[];
+}
+
+interface ValidationResult {
+  passed: boolean;
+  score: number;
+  issues: string[];
+  basicScore?: number;
+  completenessScore?: number;
+  [key: string]: any;
+}
+
+interface Rule {
+  title?: string;
+  description?: string;
+  category?: string;
+  type?: string;
+  severity?: string;
+  confidence?: number;
+  condition?: string;
+  example?: string;
+  [key: string]: any;
+}
+
 /**
 * 规则验证器类
 */
 export class RuleValidator {
-constructor() {
-// 使用统一配置管理器
-this.validationConfig = config.getModule('validation');
-}
+  private validationConfig: ValidationConfig;
+
+  constructor() {
+    // 使用统一配置管理器
+    this.validationConfig = config.getModule('validation') || {
+      requiredFields: { basic: ['title', 'description', 'category', 'type', 'severity'] },
+      fieldLengths: {},
+      ranges: {},
+      validValues: {},
+      sqlKeywords: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'FROM', 'WHERE', 'JOIN']
+    };
+  }
 
 /**
 * 执行基础验证 - 用于QualityEvaluator
-* @param {Object} rule - 规则对象
-* @returns {Object} 验证结果
+* @param {Rule} rule - 规则对象
+* @returns {ValidationResult} 验证结果
 */
-performBasicValidation(rule) {
+performBasicValidation(rule: Rule): ValidationResult {
 const issues = [];
 let score = 100;
 
@@ -84,13 +125,13 @@ validationType: 'basic'
 * @param {Object} rule - 规则对象
 * @returns {Object} 验证结果
 */
-performCompletenessValidation(rule) {
+performCompletenessValidation(rule: Rule): ValidationResult {
 const issues = [];
 let score = 100;
 
 try {
 // 1. 检查完整必需字段
-const missingFields = this.checkRequiredFields(rule, this.validationConfig.requiredFields.complete);
+const missingFields = this.checkRequiredFields(rule, (this.validationConfig.requiredFields as any).complete || []);
 if (missingFields.length > 0) {
 issues.push(`缺少必需字段: ${missingFields.join(', ')}`);
 score -= missingFields.length * 15;
@@ -145,7 +186,7 @@ reason: `验证过程出错: ${error.message}`
 * @param {Array} requiredFields - 必需字段列表
 * @returns {Array} 缺失字段列表
 */
-checkRequiredFields(rule, requiredFields) {
+private checkRequiredFields(rule: Rule, requiredFields: string[]): string[] {
 return requiredFields.filter(field =>
 !rule[field] || (typeof rule[field] === 'string' && rule[field].trim() === '')
 );
@@ -157,13 +198,13 @@ return requiredFields.filter(field =>
 * @param {Object} lengthConfig - 长度配置
 * @returns {Object} 验证结果
 */
-validateFieldLengths(rule, lengthConfig) {
+private validateFieldLengths(rule: Rule, lengthConfig: any): { issues: string[]; penalty: number } {
 const issues = [];
 let penalty = 0;
 
 Object.entries(lengthConfig).forEach(([field, config]) => {
-if (rule[field] && rule[field].length < config.min) {
-issues.push(`${field}过短 (最少${config.min}字符)`);
+if (rule[field] && rule[field].length < (config as any).min) {
+issues.push(`${field}过短 (最少${(config as any).min}字符)`);
 penalty += 10;
 }
 });
@@ -176,7 +217,7 @@ return { issues, penalty };
 * @param {Object} rule - 规则对象
 * @returns {Object} 验证结果
 */
-validateFieldLengthsStrict(rule) {
+private validateFieldLengthsStrict(rule: Rule): { issues: string[]; penalty: number } {
 const issues = [];
 let penalty = 0;
 
@@ -207,7 +248,7 @@ return { issues, penalty };
 * @param {Object} rangeConfig - 范围配置
 * @returns {Object} 验证结果
 */
-validateRanges(rule, rangeConfig) {
+private validateRanges(rule: Rule, rangeConfig: any): { issues: string[]; penalty: number } {
 const issues = [];
 let penalty = 0;
 
@@ -218,11 +259,11 @@ const value = parseFloat(rule[field]);
 if (isNaN(value)) {
 issues.push(`${field}不是有效数字`);
 penalty += 15;
-} else if (value < config.min || value > config.max) {
-issues.push(`${field}超出有效范围 [${config.min}, ${config.max}]`);
+} else if (value < (config as any).min || value > (config as any).max) {
+issues.push(`${field}超出有效范围 [${(config as any).min}, ${(config as any).max}]`);
 penalty += 15;
-} else if (config.recommended && value < config.recommended) {
-issues.push(`${field}低于推荐值 ${config.recommended}`);
+} else if ((config as any).recommended && value < (config as any).recommended) {
+issues.push(`${field}低于推荐值 ${(config as any).recommended}`);
 penalty += 10;
 }
 }
@@ -237,13 +278,13 @@ return { issues, penalty };
 * @param {Object} validConfig - 有效值配置
 * @returns {Object} 验证结果
 */
-validateValues(rule, validConfig) {
+private validateValues(rule: Rule, validConfig: any): { issues: string[]; penalty: number } {
 const issues = [];
 let penalty = 0;
 
 Object.entries(validConfig).forEach(([field, validValues]) => {
-if (rule[field] && !validValues.includes(rule[field])) {
-issues.push(`无效的${field}: ${rule[field]} (有效值: ${validValues.join(', ')})`);
+if (rule[field] && !(validValues as string[]).includes(rule[field])) {
+issues.push(`无效的${field}: ${rule[field]} (有效值: ${(validValues as string[]).join(', ')})`);
 penalty += 15;
 }
 });
@@ -315,7 +356,7 @@ return { valid: true, reason: '安全规则验证通过' };
 * @param {string} validationLevel - 验证级别: 'basic' | 'complete' | 'strict'
 * @returns {Object} 综合验证结果
 */
-validate(rule, validationLevel = 'basic') {
+validate(rule: Rule, validationLevel: string = 'basic'): any {
 switch (validationLevel) {
 case 'basic':
 return this.performBasicValidation(rule);
@@ -363,7 +404,7 @@ throw new Error(`未知的验证级别: ${validationLevel}`);
 * @param {string} validationLevel - 验证级别
 * @returns {Array} 验证结果数组
 */
-validateBatch(rules, validationLevel = 'basic') {
+validateBatch(rules: Rule[], validationLevel: string = 'basic'): any[] {
 return rules.map(rule => ({
 rule,
 validation: this.validate(rule, validationLevel)
@@ -375,8 +416,16 @@ validation: this.validate(rule, validationLevel)
 * @param {Array} validationResults - 验证结果数组
 * @returns {Object} 统计信息
 */
-getValidationStats(validationResults) {
-const stats = {
+getValidationStats(validationResults: any[]): any {
+const stats: {
+total: number;
+passed: number;
+failed: number;
+averageScore: number;
+commonIssues: Record<string, number>;
+validationType: any;
+passRate?: number;
+} = {
 total: validationResults.length,
 passed: 0,
 failed: 0,
@@ -415,7 +464,7 @@ return stats;
 * 更新验证配置
 * @param {Object} newConfig - 新配置
 */
-updateConfig(newConfig) {
+updateConfig(newConfig: any): void {
 config.set('validation', config.deepMerge(config.getModule('validation'), newConfig));
 this.validationConfig = config.getModule('validation');
 
@@ -427,7 +476,7 @@ this.validationConfig = config.getModule('validation');
 * @param {Object} source - 源配置
 * @returns {Object} 合并后的配置
 */
-mergeConfig(target, source) {
+private mergeConfig(target: any, source: any): any {
 const result = { ...target };
 
 Object.keys(source).forEach(key => {
@@ -445,7 +494,7 @@ return result;
 * 获取当前配置
 * @returns {Object} 当前验证配置
 */
-getConfig() {
+getConfig(): any {
 return config.getModule('validation');
 }
 }

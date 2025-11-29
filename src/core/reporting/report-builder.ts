@@ -4,11 +4,37 @@
 * 包括智能去重、优先级评估、实施计划生成等功能
 */
 
+// 定义接口
+interface AnalysisResult {
+  success?: boolean;
+  data?: any;
+  [key: string]: any;
+}
+
+interface AnalysisResults {
+  [dimension: string]: AnalysisResult;
+}
+
 /**
 * 报告整合器类
 */
 class ReportIntegrator {
-constructor(config = {}) {
+private config: {
+similarityThreshold: number;
+weights: {
+performance: number;
+security: number;
+standards: number;
+};
+priorityFactors: {
+severity: number;
+impact: number;
+effort: number;
+};
+[key: string]: any;
+};
+
+constructor(config: any = {}) {
 this.config = {
 // 去重相似度阈值
 similarityThreshold: config.similarityThreshold || 0.8,
@@ -92,13 +118,13 @@ return this.createErrorReport(context, error);
 * @param {Object} analysisResults - 分析结果
 * @returns {boolean} 是否有有效结果
 */
-hasValidResults(analysisResults) {
+hasValidResults(analysisResults: AnalysisResults) {
 if (!analysisResults || typeof analysisResults !== 'object') {
 return false;
 }
 
 return Object.values(analysisResults).some(result =>
-result && result.success && result.data
+result && (result as AnalysisResult).success && (result as AnalysisResult).data
 );
 }
 
@@ -107,13 +133,13 @@ result && result.success && result.data
 * @param {Object} analysisResults - 分析结果
 * @returns {Array} 所有建议的列表
 */
-extractAllRecommendations(analysisResults) {
+extractAllRecommendations(analysisResults: AnalysisResults) {
 const recommendations = [];
 
 Object.entries(analysisResults).forEach(([dimension, result]) => {
-if (!result || !result.success || !result.data) return;
+if (!result || !(result as AnalysisResult).success || !(result as AnalysisResult).data) return;
 
-const dimensionData = result.data;
+const dimensionData = (result as AnalysisResult).data;
 const dimensionRecommendations = dimensionData.recommendations || [];
 
 // 为每个建议添加维度信息
@@ -475,7 +501,7 @@ return plan;
 * @param {Object} analysisResults - 分析结果
 * @returns {Object} 综合指标
 */
-calculateOverallMetrics(analysisResults) {
+calculateOverallMetrics(analysisResults: AnalysisResults) {
 const weights = this.config.weights;
 let totalScore = 0;
 let totalWeight = 0;
@@ -483,9 +509,9 @@ let securityVeto = false;
 let lowestScore = 100;
 
 Object.entries(analysisResults).forEach(([dimension, result]) => {
-if (!result || !result.success || !result.data) return;
+if (!result || !(result as AnalysisResult).success || !(result as AnalysisResult).data) return;
 
-const dimensionScore = result.data.score || 0;
+const dimensionScore = ((result as AnalysisResult).data as any).score || 0;
 const dimensionWeight = weights[dimension] || 0;
 
 totalScore += dimensionScore * dimensionWeight;
@@ -523,16 +549,16 @@ return { overallScore, riskLevel, securityVeto };
 * @param {Object} analysisResults - 分析结果
 * @returns {Object} 分析摘要
 */
-buildSummary(analysisResults) {
-const summary = {};
+buildSummary(analysisResults: AnalysisResults) {
+const summary: any = {};
 
 Object.entries(analysisResults).forEach(([dimension, result]) => {
-if (!result || !result.success || !result.data) {
+if (!result || !(result as AnalysisResult).success || !(result as AnalysisResult).data) {
 summary[dimension] = this.createDefaultDimensionSummary(dimension);
 return;
 }
 
-const data = result.data;
+const data = (result as AnalysisResult).data;
 
 // 保留所有原始字段
 summary[dimension] = {

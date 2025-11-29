@@ -132,23 +132,38 @@ const interactive = c.req.query('interactive') === 'true';
 const configData = config.getAll();
 
 // 获取知识库状态
-let knowledgeBaseStatus = { enabled: false, initialized: false, rulesCount: 0 };
+let knowledgeBaseStatus: { enabled: boolean; initialized: boolean; rulesCount: number; error?: string } = { enabled: false, initialized: false, rulesCount: 0 };
 if ( (config as any).knowledgeBase?.enabled) {
 try {
-const { getKnowledgeBaseStatus } = await import('../../services/knowledge-service.js');
-knowledgeBaseStatus = await getKnowledgeBaseStatus();
-} catch (error) {
+const { knowledgeService } = await import('../../services/knowledge-service.js');
+knowledgeBaseStatus = await knowledgeService.getStatus();
+} catch (error: any) {
 knowledgeBaseStatus.error = error.message;
 }
 }
 
 // 获取历史记录统计
-let historyStats = { total: 0, recent: 0 };
+let historyStats: { total: number; recent: number; databaseTypes: Record<string, number>; types: Record<string, number>; dateRange: { start: string; end: string }; averageDuration: number; error?: string } = {
+total: 0,
+recent: 0,
+databaseTypes: {},
+types: {},
+dateRange: { start: '', end: '' },
+averageDuration: 0
+};
 try {
 const { getHistoryService } = await import('../../services/history-service.js');
 const historyService = await getHistoryService();
-historyStats = await historyService.getHistoryStats();
-} catch (error) {
+const result = await historyService.getHistoryStats();
+historyStats = {
+total: result.total || 0,
+recent: 0, // 暂时设为0，因为getHistoryStats没有返回recent属性
+databaseTypes: result.databaseTypes || {},
+types: result.types || {},
+dateRange: result.dateRange || { start: '', end: '' },
+averageDuration: result.averageDuration || 0
+};
+} catch (error: any) {
 historyStats.error = error.message;
 }
 
@@ -172,18 +187,18 @@ const configExists = existsSync(join(projectRoot, 'data/config/config.json'));
 
 // 系统信息
 const systemInfo = {
-version: config.version || '1.0.0',
+version: (config as any).version || '1.0.0',
 nodeVersion: process.version,
 platform: process.platform,
 uptime: process.uptime(),
 memoryUsage: process.memoryUsage(),
-initialized: config.initialized && configExists
+initialized: (config as any).initialized && configExists
 };
 
 const statusData = {
 system: systemInfo,
 config: {
-initialized: config.initialized,
+initialized: (config as any).initialized,
 fileExists: configExists,
 knowledgeBase:  (config as any).knowledgeBase || {}
 },

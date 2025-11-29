@@ -23,7 +23,7 @@ logLevel: process.env.LOG_LEVEL || 'info',
 
 // 服务器配置
 server: {
-port: parseInt(process.env.API_PORT || process.env.PORT || 3005),
+port: parseInt(process.env.API_PORT || process.env.PORT || '3005'),
 host: process.env.API_HOST || '0.0.0.0',
 cors: {
 enabled: process.env.API_CORS_ENABLED !== 'false',
@@ -169,29 +169,6 @@ getModule(module, defaultValue = {}) {
 return this.get(module, defaultValue);
 }
 
-/**
-* 获取服务器配置
-* @returns {Object} 服务器配置
-*/
-getServerConfig() {
-return this.getModule('server');
-}
-
-/**
-* 获取LLM配置
-* @returns {Object} LLM配置
-*/
-getLLMConfig() {
-return this.getModule('llm');
-}
-
-/**
-* 获取规则学习配置
-* @returns {Object} 规则学习配置
-*/
-getRuleLearningConfig() {
-return this.getModule('ruleLearning');
-}
 
 /**
 * 获取知识库配置
