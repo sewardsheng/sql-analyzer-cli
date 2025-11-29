@@ -103,8 +103,8 @@ await next();
 
 // 按正确顺序应用中间件
 app.use('*', createDefaultCorsMiddleware());
-// app.use('*', createDefaultRateLimiterMiddleware()); // 暂时禁用，因为Hono兼容性问题
-// app.use('*', createDefaultRequestLoggerMiddleware()); // 暂时禁用，因为Hono兼容性问题
+app.use('*', createDefaultRateLimiterMiddleware()); // 修复Hono兼容性问题后重新启用
+app.use('*', createDefaultRequestLoggerMiddleware()); // 修复Hono兼容性问题后重新启用
 
 // 临时添加简单测试路由
 app.get('/api/test', (c) => {

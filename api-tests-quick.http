@@ -1,0 +1,74 @@
+### SQL Analyzer API 快速测试
+### 核心功能验证
+
+@baseUrl = http://localhost:3000
+
+### 健康检查
+GET {{baseUrl}}/api/health/ping
+
+### 单条SQL分析 - 综合分析
+POST {{baseUrl}}/api/analyze
+Content-Type: application/json
+
+{
+  "sql": "SELECT u.name, COUNT(o.id) as order_count FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.status = 'active' GROUP BY u.id",
+  "databaseType": "mysql",
+  "options": {
+    "performance": true,
+    "security": true,
+    "standards": true
+  }
+}
+
+### 批量SQL分析
+POST {{baseUrl}}/api/analyze/batch
+Content-Type: application/json
+
+{
+  "sqls": [
+    "SELECT * FROM users WHERE id = 1",
+    "UPDATE users SET last_login = NOW() WHERE id = 1"
+  ],
+  "databaseType": "mysql",
+  "options": {
+    "performance": true,
+    "security": true
+  }
+}
+
+### 安全分析测试
+POST {{baseUrl}}/api/analyze
+Content-Type: application/json
+
+{
+  "sql": "SELECT * FROM users WHERE id = " + userInput,
+  "databaseType": "mysql",
+  "options": {
+    "security": true,
+    "performance": false,
+    "standards": false
+  }
+}
+
+### 性能分析测试
+POST {{baseUrl}}/api/analyze
+Content-Type: application/json
+
+{
+  "sql": "SELECT * FROM orders o JOIN users u ON o.user_id = u.id WHERE o.status = 'pending' ORDER BY o.created_at DESC",
+  "databaseType": "postgresql",
+  "options": {
+    "performance": true,
+    "security": false,
+    "standards": false
+  }
+}
+
+### 获取系统状态
+GET {{baseUrl}}/api/status
+
+### 获取知识库状态
+GET {{baseUrl}}/api/knowledge
+
+### 获取分析器状态
+GET {{baseUrl}}/api/analyze/status
