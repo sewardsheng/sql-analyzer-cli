@@ -311,8 +311,133 @@ getStats() {
 return {
 version: '1.0.0',
 supportedDimensions: Object.keys(this.fallbackData),
-features: ['best_effort_parsing', 'manual_fallback', 'data_normalization']
+features: ['best_effort_parsing', 'manual_fallback', 'data_normalization', 'dimension_analysis']
 };
+}
+
+/**
+* 从LLM分析结果中提取所有维度的分析数据
+* @param {Object} analysisResult - LLM返回的原始分析结果
+* @returns {Object} 提取并合并后的分析数据
+*/
+extractDimensionAnalysis(analysisResult) {
+  const result = {
+    allIssues: [],
+    allRecommendations: [],
+    sqlFixData: null,
+    overallScore: analysisResult.overallScore || analysisResult.score || 75,
+    summary: analysisResult.summary || 'SQL分析完成',
+    dimensions: {}
+  };
+
+  // 遍历各个分析维度
+  ['performance', 'security', 'standards'].forEach(dimension => {
+    if (analysisResult[dimension]) {
+      let dimensionResult = analysisResult[dimension];
+      const dimensionName = dimension;
+
+      let extractedData = null;
+
+      // 尝试从summary字段中提取JSON数据
+      if (dimensionResult.summary && typeof dimensionResult.summary === 'string') {
+        extractedData = this.extractJsonFromMarkdown(dimensionResult.summary);
+        if (extractedData) {
+          dimensionResult = { ...dimensionResult, ...extractedData };
+        }
+      }
+
+      // 如果summary中没找到，尝试从rawResponse中解析
+      if (!extractedData && dimensionResult.rawResponse && typeof dimensionResult.rawResponse === 'string') {
+        let rawData = this.extractJsonFromMarkdown(dimensionResult.rawResponse);
+        if (rawData) {
+          dimensionResult = { ...dimensionResult, ...rawData };
+        }
+      }
+
+      // 如果仍然是字符串，尝试直接解析
+      if (typeof dimensionResult === 'string') {
+        try {
+          dimensionResult = JSON.parse(dimensionResult);
+        } catch (e) {
+          console.warn(`⚠️  ${dimensionName}维度JSON解析失败`);
+          return;
+        }
+      }
+
+      // 提取问题
+      if (dimensionResult.issues && Array.isArray(dimensionResult.issues)) {
+        dimensionResult.issues.forEach(issue => {
+          result.allIssues.push({
+            ...issue,
+            dimension: dimensionName
+          });
+        });
+      }
+
+      // 提取建议
+      if (dimensionResult.recommendations && Array.isArray(dimensionResult.recommendations)) {
+        dimensionResult.recommendations.forEach(rec => {
+          result.allRecommendations.push({
+            ...rec,
+            dimension: dimensionName
+          });
+        });
+      }
+
+      // 提取SQL修复信息（从standards维度）
+      if (dimensionName === 'standards' && dimensionResult.sqlFix) {
+        result.sqlFixData = dimensionResult.sqlFix;
+      }
+
+      // 如果维度有分数，更新总体分数
+      if (dimensionResult.overallScore) {
+        result.overallScore = Math.min(result.overallScore, dimensionResult.overallScore);
+      }
+
+      // 更新总结（使用最详细的总结）
+      if (dimensionResult.summary && typeof dimensionResult.summary === 'string' && !dimensionResult.summary.includes('```json')) {
+        result.summary = dimensionResult.summary;
+      }
+
+      // 保存维度原始数据
+      result.dimensions[dimensionName] = dimensionResult;
+    }
+  });
+
+  return result;
+}
+
+/**
+* 从Markdown格式中提取JSON数据
+* @param {string} content - 包含JSON的Markdown内容
+* @returns {Object|null} 解析后的JSON对象，失败返回null
+*/
+extractJsonFromMarkdown(content) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
+  // 尝试匹配 ```json ... ``` 格式
+  const jsonMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[1]);
+    } catch (e) {
+      console.warn('JSON解析失败:', e.message);
+    }
+  }
+
+  // 尝试匹配单独的JSON对象
+  const simpleJsonMatch = content.match(/\{[\s\S]*\}/);
+  if (simpleJsonMatch) {
+    try {
+      return JSON.parse(simpleJsonMatch[0]);
+    } catch (e) {
+      // 忽略解析错误
+    }
+  }
+
+  return null;
 }
 }
 

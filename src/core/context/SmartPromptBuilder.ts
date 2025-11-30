@@ -422,6 +422,22 @@ format += '    "vulnerabilityType": "漏洞类型"\n';
 format += '  },\n';
 }
 
+if (analysisTypes.includes('standards')) {
+  format += '  "sqlFix": {\n';
+  format += '    "originalSql": "原始SQL语句",\n';
+  format += '    "fixedSql": "修复后的纯净SQL语句（可直接执行）",\n';
+  format += '    "isSafe": true,\n';
+  format += '    "isValidSyntax": true,\n';
+  format += '    "changes": [\n';
+  format += '      {\n';
+  format += '        "type": "naming|formatting|structure|best_practice",\n';
+  format += '        "description": "具体变更说明",\n';
+  format += '        "lineNumber": "行号"\n';
+  format += '      }\n';
+  format += '    ]\n';
+  format += '  },\n';
+}
+
 format += '  "confidence": 0.85,\n';
 format += '  "analysisTime": "2025-01-01T00:00:00Z"\n';
 format += '}\n';

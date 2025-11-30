@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { createEnhancedSQLAnalyzer } from '../core/index.js';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, extname } from 'path';
+import { llmJsonParser } from '../core/llm-json-parser.js';
 
 class SQLAnalyzerCLI {
   private program: Command;
@@ -111,8 +112,7 @@ class SQLAnalyzerCLI {
     this.program
       .command('analyze')
       .alias('a')
-      .description('分析单个SQL文件')
-      .argument('<file>', '要分析的SQL文件路径')
+      .description('分析SQL语句或SQL文件')
       .option('-t, --types <types>', '分析类型 (performance,security,standards)', this.parseCommaSeparated)
       .option('-d, --database <type>', '数据库类型 (mysql,postgresql,oracle,sqlserver)')
       .option('-b, --batch-size <num>', '批处理大小 (默认: 10)', '10')
@@ -123,15 +123,18 @@ class SQLAnalyzerCLI {
       .option('-s, --security', '仅执行安全分析')
       .option('--standards', '仅执行规范检查')
       .option('-i, --interactive', '交互式模式')
+      .option('--sql <statement>', '要分析的SQL语句')
+      .option('--file <path>', '要分析的SQL文件路径')
       .addHelpText('after', `
 示例:
-  sql-analyzer analyze query.sql
-  sql-analyzer analyze query.sql --types performance,security
-  sql-analyzer analyze query.sql --database mysql --json
-  sql-analyzer analyze query.sql --performance --no-cache
-  sql-analyzer analyze query.sql --interactive`)
-      .action(async (file: string, options: any) => {
-        await this.handleAnalyze(file, options);
+  sql-analyzer analyze --sql "SELECT * FROM users"           # 直接分析SQL语句
+  sql-analyzer analyze --file ./query.sql                  # 分析SQL文件
+  sql-analyzer analyze --sql "SELECT * FROM users" --database mysql --json
+  sql-analyzer analyze --file ./query.sql --types performance,security
+  sql-analyzer analyze --sql "SELECT * FROM users" --standards
+  sql-analyzer analyze --file ./query.sql --performance --no-cache`)
+      .action(async (options: any) => {
+        await this.handleAnalyze(options);
       });
 
     // 目录分析命令
@@ -218,33 +221,60 @@ class SQLAnalyzerCLI {
   }
 
   /**
-   * 处理文件分析命令
-   * @param {string} filePath - 文件路径
+   * 处理分析命令（支持文件和SQL语句）
    * @param {Object} options - 命令行选项
    */
-  async handleAnalyze(filePath: string, options: any): Promise<void> {
+  async handleAnalyze(options: any): Promise<void> {
     try {
-      const resolvedPath = resolve(filePath);
-
-      // 检查文件是否存在
-      if (!existsSync(resolvedPath)) {
-        throw new Error(`文件不存在: ${resolvedPath}`);
+      // 验证输入选项
+      if (!options.sql && !options.file) {
+        throw new Error('请使用 --sql 或 --file 选项指定要分析的内容');
       }
 
-      // 检查文件扩展名
-      const fileExt = extname(resolvedPath).toLowerCase();
-      if (!['.sql', '.ddl', '.dml'].includes(fileExt)) {
-        console.warn(yellow`⚠️  文件类型 ${fileExt} 可能不是SQL文件`);
+      if (options.sql && options.file) {
+        throw new Error('--sql 和 --file 选项不能同时使用');
       }
 
-      console.log(cyan`🔍 正在分析文件: ${resolvedPath}`);
+      let sqlContent: string;
+      let inputType: 'file' | 'sql';
+      let inputPath: string;
+
+      // 判断是文件还是SQL语句
+      if (options.sql) {
+        // 直接分析SQL语句
+        sqlContent = options.sql.trim();
+        inputType = 'sql';
+        inputPath = 'SQL语句';
+        console.log(cyan`🔍 正在分析SQL语句: ${sqlContent.substring(0, 50)}${sqlContent.length > 50 ? '...' : ''}`);
+      } else {
+        // 分析文件
+        const resolvedPath = resolve(options.file);
+        inputPath = resolvedPath;
+        inputType = 'file';
+
+        // 检查文件是否存在
+        if (!existsSync(resolvedPath)) {
+          throw new Error(`文件不存在: ${resolvedPath}`);
+        }
+
+        // 检查文件扩展名
+        const fileExt = extname(resolvedPath).toLowerCase();
+        if (!['.sql', '.ddl', '.dml'].includes(fileExt)) {
+          console.warn(yellow`⚠️  文件类型 ${fileExt} 可能不是SQL文件`);
+        }
+
+        console.log(cyan`🔍 正在分析文件: ${resolvedPath}`);
+
+        // 读取文件内容
+        const fileContent = readFileSync(resolvedPath, 'utf-8');
+        sqlContent = fileContent.trim();
+
+        if (!sqlContent) {
+          throw new Error('文件内容为空');
+        }
+      }
+
       const startTime = Date.now();
-
-      // 读取文件内容
-      const fileContent = readFileSync(resolvedPath, 'utf-8');
-      if (!fileContent.trim()) {
-        throw new Error('文件内容为空');
-      }
 
       let result;
 
@@ -255,41 +285,68 @@ class SQLAnalyzerCLI {
         try {
           // 尝试使用analyzeFile方法（如果存在）
           if (typeof this.analyzer.analyzeFile === 'function') {
-            result = await this.analyzer.analyzeFile(fileContent, {
+            result = await this.analyzer.analyzeFile(sqlContent, {
               ...analysisOptions,
-              filePath: resolvedPath
+              filePath: inputPath,
+              inputType
             });
           } else if (typeof this.analyzer.analyzeSQL === 'function') {
             // 使用analyzeSQL方法分析SQL内容
-            const analysisResult = await this.analyzer.analyzeSQL(fileContent, analysisOptions);
+            const analysisResult = await this.analyzer.analyzeSQL(sqlContent, analysisOptions);
+
+            // 提取真实的分析结果
+            const realAnalysis = analysisResult.parsedContent || analysisResult;
+
+            // 调试输出 - 检查全局调试选项
+            const globalOptions = this.program.opts();
+            const isDebugMode = globalOptions.debug || options.debug;
+
+            if (isDebugMode) {
+              console.log(magenta`\n🔍 调试信息 - 原始分析结果:`);
+              console.log(JSON.stringify(analysisResult, null, 2));
+              console.log(magenta`\n🔍 调试信息 - 提取的分析结果:`);
+              console.log(JSON.stringify(realAnalysis, null, 2));
+            }
+
+            // 使用统一的JSON解析器提取维度分析结果
+            const dimensionAnalysis = llmJsonParser.extractDimensionAnalysis(realAnalysis);
+
+            if (isDebugMode) {
+              console.log(magenta`\n🔍 调试信息 - 提取的维度分析结果:`);
+              console.log(JSON.stringify(dimensionAnalysis, null, 2));
+            }
+
+            // 构建最终结果
             result = {
               fileInfo: {
-                fileName: resolvedPath.split('\\').pop() || resolvedPath.split('/').pop() || 'unknown',
-                filePath: resolvedPath
+                fileName: inputType === 'file' ?
+                  (inputPath.split('\\').pop() || inputPath.split('/').pop() || 'unknown') :
+                  'SQL语句',
+                filePath: inputPath
               },
               stats: {
                 totalStatements: 1,
                 successfulAnalyses: analysisResult.success ? 1 : 0,
-                overallScore: analysisResult.score || 75
+                overallScore: dimensionAnalysis.overallScore
               },
               analysis: {
-                summary: analysisResult.summary || 'SQL分析完成',
-                issues: analysisResult.issues || [],
-                recommendations: analysisResult.recommendations || [],
-                confidence: analysisResult.confidence || 0.85
-              }
+                summary: dimensionAnalysis.summary,
+                issues: dimensionAnalysis.allIssues,
+                recommendations: dimensionAnalysis.allRecommendations,
+                confidence: realAnalysis.confidence || 0.85,
+                sqlFix: dimensionAnalysis.sqlFixData
+              },
+              rawResult: analysisResult // 保留原始结果用于调试
             };
           } else {
             throw new Error('分析器没有可用的分析方法');
           }
         } catch (error: any) {
-          console.warn(yellow`⚠️  真实分析失败: ${error.message}`);
-          console.warn(yellow`⚠️  回退到演示模式`);
-          result = this.generateDemoResult(resolvedPath, fileContent);
+          console.error(red`❌ 分析失败: ${error.message}`);
+          throw error; // 直接抛出错误，不使用演示模式
         }
       } else {
-        console.warn(yellow`⚠️  分析器不可用，使用演示模式`);
-        result = this.generateDemoResult(resolvedPath, fileContent);
+        throw new Error('分析器不可用');
       }
 
       // 显示分析结果
@@ -305,54 +362,7 @@ class SQLAnalyzerCLI {
     }
   }
 
-  /**
-   * 生成演示结果（当真实分析器不可用时）
-   */
-  private generateDemoResult(filePath: string, content: string) {
-    const lines = content.split('\n').filter(line => line.trim()).length;
-    const sqlCount = Math.max(1, Math.floor(lines / 3)); // 粗略估计SQL语句数
-
-    return {
-      fileInfo: {
-        fileName: filePath.split('\\').pop() || filePath.split('/').pop() || filePath,
-        filePath
-      },
-      stats: {
-        totalStatements: sqlCount,
-        successfulAnalyses: sqlCount,
-        overallScore: 75 + Math.floor(Math.random() * 20) // 75-95分
-      },
-      analysis: {
-        summary: `文件包含${sqlCount}条SQL语句，整体质量良好，建议优化索引使用和查询性能`,
-        issues: [
-          {
-            severity: 'HIGH',
-            title: '缺少索引建议',
-            description: '建议在查询条件字段上创建索引以提升查询性能'
-          },
-          {
-            severity: 'MEDIUM',
-            title: '查询优化空间',
-            description: '部分查询可能存在优化空间，建议检查执行计划'
-          }
-        ],
-        recommendations: [
-          {
-            priority: 'LOW',
-            title: '限制返回字段',
-            description: '避免使用SELECT *，明确指定需要的字段'
-          },
-          {
-            priority: 'MEDIUM',
-            title: '添加LIMIT子句',
-            description: '对大表查询时添加适当的LIMIT限制'
-          }
-        ],
-        confidence: 0.85 + Math.random() * 0.1 // 85-95%
-      }
-    };
-  }
-
+  
   /**
    * 处理目录分析命令
    * @param {string} dirPath - 目录路径
@@ -521,57 +531,137 @@ class SQLAnalyzerCLI {
     console.log(`总体评分: ${scoreColor(`${score}分`)}`);
     console.log('');
 
-    // 显示分析总结
+    // 优先显示SQL修复信息 - 这是最重要的解决方案
+    if (result.analysis.sqlFix) {
+      console.log(green`🔧 SQL修复:`);
+      console.log(gray('='.repeat(30)));
+      console.log(cyan`修复后的SQL:`);
+      console.log(blue(result.analysis.sqlFix.fixedSql));
+      console.log('');
+
+      console.log(cyan`修复详情:`);
+      console.log(`✅ 语法正确: ${result.analysis.sqlFix.isValidSyntax ? '是' : '否'}`);
+      console.log(`🛡️  安全执行: ${result.analysis.sqlFix.isSafe ? '是' : '否'}`);
+
+      if (result.analysis.sqlFix.changes && result.analysis.sqlFix.changes.length > 0) {
+        console.log(cyan`修复变更:`);
+        result.analysis.sqlFix.changes.forEach((change: any, index: number) => {
+          console.log(`${green(index + 1)}. ${change.type}: ${change.description}`);
+        });
+      }
+      console.log('');
+    }
+
+    // 按维度显示问题 - 用户最关心的部分
+    if (result.analysis.issues && result.analysis.issues.length > 0) {
+      const issuesByDimension = this.groupByDimension(result.analysis.issues);
+
+      Object.keys(issuesByDimension).forEach(dimension => {
+        const dimensionName = this.getDimensionDisplayName(dimension);
+        const dimensionColor = this.getDimensionColor(dimension);
+
+        console.log(dimensionColor`⚠️  ${dimensionName}问题:`);
+
+        issuesByDimension[dimension].forEach((issue: any, index: number) => {
+          const severity = issue.severity?.toUpperCase() || 'MEDIUM';
+          let severityColor = yellow;
+
+          if (severity === 'HIGH' || severity === 'CRITICAL') {
+            severityColor = red;
+          } else if (severity === 'LOW') {
+            severityColor = green;
+          }
+
+          console.log(`${cyan(index + 1)}. [${severityColor(severity)}] ${issue.title || issue.description}`);
+          if (issue.description && issue.title) {
+            console.log(`   ${gray(issue.description)}`);
+          }
+        });
+        console.log('');
+      });
+    }
+
+    // 按维度显示建议 - 具体的解决方案
+    if (result.analysis.recommendations && result.analysis.recommendations.length > 0) {
+      const recommendationsByDimension = this.groupByDimension(result.analysis.recommendations);
+
+      Object.keys(recommendationsByDimension).forEach(dimension => {
+        const dimensionName = this.getDimensionDisplayName(dimension);
+        const dimensionColor = this.getDimensionColor(dimension);
+
+        console.log(dimensionColor`💡 ${dimensionName}建议:`);
+
+        recommendationsByDimension[dimension].forEach((rec: any, index: number) => {
+          const priority = rec.priority?.toUpperCase() || 'MEDIUM';
+          let priorityColor = yellow;
+
+          if (priority === 'HIGH') {
+            priorityColor = red;
+          } else if (priority === 'LOW') {
+            priorityColor = green;
+          }
+
+          console.log(`${cyan(index + 1)}. [${priorityColor(priority)}] ${rec.title || rec.description}`);
+          if (rec.description && rec.title) {
+            console.log(`   ${gray(rec.description)}`);
+          }
+        });
+        console.log('');
+      });
+    }
+
+    // 最后显示分析总结 - 总体评估
     console.log(cyan`📋 分析总结:`);
     console.log(gray(result.analysis.summary));
     console.log('');
-
-    // 显示问题
-    if (result.analysis.issues && result.analysis.issues.length > 0) {
-      console.log(yellow`⚠️  发现的问题:`);
-      result.analysis.issues.forEach((issue: any, index: number) => {
-        const severity = issue.severity?.toUpperCase() || 'MEDIUM';
-        let severityColor = yellow;
-
-        if (severity === 'HIGH' || severity === 'CRITICAL') {
-          severityColor = red;
-        } else if (severity === 'LOW') {
-          severityColor = green;
-        }
-
-        console.log(`${cyan(index + 1)}. [${severityColor(severity)}] ${issue.title || issue.description}`);
-        if (issue.description && issue.title) {
-          console.log(`   ${gray(issue.description)}`);
-        }
-      });
-      console.log('');
-    }
-
-    // 显示建议
-    if (result.analysis.recommendations && result.analysis.recommendations.length > 0) {
-      console.log(magenta`💡 优化建议:`);
-      result.analysis.recommendations.forEach((rec: any, index: number) => {
-        const priority = rec.priority?.toUpperCase() || 'MEDIUM';
-        let priorityColor = yellow;
-
-        if (priority === 'HIGH') {
-          priorityColor = red;
-        } else if (priority === 'LOW') {
-          priorityColor = green;
-        }
-
-        console.log(`${cyan(index + 1)}. [${priorityColor(priority)}] ${rec.title || rec.description}`);
-        if (rec.description && rec.title) {
-          console.log(`   ${gray(rec.description)}`);
-        }
-      });
-      console.log('');
-    }
 
     // 显示置信度
     if (result.analysis.confidence > 0) {
       const confidence = (result.analysis.confidence * 100).toFixed(1);
       console.log(blue`🎯 分析置信度: ${green(confidence)}%`);
+    }
+  }
+
+  /**
+   * 按维度分组项目
+   */
+  private groupByDimension(items: any[]): Record<string, any[]> {
+    const grouped: Record<string, any[]> = {};
+
+    items.forEach(item => {
+      const dimension = item.dimension || 'general';
+      if (!grouped[dimension]) {
+        grouped[dimension] = [];
+      }
+      grouped[dimension].push(item);
+    });
+
+    return grouped;
+  }
+
+  /**
+   * 获取维度显示名称
+   */
+  private getDimensionDisplayName(dimension: string): string {
+    const names: Record<string, string> = {
+      'performance': '性能',
+      'security': '安全',
+      'standards': '规范',
+      'general': '通用'
+    };
+    return names[dimension] || dimension;
+  }
+
+  /**
+   * 获取维度颜色
+   */
+  private getDimensionColor(dimension: string): (text: string) => string {
+    switch (dimension) {
+      case 'performance': return yellow;
+      case 'security': return red;
+      case 'standards': return blue;
+      case 'general': return cyan;
+      default: return cyan;
     }
   }
 

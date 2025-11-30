@@ -58,6 +58,39 @@
 - **兼容性**：数据库版本升级时的兼容性问题
 - **重构成本**：未来重构的复杂度和成本
 
+## SQL修复要求
+
+### 🎯 输出要求
+1. **纯净SQL**：`fixedSql`字段必须是可直接执行的SQL语句，不带任何注释或解释
+2. **语法正确**：确保修复后的SQL语法完全正确，能够正常执行
+3. **逻辑安全**：保持原业务逻辑不变，不引入安全风险
+4. **格式规范**：符合标准格式化规范，包括关键字大小写、缩进等
+
+### ✅ 修复原则
+- **保持语义**：查询结果与原SQL完全一致
+- **向后兼容**：不使用新特性导致兼容性问题
+- **安全优先**：修复不引入SQL注入或其他安全风险
+- **性能友好**：修复不会降低执行性能
+
+### 🚫 禁止操作
+- 不修改表结构或字段定义
+- 不改变业务逻辑或查询结果
+- 不添加复杂的子查询影响可读性
+- 不使用数据库特定的高级特性
+- 不在`fixedSql`中包含任何注释或说明文字
+
+### 📝 修复示例
+
+**修复前SQL：**
+```sql
+select * from users u, orders o where u.id=o.user_id and u.name like '%test%'
+```
+
+**输出的fixedSql字段：**
+```sql
+SELECT u.id, u.name, u.email, o.id AS order_id, o.amount, o.created_at FROM users AS u INNER JOIN orders AS o ON u.id = o.user_id WHERE u.name LIKE '%test%'
+```
+
 ## 待检查的SQL代码
 
 ```sql
@@ -70,12 +103,26 @@
 1. **第一印象**：这代码给人的第一感觉如何？
 2. **深入分析**：逐个部分检查具体的质量问题
 3. **影响评估**：这些问题对团队和维护的影响
-4. **改进建议**：如何让代码变得更专业？
+4. **SQL修复**：生成纯净的、可执行的修复后SQL
+5. **改进建议**：如何让代码变得更专业？
 
 ### JSON输出格式
 
 ```json
 {
+  "sqlFix": {
+    "originalSql": "{{sql}}",
+    "fixedSql": "修复后的纯净SQL语句（可直接执行，不包含注释）",
+    "isSafe": true,
+    "isValidSyntax": true,
+    "changes": [
+      {
+        "type": "naming|formatting|structure|best_practice",
+        "description": "具体变更说明",
+        "lineNumber": "行号"
+      }
+    ]
+  },
   "qualityAssessment": {
     "overallScore": 0.4,
     "grade": "A|B|C|D|F",
