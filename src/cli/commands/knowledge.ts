@@ -3,13 +3,19 @@
  * 老王我把知识库管理独立出来了！
  */
 
-import { knowledgeService } from '../../services/knowledge-service.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
 import { cli as cliTools } from '../../utils/cli/index.js';
 
 /**
  * 知识库管理命令类
  */
 export class KnowledgeCommand {
+  private serviceContainer: ServiceContainer;
+
+  constructor(serviceContainer?: ServiceContainer) {
+    this.serviceContainer = serviceContainer || ServiceContainer.getInstance();
+  }
+
   /**
    * 处理知识库命令
    */
@@ -42,6 +48,7 @@ export class KnowledgeCommand {
   private async showStatus(): Promise<void> {
     cliTools.log.info('🔍 查询知识库状态...');
 
+    const knowledgeService = this.serviceContainer.getKnowledgeService();
     const status = await knowledgeService.getStatus();
 
     console.log(cliTools.colors.cyan('\n📚 知识库状态'));
@@ -65,6 +72,7 @@ export class KnowledgeCommand {
   private async resetKnowledge(): Promise<void> {
     cliTools.log.warn('🔄 重置知识库...');
 
+    const knowledgeService = this.serviceContainer.getKnowledgeService();
     const result = await knowledgeService.resetKnowledge();
 
     if (result.success) {
@@ -86,6 +94,7 @@ export class KnowledgeCommand {
 
     cliTools.log.info(`📖 从目录学习规则: ${cliTools.colors.cyan(directory)}`);
 
+    const knowledgeService = this.serviceContainer.getKnowledgeService();
     const result = await knowledgeService.learnDocuments({
       inputDirectory: directory,
       clearExisting: false

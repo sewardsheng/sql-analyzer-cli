@@ -8,6 +8,7 @@
 import { Command } from 'commander';
 import { AnalyzeCommand, StatsCommand, HealthCommand, KnowledgeCommand, HistoryCommand, LearnCommand, MenuCommand } from './commands/index.js';
 import { cli as cliTools } from '../utils/cli/index.js';
+import { executeEvaluate, type EvaluateOptions } from './commands/evaluate.js';
 
 /**
  * SQL分析器CLI主类 - 大大简化！
@@ -56,6 +57,7 @@ export class SQLAnalyzerCLI {
     this.registerStatsCommand();
     this.registerKnowledgeCommand();
     this.registerHistoryCommand();
+    this.registerEvaluateCommand();
 
     // 处理未知命令
     this.program.on('command:*', () => {
@@ -201,6 +203,34 @@ export class SQLAnalyzerCLI {
       .action(async (options) => {
         try {
           await this.commands.history.execute(options);
+        } catch (error: any) {
+          cliTools.log.error(error.message);
+          process.exit(1);
+        }
+      });
+  }
+
+  /**
+   * 注册evaluate命令
+   */
+  private registerEvaluateCommand(): void {
+    this.program
+      .command('evaluate')
+      .alias('eval')
+      .description('🔍 智能规则评估：批量处理、自动分类、质量分析')
+      .option('-s, --source <path>', '源目录路径', 'rules/learning-rules/manual_review/2025-12')
+      .option('-o, --output <path>', '输出报告路径', 'evaluation-report.json')
+      .option('-b, --batch', '批量处理模式')
+      .option('-i, --interactive', '交互式模式')
+      .option('-f, --force', '强制重新评估')
+      .option('-t, --threshold <number>', '质量阈值 (0-100)', '70')
+      .option('-c, --concurrency <number>', '并发数量', '3')
+      .option('--dry-run', '预演模式，不实际移动文件')
+      .option('-v, --verbose', '详细输出')
+      .option('--move', '评估完成后自动移动文件到对应目录')
+      .action(async (options: EvaluateOptions) => {
+        try {
+          await executeEvaluate(options);
         } catch (error: any) {
           cliTools.log.error(error.message);
           process.exit(1);

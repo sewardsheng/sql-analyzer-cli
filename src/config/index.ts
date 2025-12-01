@@ -50,9 +50,16 @@ embeddingModel: process.env.VECTOR_STORE_EMBEDDING_MODEL || 'text-embedding-ada-
 // 规则学习配置
 ruleLearning: {
 enabled: process.env.RULE_LEARNING_ENABLED !== 'false',
-minConfidence: parseFloat(process.env.RULE_LEARNING_MIN_CONFIDENCE) || 0.7,
+minConfidence: parseFloat(process.env.RULE_LEARNING_MIN_CONFIDENCE) || 0.5,
 batchSize: parseInt(process.env.RULE_LEARNING_BATCH_SIZE) || 5,
-autoApproveThreshold: parseFloat(process.env.RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD) / 100 || 0.7
+autoApproveThreshold: parseFloat(process.env.RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD) / 100 || 0.5
+},
+
+// 规则审批配置
+approval: {
+autoApproveThreshold: parseFloat(process.env.RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD) / 100 || 0.5,
+minQualityScore: parseInt(process.env.RULE_EVALUATION_MIN_QUALITY_SCORE) || 60,
+completenessConfidenceThreshold: parseFloat(process.env.RULE_EVALUATION_CONFIDENCE_THRESHOLD) / 100 || 0.5
 },
 
 // 知识库配置

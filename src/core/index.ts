@@ -5,8 +5,7 @@
 
 // 导出SQL分析器
 export {
-SQLAnalyzer,
-createSQLAnalyzer
+SQLAnalyzer
 } from './SQLAnalyzer.js';
 
 export { LlmJsonParser, llmJsonParser } from './llm-json-parser.js';

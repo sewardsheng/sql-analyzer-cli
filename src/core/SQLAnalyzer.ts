@@ -511,13 +511,5 @@ this.toolFactory.clearCache();
 }
 }
 
-/**
-* 创建SQL分析器
-* @param {Object} options - 配置选项
-* @returns {SQLAnalyzer} 分析器实例
-*/
-export function createSQLAnalyzer(options = {}) {
-return new SQLAnalyzer(options);
-}
 
 export default SQLAnalyzer;

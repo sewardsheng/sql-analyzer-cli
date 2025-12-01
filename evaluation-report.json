@@ -1,0 +1,61 @@
+{
+  "timestamp": "2025-12-01T13:16:35.829Z",
+  "summary": {
+    "totalRules": 6,
+    "processedRules": 6,
+    "successRate": "100.0%",
+    "averageQualityScore": "56.5",
+    "duplicateRulesFound": 0,
+    "processingTime": "6.67s"
+  },
+  "performance": {
+    "totalTime": "6.67s",
+    "averageTimePerRule": "5642ms",
+    "cacheHitRate": "30.0%"
+  },
+  "detailedResults": [
+    {
+      "rule": {
+        "id": "测试规则-高质量优秀规则-应该移动到-approved",
+        "title": "测试规则 - 高质量优秀规则 (应该移动到 approved)",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 92,
+        "qualityLevel": "excellent",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "low_quality"
+      },
+      "recommendedAction": {
+        "action": "move_to_issues",
+        "targetDirectory": "rules/learning-rules/low_quality",
+        "priority": "high",
+        "estimatedEffort": 15
+      }
+    },
+    {
+      "rule": {
+        "id": "测试规则-中等质量规则-应该移动到-manual-review",
+        "title": "测试规则 - 中等质量规则 (应该移动到 manual_review)",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 72,
+        "qualityLevel": "fair",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "low_quality"
+      },
+      "recommendedAction": {
+        "action": "move_to_issues",
+        "targetDirectory": "rules/learning-rules/low_quality",
+        "priority": "medium",
+        "estimatedEffort": 15
+      }
+    }
+  ],
+  "errors": []
+}

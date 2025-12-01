@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-12-01T11:50:32.150Z",
+  "summary": {
+    "totalRules": 21,
+    "processedRules": 21,
+    "successRate": "100.0%",
+    "averageQualityScore": "N/A",
+    "duplicateRulesFound": 0,
+    "processingTime": "0.01s"
+  },
+  "performance": {
+    "totalTime": "0.01s",
+    "averageTimePerRule": "0ms",
+    "cacheHitRate": "30.0%"
+  },
+  "detailedResults": [],
+  "errors": []
+}

@@ -20,7 +20,9 @@ export function registerKnowledgeRoutes(app: Hono): void {
    */
   app.get('/knowledge', async (c: Context) => {
     try {
-      const { knowledgeService } = await import('../../services/knowledge-service.js');
+      const { ServiceContainer } = await import('../../services/factories/ServiceContainer.js');
+      const container = ServiceContainer.getInstance();
+      const knowledgeService = container.getKnowledgeService();
       const result = await knowledgeService.getStatus();
 
       return c.json(formatSuccessResponse(result, '获取知识库状态成功'));
@@ -51,8 +53,9 @@ export function registerKnowledgeRoutes(app: Hono): void {
       }
 
       const k = body.k || 4;
-      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
-      const knowledgeService = getKnowledgeService();
+      const { ServiceContainer } = await import('../../services/factories/ServiceContainer.js');
+      const container = ServiceContainer.getInstance();
+      const knowledgeService = container.getKnowledgeService();
       const result = await knowledgeService.searchKnowledge(body.query, k);
 
       if (!result.success) {
@@ -115,8 +118,9 @@ export function registerKnowledgeRoutes(app: Hono): void {
 
       console.log(chalk.blue(`[API] 开始学习文档，目录: ${options.rulesDir}`));
 
-      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
-      const knowledgeService = getKnowledgeService();
+      const { ServiceContainer } = await import('../../services/factories/ServiceContainer.js');
+      const container = ServiceContainer.getInstance();
+      const knowledgeService = container.getKnowledgeService();
 
       // 在后台执行学习任务
       knowledgeService.learnDocuments(options).then((result: any) => {
@@ -146,8 +150,9 @@ export function registerKnowledgeRoutes(app: Hono): void {
     try {
       console.log(chalk.blue('[API] 正在重置知识库...'));
 
-      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
-      const knowledgeService = getKnowledgeService();
+      const { ServiceContainer } = await import('../../services/factories/ServiceContainer.js');
+      const container = ServiceContainer.getInstance();
+      const knowledgeService = container.getKnowledgeService();
       const result = await knowledgeService.resetKnowledge();
 
       if (result.success) {

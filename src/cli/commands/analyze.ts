@@ -6,37 +6,39 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve, extname } from 'path';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
-import { createSQLAnalyzer } from '../../core/index.js';
-import { createFileAnalyzerService } from '../../services/FileAnalyzerService.js';
-import { getHistoryService } from '../../services/history-service.js';
 import { cli as cliTools } from '../../utils/cli/index.js';
 import { ResultFormatter, resultFormatter } from '../../utils/formatter.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+import { ISQLAnalyzer, IFileAnalyzerService, IHistoryService } from '../../services/interfaces/ServiceInterfaces.js';
+import { DatabaseIdentifier } from '../../core/identification/index.js';
 
 /**
- * 分析命令类
+ * 分析命令类 - 重构版
+ * 使用ServiceContainer统一管理服务，消除重复代码
  */
 export class AnalyzeCommand {
-  private analyzer: any;
-  private fileAnalyzer: any;
-  private historyService: any;
+  private serviceContainer: ServiceContainer;
+  private analyzer: ISQLAnalyzer;
+  private fileAnalyzer: IFileAnalyzerService;
+  private dbIdentifier: DatabaseIdentifier;
 
-  constructor() {
-    // 初始化分析器
-    this.analyzer = createSQLAnalyzer({
-      enableCaching: true,
-      enableKnowledgeBase: true,
-      maxConcurrency: 3
-    });
+  constructor(serviceContainer?: ServiceContainer) {
+    // 使用依赖注入，方便测试
+    this.serviceContainer = serviceContainer || ServiceContainer.getInstance();
 
-    // 初始化文件分析服务
-    this.fileAnalyzer = createFileAnalyzerService({
-      enableCache: true,
-      enableKnowledgeBase: true,
-      maxConcurrency: 3
-    });
+    // 从服务容器获取所有服务（同步服务）
+    this.analyzer = this.serviceContainer.getSQLAnalyzer();
+    this.fileAnalyzer = this.serviceContainer.getFileAnalyzerService();
 
-    // 初始化历史服务
-    this.historyService = getHistoryService();
+    // 初始化数据库识别器
+    this.dbIdentifier = new DatabaseIdentifier();
+  }
+
+  /**
+   * 获取历史服务（直接从ServiceContainer获取，它会处理复用）
+   */
+  private async getHistoryService(): Promise<IHistoryService> {
+    return await this.serviceContainer.getHistoryService();
   }
 
   /**
@@ -72,7 +74,23 @@ export class AnalyzeCommand {
       // 确定输入类型
       const inputType = sql ? 'sql' : 'file';
 
+      // 自动识别数据库类型
+      let databaseType = 'unknown';
+      if (options.database) {
+        databaseType = options.database;
+      } else {
+        const identificationResult = this.dbIdentifier.identify(sqlContent);
+        databaseType = identificationResult.type || 'unknown';
+
+        // 调试输出数据库识别结果
+        if (options.debug) {
+          console.log(cliTools.colors.magenta(`\n🔍 数据库识别结果:`));
+          console.log(JSON.stringify(identificationResult, null, 2));
+        }
+      }
+
       cliTools.log.analysis(`正在分析SQL语句: ${sqlContent.substring(0, 100)}${sqlContent.length > 100 ? '...' : ''}`);
+      cliTools.log.info(`检测到数据库类型: ${databaseType}`);
       const startTime = Date.now();
 
       // 使用AI智能分析模式
@@ -80,6 +98,8 @@ export class AnalyzeCommand {
 
       // 分析选项
       const analysisOptions = this.processOptions(options);
+      // 将识别的数据库类型传递给分析器
+      analysisOptions.databaseType = databaseType;
 
       try {
         // 使用analyzeSQL方法分析SQL内容
@@ -89,11 +109,15 @@ export class AnalyzeCommand {
         const realAnalysis = analysisResult.parsedContent || analysisResult;
 
         // 调试输出
-        if (options.debug) {
+        if (options.debug || true) { // 强制启用调试
           console.log(cliTools.colors.magenta`\n🔍 调试信息 - 原始分析结果:`);
           console.log(JSON.stringify(analysisResult, null, 2));
           console.log(cliTools.colors.magenta`\n🔍 调试信息 - 提取的分析结果:`);
           console.log(JSON.stringify(realAnalysis, null, 2));
+          console.log(cliTools.colors.yellow(`\n🔍 realAnalysis.issues 数量: ${realAnalysis.issues?.length || 0}`));
+          if (realAnalysis.issues && realAnalysis.issues.length > 0) {
+            console.log(cliTools.colors.yellow(`第一个问题的维度: ${realAnalysis.issues[0].dimension}`));
+          }
         }
 
         // 使用统一的JSON解析器提取维度分析结果
@@ -108,7 +132,7 @@ export class AnalyzeCommand {
         const issuesByDimension = this.groupIssuesByDimension(dimensionAnalysis.allIssues);
         const recommendationsByDimension = this.groupRecommendationsByDimension(dimensionAnalysis.allRecommendations);
 
-        // 构建最终结果
+        // 构建最终结果 - 添加兼容规则学习器的数据结构
         const result = {
           fileInfo: {
             fileName: inputType === 'file' ?
@@ -119,15 +143,36 @@ export class AnalyzeCommand {
           stats: {
             totalStatements: 1,
             successfulAnalyses: analysisResult.success ? 1 : 0,
-            overallScore: 75 // 移除置信度依赖，使用固定默认值
+            overallScore: 75
           },
           analysis: {
             summary: dimensionAnalysis.summary,
             issues: issuesByDimension,
             recommendations: recommendationsByDimension,
-            confidence: 0.85, // 移除置信度依赖，使用固定默认值
+            confidence: 0.85,
             sqlFix: dimensionAnalysis.sqlFixData,
             learning: realAnalysis.learning || null
+          },
+          // 为规则学习器提供兼容的数据结构
+          data: {
+            performance: {
+              metadata: { confidence: 0.85 },
+              data: {
+                issues: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'performance') || []
+              }
+            },
+            security: {
+              metadata: { confidence: 0.85 },
+              data: {
+                vulnerabilities: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'security') || []
+              }
+            },
+            standards: {
+              metadata: { confidence: 0.85 },
+              data: {
+                violations: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'standards') || []
+              }
+            }
           },
           rawResult: analysisResult
         };
@@ -155,18 +200,21 @@ export class AnalyzeCommand {
           }
         }
 
-        // 触发规则学习
+        // 触发规则学习（改为同步执行以调试）
         console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
-        this.asyncTriggerRuleLearning(sqlContent, inputType, inputPath, dimensionAnalysis).catch(error => {
+        try {
+          await this.asyncTriggerRuleLearning(sqlContent, inputType, inputPath, dimensionAnalysis, result);
+        } catch (error: any) {
           console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
-        });
+        }
 
         // 保存分析结果到历史记录
         try {
-          await this.historyService.saveAnalysis({
+          const historyService = await this.getHistoryService();
+          await historyService.saveAnalysis({
             id: `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             timestamp: new Date().toISOString(),
-            databaseType: 'unknown',
+            databaseType: databaseType, // 使用识别的数据库类型
             type: inputType,
             sql: sqlContent, // 添加原始SQL字段
             input: {
@@ -461,62 +509,55 @@ export class AnalyzeCommand {
    * @param inputType 输入类型
    * @param inputPath 输入路径
    * @param dimensionAnalysis 维度分析结果
+   * @param result 完整的分析结果（包含规则学习需要的data结构）
    */
-  private async asyncTriggerRuleLearning(sqlContent: string, inputType: string, inputPath: string, dimensionAnalysis: any): Promise<void> {
+  private async asyncTriggerRuleLearning(sqlContent: string, inputType: string, inputPath: string, dimensionAnalysis: any, result: any): Promise<void> {
     try {
       console.log(cliTools.colors.blue('📥 开始导入规则学习模块...'));
 
-      // 动态导入规则学习器
-      const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
-      const { getLLMService } = await import('../../core/llm-service.js');
-      const { getHistoryService } = await import('../../services/history-service.js');
+      // 动态导入规则生成器
+      const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
 
       console.log(cliTools.colors.blue('🔧 初始化服务...'));
 
-      // 初始化服务
-      const llmService = getLLMService();
-      const historyService = await getHistoryService();
-      const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
-
       console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
 
-      // 执行规则学习
-      const learningResult = await ruleLearner.performBatchLearning({
-        minConfidence: 0.1, // 降低置信度阈值
-        maxRules: 10,
-        forceLearn: true, // 强制学习
-        batchSize: 20
-      });
+      // 调试：打印完整的分析结果结构
+      if (true) { // 强制启用调试
+        console.log(cliTools.colors.magenta(`\n🔍 规则生成器接收的数据结构:`));
+        console.log(`data.performance.data.issues 数量: ${result.data?.performance?.data?.issues?.length || 0}`);
+        console.log(`data.security.data.vulnerabilities 数量: ${result.data?.security?.data?.vulnerabilities?.length || 0}`);
+        console.log(`data.standards.data.violations 数量: ${result.data?.standards?.data?.violations?.length || 0}`);
+        console.log(`\n🔍 data.performance.data.issues 示例:`);
+        console.log(JSON.stringify(result.data?.performance?.data?.issues?.[0] || null, null, 2));
+      }
+
+      // 直接从当前分析结果生成规则，无需依赖历史记录
+      const learningResult = await generateRulesFromAnalysis(
+        sqlContent,
+        result,
+        'unknown', // 数据库类型，可以后续优化
+        'rules/learning-rules/manual_review'
+      );
 
       console.log(cliTools.colors.blue('✅ 规则学习执行完成'));
+      console.log(cliTools.colors.magenta(`🔍 规则学习结果: ${JSON.stringify(learningResult, null, 2)}`));
 
       // 显示详细的学习结果
-      console.log(cliTools.colors.magenta(`\n🔍 规则学习调试信息:`));
-      console.log(`   学习成功: ${learningResult.success}`);
-      console.log(`   处理记录: ${learningResult.processedRecords || 0}`);
-      console.log(`   生成规则: ${learningResult.generatedRules || 0}`);
-      console.log(`   批准规则: ${learningResult.approvedRules || 0}`);
-      if (learningResult.message) {
-        console.log(`   消息: ${learningResult.message}`);
-      }
-      if (learningResult.error) {
-        console.log(`   错误: ${learningResult.error}`);
-      }
+      console.log(cliTools.colors.magenta(`\n🔍 规则生成调试信息:`));
+      console.log(`   生成规则: ${learningResult.length || 0}`);
 
-      if (learningResult.generatedRules > 0) {
-        console.log(`${cliTools.colors.green('\n✅ 规则学习完成!')}`);
-        console.log(`   生成规则: ${learningResult.generatedRules} 条`);
-        console.log(`   批准规则: ${learningResult.approvedRules || 0} 条`);
+      if (learningResult && learningResult.length > 0) {
+        console.log(`${cliTools.colors.green('\n✅ 规则生成完成!')}`);
+        console.log(`   生成规则: ${learningResult.length} 条`);
 
-        if (learningResult.details?.rules && learningResult.details.rules.length > 0) {
-          console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
-          learningResult.details.rules.forEach((rule: any, index: number) => {
-            console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
-          });
-        }
+        console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
+        learningResult.forEach((rule: any, index: number) => {
+          console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
+        });
       } else {
         console.log(`${cliTools.colors.yellow('\n⚠️ 本次未生成新规则')}`);
-        console.log(`   可能原因：历史记录不足、置信度过低或规则学习未启用`);
+        console.log(`   可能原因：分析结果中无问题或质量评估未通过`);
       }
 
     } catch (error) {

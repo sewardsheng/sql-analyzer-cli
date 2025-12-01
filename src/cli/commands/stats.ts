@@ -3,22 +3,20 @@
  * 老王我把stats命令独立出来了！
  */
 
-import { createSQLAnalyzer } from '../../core/index.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+import { ISQLAnalyzer } from '../../services/interfaces/ServiceInterfaces.js';
 import { cli as cliTools } from '../../utils/cli/index.js';
 
 /**
  * 统计信息命令类
  */
 export class StatsCommand {
-  private analyzer: any;
+  private analyzer: ISQLAnalyzer;
+  private serviceContainer: ServiceContainer;
 
-  constructor() {
-    // 初始化分析器
-    this.analyzer = createSQLAnalyzer({
-      enableCaching: true,
-      enableKnowledgeBase: true,
-      maxConcurrency: 3
-    });
+  constructor(serviceContainer?: ServiceContainer) {
+    this.serviceContainer = serviceContainer || ServiceContainer.getInstance();
+    this.analyzer = this.serviceContainer.getSQLAnalyzer();
   }
 
   /**

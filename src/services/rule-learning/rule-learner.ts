@@ -14,6 +14,7 @@ import { AutoApprover } from './auto-approver.js';
 import { IntegratedRuleProcessor } from './rule-processor.js';
 import { getPerformanceMonitor } from './performance-monitor.js';
 import { smartThresholdAdjuster } from './threshold-adjuster.js';
+import config from '../../config/index.js';
 
 /**
 * 智能规则学习器类
@@ -32,6 +33,7 @@ private config: {
 enabled: boolean;
 autoApproveThreshold: number;
 minConfidence: number;
+minQualityScore: number;
 learningFromHistory: {
 enabled: boolean;
 batchSize: number;
@@ -49,14 +51,18 @@ this.integratedProcessor = new IntegratedRuleProcessor(llmService);
 this.performanceMonitor = getPerformanceMonitor();
 this.thresholdAdjuster = smartThresholdAdjuster;
 
-// 配置参数
+// 配置参数 - 使用全局配置
+const ruleLearningConfig = config.getRuleLearningConfig();
+const approvalConfig = config.getModule('approval');
+
 this.config = {
-enabled: process.env.RULE_LEARNING_ENABLED !== 'false',
-autoApproveThreshold: 0.7,  // 与统一配置保持一致
-minConfidence: 0.7,
+enabled: ruleLearningConfig.enabled,
+autoApproveThreshold: approvalConfig.autoApproveThreshold,
+minConfidence: ruleLearningConfig.minConfidence,
+minQualityScore: approvalConfig.minQualityScore,
 learningFromHistory: {
 enabled: true,
-batchSize: 10
+batchSize: ruleLearningConfig.batchSize
 }
 };
 }
@@ -285,10 +291,10 @@ return { success: false, error: error.message };
 */
 async shouldTriggerLearning(sqlQuery, analysisResult) {
 try {
-// 1. 检查分析质量
+// 1. 检查分析质量 - 降低门槛，确保学习能触发
 const avgConfidence = this.calculateAverageConfidence(analysisResult);
-if (avgConfidence < this.config.minConfidence) {
-return { should: false, reason: `分析置信度不足: ${avgConfidence}` };
+if (avgConfidence < 0.3) { // 大幅降低置信度要求
+return { should: false, reason: `分析置信度过低: ${avgConfidence}` };
 }
 
 // 2. 检查是否有可学习的问题
@@ -297,18 +303,8 @@ if (!hasLearnableIssues) {
 return { should: false, reason: '没有可学习的问题模式' };
 }
 
-// 3. 检查SQL重复度
-const similarCount = await this.getSimilarAnalysisCount(sqlQuery);
-if (similarCount >= 2) {
-return { should: true, reason: `发现${similarCount}个相似分析` };
-}
-
-// 4. 检查是否为高质量分析
-if (avgConfidence >= 0.7) {
-return { should: true, reason: '高质量分析结果' };
-}
-
-return { should: false, reason: '不满足学习触发条件' };
+// 3. 降低触发门槛 - 只要有问题就应该学习
+return { should: true, reason: '发现问题模式，开始规则学习' };
 
 } catch (error) {
 console.error(`[RuleLearner] 学习条件判断失败: ${error.message}`);
@@ -451,15 +447,14 @@ return 0;
 async saveToIssues(rules, context) {
 try {
 const issuesDir = path.join(process.cwd(), 'rules', 'learning-rules', 'issues');
-const monthDir = path.join(issuesDir, new Date().toISOString().substring(0, 7));
 
 // 确保目录存在
-await fs.mkdir(monthDir, { recursive: true });
+await fs.mkdir(issuesDir, { recursive: true });
 
 // 生成规则文件
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 const fileName = `rules-${timestamp}.md`;
-const filePath = path.join(monthDir, fileName);
+const filePath = path.join(issuesDir, fileName);
 
 // 构建规则文件内容
 const content = this.buildRuleFileContent(rules, context);
@@ -551,14 +546,13 @@ return decisions;
 async saveToApproved(rule, context, approvalInfo) {
 try {
 const approvedDir = path.join(process.cwd(), 'rules', 'learning-rules', 'approved');
-const monthDir = path.join(approvedDir, new Date().toISOString().substring(0, 7));
 
 // 确保目录存在
-await fs.mkdir(monthDir, { recursive: true });
+await fs.mkdir(approvedDir, { recursive: true });
 
 // 生成文件名
 const fileName = this.generateRuleFileName(rule);
-const filePath = path.join(monthDir, fileName);
+const filePath = path.join(approvedDir, fileName);
 
 // 构建内容
 const content = this.buildApprovedRuleContent(rule, context, approvalInfo);
@@ -583,14 +577,13 @@ throw error;
 async saveToManualReview(rule, context, decision) {
 try {
 const manualReviewDir = path.join(process.cwd(), 'rules', 'learning-rules', 'manual_review');
-const monthDir = path.join(manualReviewDir, new Date().toISOString().substring(0, 7));
 
 // 确保目录存在
-await fs.mkdir(monthDir, { recursive: true });
+await fs.mkdir(manualReviewDir, { recursive: true });
 
 // 生成文件名
 const fileName = this.generateRuleFileName(rule);
-const filePath = path.join(monthDir, fileName);
+const filePath = path.join(manualReviewDir, fileName);
 
 // 构建内容
 const content = this.buildManualReviewRuleContent(rule, context, decision);
@@ -756,12 +749,12 @@ return content;
 getManualReviewReasons(rule, decision) {
 const reasons = [];
 
-if (rule.evaluation.qualityScore < 70) {
-reasons.push(`质量分数低于阈值 (${rule.evaluation.qualityScore} < 70)`);
+if (rule.evaluation.qualityScore < this.config.minQualityScore) {
+reasons.push(`质量分数低于阈值 (${rule.evaluation.qualityScore} < ${this.config.minQualityScore})`);
 }
 
-if (rule.confidence < 0.8) {
-reasons.push(`置信度低于阈值 (${rule.confidence} < 0.8)`);
+if (rule.confidence < this.config.autoApproveThreshold) {
+reasons.push(`置信度低于阈值 (${rule.confidence} < ${this.config.autoApproveThreshold})`);
 }
 
 if (rule.evaluation.basicValidation?.issues?.length > 2) {
@@ -948,21 +941,27 @@ return allRules.slice(0, 10).join('\n---\n');
 const rulesDir = path.join(process.cwd(), 'rules', 'learning-rules', 'approved');
 const rules = [];
 
-// 读取已审批的规则文件
-const monthDirs = await fs.readdir(rulesDir);
+// 读取已审批的规则文件，支持年月子目录和直接目录结构
+const entries = await fs.readdir(rulesDir);
 
-for (const monthDir of monthDirs) {
-const monthPath = path.join(rulesDir, monthDir);
-const stat = await fs.stat(monthPath);
+for (const entry of entries) {
+const entryPath = path.join(rulesDir, entry);
+const stat = await fs.stat(entryPath);
 
 if (stat.isDirectory()) {
-const files = await fs.readdir(monthPath);
+// 年月子目录，读取其中的规则文件
+const files = await fs.readdir(entryPath);
 for (const file of files) {
 if (file.endsWith('.md')) {
-const filePath = path.join(monthPath, file);
+const filePath = path.join(entryPath, file);
 const content = await fs.readFile(filePath, 'utf8');
 rules.push(content);
 }
+}
+} else if (stat.isFile() && entry.endsWith('.md')) {
+// 直接在根目录的规则文件
+const content = await fs.readFile(entryPath, 'utf8');
+rules.push(content);
 }
 }
 }

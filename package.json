@@ -13,7 +13,12 @@
     "cli": "tsx src/cli/index.ts",
     "analyze": "tsx src/cli/index.ts analyze",
     "stats": "tsx src/cli/index.ts stats",
-    "scan": "tsx src/cli/index.ts directory"
+    "scan": "tsx src/cli/index.ts directory",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "keywords": [
     "sql",
@@ -52,8 +57,10 @@
     "@hono/node-server": "^1.19.6",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^20.19.25",
+    "@vitest/ui": "^4.0.14",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
   },
   "engines": {
     "node": ">=18.0.0"

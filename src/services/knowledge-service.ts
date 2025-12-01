@@ -479,40 +479,7 @@ await fs.rm(tempDir, { recursive: true, force: true });
 }
 }
 
-// ============================================================================
-// 向后兼容的导出函数
-// ============================================================================
-
-/**
-* 学习文档（向后兼容）
-*/
-export async function learnDocuments(options) {
-const knowledgeService = new KnowledgeService();
-return await knowledgeService.learnDocuments(options);
-}
-
-/**
-* 显示知识库状态（向后兼容）
-*/
-export async function showKnowledgeStatus() {
-const knowledgeService = new KnowledgeService();
-return await knowledgeService.getKnowledgeStatus();
-}
-
-// ============================================================================
-// 新的导出 - 直接访问服务实例
-// ============================================================================
-
-/**
-* 获取知识库服务实例
-* @returns {KnowledgeService} 知识库服务实例
-*/
-export function getKnowledgeService() {
-return new KnowledgeService();
-}
 
 // 导出服务类
 export { KnowledgeService };
 
-// 导出知识库服务实例（用于兼容API调用）
-export const knowledgeService = new KnowledgeService();

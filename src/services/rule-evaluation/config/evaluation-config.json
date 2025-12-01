@@ -1,0 +1,57 @@
+{
+  "duplicateDetection": {
+    "enabled": true,
+    "thresholds": {
+      "exact": 0.95,
+      "semantic": 0.85,
+      "structural": 0.75,
+      "warning": 0.6
+    },
+    "weights": {
+      "exact": 0.4,
+      "semantic": 0.35,
+      "structural": 0.15,
+      "content": 0.1
+    }
+  },
+  "qualityAssessment": {
+    "enabled": true,
+    "dimensionWeights": {
+      "accuracy": 0.25,
+      "practicality": 0.25,
+      "completeness": 0.2,
+      "generality": 0.15,
+      "consistency": 0.15
+    },
+    "thresholds": {
+      "excellent": 90,
+      "good": 75,
+      "fair": 60,
+      "minimum": 40
+    }
+  },
+  "classification": {
+    "enabled": true,
+    "thresholds": {
+      "minQualityScore": 70,
+      "maxDuplicateRisk": "medium",
+      "minCompletenessScore": 60
+    },
+    "manualReviewTriggers": {
+      "lowConfidence": true,
+      "borderlineScores": true,
+      "conflictingResults": true
+    }
+  },
+  "performance": {
+    "batchSize": 10,
+    "concurrency": 3,
+    "cacheTtl": 3600,
+    "timeouts": {
+      "duplicateDetection": 30000,
+      "qualityEvaluation": 60000,
+      "classification": 10000,
+      "total": 120000
+    }
+  }
+}

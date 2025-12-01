@@ -1,0 +1,1 @@
+DELETE FROM orders WHERE user_id = 12345 AND order_date < '2025-01-01';

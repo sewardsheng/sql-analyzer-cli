@@ -3,15 +3,23 @@
  * 触发规则学习系统
  */
 
-import { getHistoryService } from '../../services/history-service.js';
-import { getIntelligentRuleLearner } from '../../services/rule-learning/rule-learner.js';
+import { generateRulesFromHistory } from '../../services/rule-learning/rule-generator.js';
 import { getLLMService } from '../../core/llm-service.js';
 import { cli as cliTools } from '../../utils/cli/index.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
 
 /**
- * 规则学习命令类
+ * 规则学习命令类 - 极简版
+ * 老王我直接使用TestDrivenRuleGenerator，干掉那些SB组件！
  */
 export class LearnCommand {
+  private serviceContainer: ServiceContainer;
+
+  constructor(serviceContainer?: ServiceContainer) {
+    // 使用依赖注入，方便测试
+    this.serviceContainer = serviceContainer || ServiceContainer.getInstance();
+  }
+
   /**
    * 执行规则学习命令
    */
@@ -19,10 +27,8 @@ export class LearnCommand {
     try {
       cliTools.log.info('🧠 开始规则学习...');
 
-      // 初始化服务
-      const historyService = await getHistoryService();
-      const llmService = getLLMService();
-      const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
+      // 从服务容器获取历史服务
+      const historyService = await this.serviceContainer.getHistoryService();
 
       // 获取历史统计
       const historyStats = await historyService.getHistoryStats();
@@ -40,14 +46,13 @@ export class LearnCommand {
         cliTools.log.warn('⚠️  使用--force选项，强制开始学习（历史记录较少）');
       }
 
-      // 执行批量学习
+      // 执行批量学习 - 使用TestDrivenRuleGenerator
       cliTools.log.info('🔄 正在执行批量规则学习...');
       const startTime = Date.now();
 
-      const learningResult = await ruleLearner.performBatchLearning({
-        minConfidence: options.minConfidence || 0.7,
+      const learningResult = await generateRulesFromHistory(historyService, {
         maxRules: options.maxRules || 10,
-        forceLearn: options.force || false
+        minConfidence: options.minConfidence || 0.7
       });
 
       const duration = Date.now() - startTime;
@@ -56,18 +61,17 @@ export class LearnCommand {
       console.log('\n🧠 规则学习结果:');
       console.log('=' .repeat(50));
       console.log(`⏱️  学习耗时: ${(duration / 1000).toFixed(2)}秒`);
-      console.log(`📚 处理的历史记录: ${learningResult.processedRecords || 0}`);
-      console.log(`🔍 识别的模式: ${learningResult.patternsIdentified || 0}`);
-      console.log(`📝 生成的规则: ${learningResult.generatedRules || 0}`);
-      console.log(`✅ 批准的规则: ${learningResult.approvedRules || 0}`);
+      console.log(`📚 处理的历史记录: ${learningResult.processedRecords || historyStats.total}`);
+      console.log(`📝 生成的规则: ${learningResult.rules?.length || 0}`);
+      console.log(`📁 保存位置: rules/learning-rules/manual_review/`);
 
-      if (learningResult.newRules && learningResult.newRules.length > 0) {
+      if (learningResult.rules && learningResult.rules.length > 0) {
         console.log('\n🆕 新生成的规则:');
-        learningResult.newRules.forEach((rule: any, index: number) => {
-          console.log(`  ${index + 1}. ${rule.name || rule.id}`);
+        learningResult.rules.forEach((rule: any, index: number) => {
+          console.log(`  ${index + 1}. ${rule.title || rule.name || rule.id || '未知规则'}`);
           console.log(`     ${rule.description || '无描述'}`);
+          console.log(`     类别: ${rule.category || '通用'}`);
           console.log(`     置信度: ${rule.confidence || '未知'}`);
-          console.log(`     类型: ${rule.type || '通用'}`);
           console.log('');
         });
       }

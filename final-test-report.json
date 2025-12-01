@@ -1,0 +1,460 @@
+{
+  "timestamp": "2025-12-01T11:58:46.994Z",
+  "summary": {
+    "totalRules": 21,
+    "processedRules": 21,
+    "successRate": "100.0%",
+    "averageQualityScore": "N/A",
+    "duplicateRulesFound": 0,
+    "processingTime": "0.01s"
+  },
+  "performance": {
+    "totalTime": "0.01s",
+    "averageTimePerRule": "0ms",
+    "cacheHitRate": "30.0%"
+  },
+  "detailedResults": [
+    {
+      "rule": {
+        "id": "禁止在生产环境使用select",
+        "title": "禁止在生产环境使用SELECT *",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "禁止使用select-反模式",
+        "title": "禁止使用SELECT *反模式",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "强制使用表别名提升可读性",
+        "title": "强制使用表别名提升可读性",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "禁止使用select-查询",
+        "title": "禁止使用SELECT *查询",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "join和where条件缺少索引",
+        "title": "JOIN和WHERE条件缺少索引",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "字符串字面量应使用单引号",
+        "title": "字符串字面量应使用单引号",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "避免隐式类型转换引发索引失效",
+        "title": "避免隐式类型转换引发索引失效",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "join与where关键字字段必须索引化",
+        "title": "JOIN与WHERE关键字字段必须索引化",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "防止sql注入-使用参数化查询",
+        "title": "防止SQL注入：使用参数化查询",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "避免使用非标准双引号包裹字符串",
+        "title": "避免使用非标准双引号包裹字符串",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "禁止使用双引号定义字符串",
+        "title": "禁止使用双引号定义字符串",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "防范sql注入-必须使用参数化查询",
+        "title": "防范SQL注入，必须使用参数化查询",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "join操作应确保连接列存在索引",
+        "title": "JOIN操作应确保连接列存在索引",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "join与where条件缺少索引优化",
+        "title": "JOIN与WHERE条件缺少索引优化",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "mysql应使用标准单引号包裹字符串",
+        "title": "MySQL应使用标准单引号包裹字符串",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "字符串字面量应使用单引号",
+        "title": "字符串字面量应使用单引号",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "mysql禁止使用双引号包裹字符串",
+        "title": "MySQL禁止使用双引号包裹字符串",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "sql语句应格式化并使用单引号",
+        "title": "SQL语句应格式化并使用单引号",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "sql关键字应大写并格式化",
+        "title": "SQL关键字应大写并格式化",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "join查询应确保连接与过滤字段有索引",
+        "title": "JOIN查询应确保连接与过滤字段有索引",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    },
+    {
+      "rule": {
+        "id": "mysql查询应考虑缓存策略",
+        "title": "MySQL查询应考虑缓存策略",
+        "category": "unknown",
+        "severity": "medium"
+      },
+      "evaluation": {
+        "qualityScore": 0,
+        "qualityLevel": "poor",
+        "isDuplicate": false,
+        "duplicateSimilarity": 0,
+        "status": "rejected"
+      },
+      "recommendedAction": {
+        "action": "manual_review",
+        "targetDirectory": "rules/learning-rules/issues/invalid_format/",
+        "priority": "high",
+        "estimatedEffort": 30
+      }
+    }
+  ],
+  "errors": []
+}

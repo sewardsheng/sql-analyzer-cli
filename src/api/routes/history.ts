@@ -8,6 +8,10 @@ import { Hono } from 'hono';
 import chalk from 'chalk';
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse, formatPaginatedResponse } from '../../utils/api/response-formatter.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+
+// 使用ServiceContainer获取历史服务
+const serviceContainer = ServiceContainer.getInstance();
 
 /**
  * 注册历史记录相关路由
@@ -21,8 +25,7 @@ export function registerHistoryRoutes(app: Hono): void {
    */
   app.get('/history/stats', async (c: Context) => {
     try {
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const stats = await historyService.getHistoryStats();
 
       return c.json(formatSuccessResponse(stats, '获取历史记录统计成功'));
@@ -45,8 +48,7 @@ export function registerHistoryRoutes(app: Hono): void {
   app.get('/history/export', async (c: Context) => {
     try {
       const format = c.req.query('format') || 'json';
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const result = await historyService.exportHistory(format);
 
       if (format === 'csv') {
@@ -70,8 +72,7 @@ export function registerHistoryRoutes(app: Hono): void {
    */
   app.get('/history', async (c: Context) => {
     try {
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const history = await historyService.getAllHistory();
 
       return c.json(formatSuccessResponse(history, '获取历史记录成功', {
@@ -92,8 +93,7 @@ export function registerHistoryRoutes(app: Hono): void {
   app.get('/history/:id', async (c: Context) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const record = await historyService.getHistoryById(id);
 
       if (!record) {
@@ -116,8 +116,7 @@ export function registerHistoryRoutes(app: Hono): void {
   app.delete('/history/:id', async (c: Context) => {
     try {
       const id = c.req.param('id');
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const success = await historyService.deleteHistory(id);
 
       if (!success) {
@@ -141,8 +140,7 @@ export function registerHistoryRoutes(app: Hono): void {
    */
   app.delete('/history', async (c: Context) => {
     try {
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const success = await historyService.clearHistory();
 
       if (!success) {
@@ -183,8 +181,7 @@ export function registerHistoryRoutes(app: Hono): void {
         console.error('JSON解析失败:', jsonError);
         throw createValidationError('无效的JSON请求体');
       }
-      const { getHistoryService } = await import('../../services/history-service.js');
-      const historyService = await getHistoryService();
+      const historyService = await serviceContainer.getHistoryService();
       const results = await historyService.searchHistory(body.query || '', body);
 
       return c.json(formatSuccessResponse(results, '搜索历史记录成功'));

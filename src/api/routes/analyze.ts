@@ -5,16 +5,18 @@
 
 import { Context } from 'hono';
 import { Hono } from 'hono';
-import { createSQLAnalyzer } from '../../core/index.js';
 import { getGlobalLogger } from '../../utils/logger.js';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+import { DatabaseIdentifier } from '../../core/identification/db-identifier.js';
 
-// 创建SQL分析器实例
-const sqlAnalyzer = createSQLAnalyzer({
-  enableCaching: true,
-  enableKnowledgeBase: true,
-  maxConcurrency: 3
-});
+// 使用ServiceContainer获取SQL分析器实例
+const serviceContainer = ServiceContainer.getInstance();
+const sqlAnalyzer = serviceContainer.getSQLAnalyzer();
+
+// 初始化数据库识别器
+const dbIdentifier = new DatabaseIdentifier();
+
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 // @ts-ignore
@@ -27,6 +29,7 @@ interface AnalysisOptions {
   security?: boolean;
   standards?: boolean;
   learn?: boolean;
+  databaseType?: string;
 }
 
 // 批量分析请求体接口
@@ -81,14 +84,19 @@ export function registerAnalyzeRoutes(app: Hono): void {
         throw createValidationError('SQL语句不能为空');
       }
 
+      // 识别数据库类型
+      const identificationResult = dbIdentifier.identify(sqlQuery);
+      const databaseType = identificationResult.type || 'unknown';
+
       // 准备分析选项
       const options: AnalysisOptions = {
         performance: body.options?.performance !== false,
         security: body.options?.security !== false,
-        standards: body.options?.standards !== false
+        standards: body.options?.standards !== false,
+        databaseType: databaseType  // 传递识别的数据库类型
       };
 
-      
+
       // 执行SQL分析
       const result = await sqlAnalyzer.analyzeSQL(sqlQuery, options);
 
@@ -97,8 +105,7 @@ export function registerAnalyzeRoutes(app: Hono): void {
       // 异步历史记录保存 + 智能规则学习 - 不阻塞响应
       setImmediate(async () => {
         try {
-          const { getHistoryService } = await import('../../services/history-service.js');
-          const historyService = await getHistoryService();
+          const historyService = await serviceContainer.getHistoryService();
 
           // 使用统一的JSON解析器提取维度分析结果，添加安全检查
           const analysisData = result.data || result; // 如果data不存在，使用result本身
@@ -108,7 +115,7 @@ export function registerAnalyzeRoutes(app: Hono): void {
         const recordId = await historyService.saveAnalysis({
           id: `api_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           timestamp: new Date().toISOString(),
-          databaseType: 'unknown',
+          databaseType: databaseType,
           type: 'api',
           sql: sqlQuery, // 添加原始SQL字段
           input: {
@@ -131,34 +138,44 @@ export function registerAnalyzeRoutes(app: Hono): void {
           }
         });
 
-          // 触发智能规则学习（与CLI保持一致）
+          // 触发测试驱动规则学习（新的简化架构）
           if (body.options?.learn !== false) {
             try {
-              const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
-              const { getLLMService } = await import('../../core/llm-service.js');
+              const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
 
-              const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
+              // 构建测试用例
+              const testCase = {
+                sql: sqlQuery,
+                analysisResult: result.data || result,
+                databaseType: databaseType,
+                timestamp: new Date().toISOString(),
+                context: {
+                  performance: dimensionAnalysis.performance || {},
+                  security: dimensionAnalysis.security || {},
+                  standards: dimensionAnalysis.standards || {}
+                }
+              };
 
-              // 异步执行批量规则学习，与CLI保持一致的参数
-              ruleLearner.performBatchLearning({
-                minConfidence: 0.1, // 与CLI保持一致
-                maxRules: 10,
-                forceLearn: true, // 强制学习
-                batchSize: 20
-              }).catch((error: any) => {
-                logWarn(LogCategory.RULE_LEARNING, `API规则学习失败: ${error.message}`, {
+              // 异步执行规则生成，直接保存到manual_review
+              generateRulesFromAnalysis(
+                sqlQuery,
+                testCase.analysisResult,
+                databaseType,
+                'rules/learning-rules/manual_review'
+              ).catch((error: any) => {
+                logWarn(LogCategory.RULE_LEARNING, `测试驱动规则生成失败: ${error.message}`, {
                   sql: sqlQuery,
                   error: error.stack
                 });
               });
 
               const logger = getGlobalLogger();
-              logger.info('API规则学习已触发', {
+              logger.info('测试驱动规则生成已触发', {
                 sql: sqlQuery.substring(0, 100)
               });
             } catch (learnError: any) {
               const logger = getGlobalLogger();
-              logger.error(`API规则学习初始化失败: ${learnError.message}`, learnError, {
+              logger.error(`测试驱动规则学习初始化失败: ${learnError.message}`, learnError, {
                 sql: sqlQuery
               });
             }
@@ -234,8 +251,7 @@ export function registerAnalyzeRoutes(app: Hono): void {
       // 异步批量历史记录保存 + 智能规则学习 - 不阻塞响应
       setImmediate(async () => {
         try {
-          const { getHistoryService } = await import('../../services/history-service.js');
-          const historyService = await getHistoryService();
+          const historyService = await serviceContainer.getHistoryService();
 
           // 为每条成功的SQL保存历史记录
           for (const result of results) {
@@ -247,32 +263,43 @@ export function registerAnalyzeRoutes(app: Hono): void {
                   type: 'batch'
                 });
 
-                // 触发智能规则学习（如果启用）
+                // 触发测试驱动规则学习（新的简化架构）
                 if (body.options?.learn !== false) {
-                  const config = getLearningConfig();
+                  try {
+                    const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
+                    const llmJsonParser = await import('../../core/llm-json-parser.js');
 
-                  if (config.learning?.enabled) {
-                    const avgConfidence = calculateAverageConfidence(result);
-                    const minConfidence = config.learning?.minConfidence ?? 0.7;
+                    // 提取维度分析结果
+                    const analysisData = result.data || result;
+                    const dimensionAnalysis = llmJsonParser.extractDimensionAnalysis(analysisData);
 
-                    if (avgConfidence >= minConfidence) {
-                      try {
-                        const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
-                        const { getLLMService } = await import('../../core/llm-service.js');
-
-                        const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
-
-                        // 异步执行规则学习
-                        ruleLearner.learnFromAnalysis(result, result.sql).catch((error: any) => {
-                          logWarn(LogCategory.RULE_LEARNING, `批量规则学习失败: ${error.message}`, {
-                            sql: result.sql,
-                            error: error.stack
-                          });
-                        });
-                      } catch (learnError: any) {
-                        logError(LogCategory.RULE_LEARNING, `批量规则学习初始化失败: ${learnError.message}`, learnError);
+                    // 构建测试用例
+                    const testCase = {
+                      sql: result.sql,
+                      analysisResult: analysisData,
+                      databaseType: 'unknown', // 批量处理时暂不识别具体类型
+                      timestamp: new Date().toISOString(),
+                      context: {
+                        performance: dimensionAnalysis.performance || {},
+                        security: dimensionAnalysis.security || {},
+                        standards: dimensionAnalysis.standards || {}
                       }
-                    }
+                    };
+
+                    // 异步执行规则生成，直接保存到manual_review
+                    generateRulesFromAnalysis(
+                      result.sql,
+                      testCase.analysisResult,
+                      testCase.databaseType,
+                      'rules/learning-rules/manual_review'
+                    ).catch((error: any) => {
+                      logWarn(LogCategory.RULE_LEARNING, `批量测试驱动规则生成失败: ${error.message}`, {
+                        sql: result.sql,
+                        error: error.stack
+                      });
+                    });
+                  } catch (learnError: any) {
+                    logError(LogCategory.RULE_LEARNING, `批量测试驱动规则学习初始化失败: ${learnError.message}`, learnError);
                   }
                 }
               } catch (err: any) {

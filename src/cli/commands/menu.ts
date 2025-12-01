@@ -1,6 +1,6 @@
 /**
  * menu命令模块 - 交互式菜单
- * 老王我做了一个超级酷的交互式菜单！用户体验拉满！
+ * 提供用户友好的交互式菜单界面
  */
 
 import readline from 'readline';
@@ -10,51 +10,46 @@ import { resolve } from 'path';
 import { cli as cliTools } from '../../utils/cli/index.js';
 import HealthService from '../../services/health-service.js';
 import { getGlobalLogger } from '../../utils/logger.js';
-import { createSQLAnalyzer } from '../../core/index.js';
-import { createFileAnalyzerService } from '../../services/FileAnalyzerService.js';
-import { getHistoryService } from '../../services/history-service.js';
-import { getKnowledgeService } from '../../services/knowledge-service.js';
 import { config } from '../../config/index.js';
 import { ResultFormatter } from '../../utils/formatter.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
 
 /**
- * 交互式菜单命令类
+ * 交互式菜单命令类 - 重构版
+ * 使用ServiceContainer统一管理服务，消除重复代码
  */
 export class MenuCommand {
   private rl: readline.Interface;
+  private serviceContainer: ServiceContainer;
   private healthService: HealthService;
   private analyzer: any;
   private fileAnalyzer: any;
-  private historyService: any;
   private knowledgeService: any;
   private resultFormatter: ResultFormatter;
 
-  constructor() {
+  constructor(serviceContainer?: ServiceContainer) {
+    // 使用依赖注入，方便测试
+    this.serviceContainer = serviceContainer || ServiceContainer.getInstance();
     this.healthService = new HealthService();
 
-    // 初始化分析器
-    this.analyzer = createSQLAnalyzer({
-      enableCaching: true,
-      enableKnowledgeBase: true,
-      maxConcurrency: 3
-    });
+    // 从服务容器获取所有服务（同步服务）
+    this.analyzer = this.serviceContainer.getSQLAnalyzer();
+    this.fileAnalyzer = this.serviceContainer.getFileAnalyzerService();
+    this.knowledgeService = this.serviceContainer.getKnowledgeService();
+    this.resultFormatter = this.serviceContainer.getResultFormatter();
+  }
 
-    // 初始化文件分析服务
-    this.fileAnalyzer = createFileAnalyzerService({
-      enableCache: true,
-      enableKnowledgeBase: true,
-      maxConcurrency: 3
-    });
+  /**
+   * 获取历史服务（直接从ServiceContainer获取，它会处理复用）
+   */
+  private async getHistoryService(): Promise<any> {
+    return await this.serviceContainer.getHistoryService();
+  }
 
-    // 初始化历史服务
-    this.historyService = getHistoryService();
-
-    // 初始化知识库服务
-    this.knowledgeService = getKnowledgeService();
-
-    // 初始化结果格式化器
-    this.resultFormatter = new ResultFormatter();
-
+  /**
+   * 初始化readline接口
+   */
+  private initReadline() {
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
@@ -65,6 +60,9 @@ export class MenuCommand {
    * 处理menu命令
    */
   async execute(): Promise<void> {
+    // 初始化readline接口
+    this.initReadline();
+
     cliTools.log.info('🚀 启动SQL分析器交互式菜单...');
 
     try {
@@ -398,7 +396,8 @@ export class MenuCommand {
 
       // 保存历史记录
       try {
-        await this.historyService.addAnalysis({
+        const historyService = await this.getHistoryService();
+        await historyService.addAnalysis({
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
           filePath: resolvedPath,
@@ -848,7 +847,8 @@ export class MenuCommand {
       cliTools.log.info('🔄 正在加载历史记录...');
 
       // 获取历史记录
-      const records = await this.historyService.getAllHistory({ limit: 20 });
+      const historyService = await this.getHistoryService();
+      const records = await historyService.getAllHistory({ limit: 20 });
 
       if (records.length === 0) {
         console.log(cliTools.colors.yellow('\n📭 暂无历史记录'));
@@ -902,7 +902,8 @@ export class MenuCommand {
 
       cliTools.log.info('🔄 正在搜索历史记录...');
 
-      const records = await this.historyService.searchHistory(searchOptions.sql || '', searchOptions);
+      const historyService = await this.getHistoryService();
+      const records = await historyService.searchHistory(searchOptions.sql || '', searchOptions);
 
       if (records.length === 0) {
         console.log(cliTools.colors.yellow('\n📭 未找到匹配的历史记录'));
@@ -939,7 +940,8 @@ export class MenuCommand {
     try {
       cliTools.log.info('🔄 正在统计历史记录...');
 
-      const statistics = await this.historyService.getHistoryStats();
+      const historyService = await this.getHistoryService();
+      const statistics = await historyService.getHistoryStats();
 
       console.log(`\n${cliTools.colors.green('📈 历史记录统计信息:')}`);
       console.log(`总分析次数: ${cliTools.colors.yellow(statistics.total?.toString() || '0')}`);
@@ -989,7 +991,8 @@ export class MenuCommand {
       if (confirm === 'YES') {
         cliTools.log.info('🔄 正在清空历史记录...');
 
-        await this.historyService.clearHistory();
+        const historyService = await this.getHistoryService();
+        await historyService.clearHistory();
 
         console.log(cliTools.colors.green('\n✅ 历史记录已清空'));
       } else {
@@ -1639,7 +1642,8 @@ export class MenuCommand {
       }
     };
 
-    await this.historyService.saveAnalysis(historyData);
+    const historyService = await this.getHistoryService();
+    await historyService.saveAnalysis(historyData);
   }
 
   /**
@@ -1652,57 +1656,41 @@ export class MenuCommand {
     try {
       console.log(cliTools.colors.blue('📥 开始导入规则学习模块...'));
 
-      // 动态导入规则学习器
-      const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
-      const { getLLMService } = await import('../../core/llm-service.js');
-      const { getHistoryService } = await import('../../services/history-service.js');
+      // 动态导入规则生成器
+      const { generateRulesFromHistory } = await import('../../services/rule-learning/rule-generator.js');
 
       console.log(cliTools.colors.blue('🔧 初始化服务...'));
 
       // 初始化服务
-      const llmService = getLLMService();
-      const historyService = await getHistoryService();
-      const ruleLearner = getIntelligentRuleLearner(llmService, historyService);
+      const historyService = await this.getHistoryService();
 
       console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
 
       // 执行规则学习
-      const learningResult = await ruleLearner.performBatchLearning({
-        minConfidence: 0.1, // 降低置信度阈值
+      const learningResult = await generateRulesFromHistory(historyService, {
         maxRules: 10,
-        forceLearn: true, // 强制学习
-        batchSize: 20
+        minConfidence: 0.1 // 降低置信度阈值
       });
 
       console.log(cliTools.colors.blue('✅ 规则学习执行完成'));
 
       // 显示详细的学习结果
       console.log(cliTools.colors.magenta(`\n🔍 规则学习调试信息:`));
-      console.log(`   学习成功: ${learningResult.success}`);
       console.log(`   处理记录: ${learningResult.processedRecords || 0}`);
-      console.log(`   生成规则: ${learningResult.generatedRules || 0}`);
-      console.log(`   批准规则: ${learningResult.approvedRules || 0}`);
-      if (learningResult.message) {
-        console.log(`   消息: ${learningResult.message}`);
-      }
-      if (learningResult.error) {
-        console.log(`   错误: ${learningResult.error}`);
-      }
+      console.log(`   生成规则: ${learningResult.rules?.length || 0}`);
 
-      if (learningResult.generatedRules > 0) {
+      if (learningResult.rules && learningResult.rules.length > 0) {
         console.log(`${cliTools.colors.green('\n✅ 规则学习完成!')}`);
-        console.log(`   生成规则: ${learningResult.generatedRules} 条`);
-        console.log(`   批准规则: ${learningResult.approvedRules || 0} 条`);
+        console.log(`   生成规则: ${learningResult.rules.length} 条`);
+        console.log(`   处理记录: ${learningResult.processedRecords} 条`);
 
-        if (learningResult.details?.rules && learningResult.details.rules.length > 0) {
-          console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
-          learningResult.details.rules.forEach((rule: any, index: number) => {
-            console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
-          });
-        }
+        console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
+        learningResult.rules.forEach((rule: any, index: number) => {
+          console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
+        });
       } else {
         console.log(`${cliTools.colors.yellow('\n⚠️ 本次未生成新规则')}`);
-        console.log(`   可能原因：历史记录不足、置信度过低或规则学习未启用`);
+        console.log(`   可能原因：历史记录不足、置信度过低或没有符合要求的分析结果`);
       }
 
     } catch (error) {
@@ -1778,7 +1766,8 @@ export class MenuCommand {
       }
     };
 
-    await this.historyService.saveAnalysis(historyData);
+    const historyService = await this.getHistoryService();
+    await historyService.saveAnalysis(historyData);
   }
 
   /**

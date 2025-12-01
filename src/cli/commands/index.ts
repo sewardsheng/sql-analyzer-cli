@@ -9,3 +9,4 @@ export { KnowledgeCommand } from './knowledge.js';
 export { HistoryCommand } from './history.js';
 export { LearnCommand } from './learn.js';
 export { MenuCommand } from './menu.js';
+export { default as EvaluateCommand } from './evaluate.js';
