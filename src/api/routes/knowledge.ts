@@ -165,42 +165,5 @@ export function registerKnowledgeRoutes(app: Hono): void {
     }
   });
 
-  /**
-   * GET /api/knowledge/export - 导出知识库
-   * 导出知识库中的文档数据
-   *
-   * Query Parameters:
-   * - format: 导出格式 (json|csv)，默认为json
-   * - includeContent: 是否包含文档内容 (true|false)，默认为false
-   */
-  app.get('/knowledge/export', async (c: Context) => {
-    try {
-      const format = c.req.query('format') || 'json';
-      const includeContent = c.req.query('includeContent') === 'true';
-
-      console.log(chalk.blue(`[API] 导出知识库，格式: ${format}`));
-
-      const { getKnowledgeService } = await import('../../services/knowledge-service.js');
-      const knowledgeService = getKnowledgeService();
-      const result = await knowledgeService.exportKnowledge({ format, includeContent });
-
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      if (format === 'csv') {
-        c.header('Content-Type', 'text/csv');
-        c.header('Content-Disposition', 'attachment; filename="knowledge.csv"');
-        return c.text(typeof (result as any).data === 'string' ? (result as any).data : JSON.stringify((result as any).data));
-      } else {
-        return c.json(formatSuccessResponse(result.data, '导出知识库成功'));
-      }
-    } catch (error: any) {
-      console.error(chalk.red(`[API] 导出知识库失败: ${error.message}`));
-
-      // 错误会被中间件处理，这里重新抛出
-      throw error;
-    }
-  });
-
+  
   }

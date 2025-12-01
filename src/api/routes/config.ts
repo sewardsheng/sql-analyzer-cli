@@ -10,6 +10,7 @@ import { createValidationError } from '../../utils/api/api-error.js';
 // @ts-ignore
 import { config } from '../../config/index.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
+import { updateEnvFile } from '../../utils/env-helper.js';
 
 /**
  * 注册配置管理相关路由
@@ -108,7 +109,31 @@ export function registerConfigRoutes(app: Hono): void {
         throw createValidationError('请求体必须包含 "value" 字段');
       }
 
+      // 配置键到环境变量的映射
+      const envKeyMap: { [key: string]: string } = {
+        'server.port': 'API_PORT',
+        'server.host': 'API_HOST',
+        'llm.apiKey': 'CUSTOM_API_KEY',
+        'llm.model': 'CUSTOM_MODEL',
+        'llm.baseUrl': 'CUSTOM_BASE_URL',
+        'llm.timeout': 'LLM_TIMEOUT',
+        'llm.maxRetries': 'LLM_MAX_RETRIES',
+        'knowledge.enabled': 'KNOWLEDGE_BASE_ENABLED',
+        'knowledge.rulesDir': 'KNOWLEDGE_RULES_DIR',
+        'ruleLearning.enabled': 'RULE_LEARNING_ENABLED',
+        'ruleLearning.minConfidence': 'RULE_LEARNING_MIN_CONFIDENCE',
+        'ruleLearning.batchSize': 'RULE_LEARNING_BATCH_SIZE',
+        'ruleLearning.autoApproveThreshold': 'RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD'
+      };
+
+      // 更新内存中的配置
       config.set(key, body.value);
+
+      // 如果有对应的环境变量，也更新.env文件
+      const envKey = envKeyMap[key];
+      if (envKey) {
+        updateEnvFile(envKey, String(body.value));
+      }
 
       console.log(chalk.green(`[API] 配置项 "${key}" 已更新为: ${body.value}`));
 

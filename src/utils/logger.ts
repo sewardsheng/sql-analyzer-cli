@@ -222,7 +222,8 @@ export class EnhancedLogger {
         this.startPerformanceMonitoring();
       }
 
-      this.info(LogCategory.SYSTEM, '日志系统初始化完成');
+      // 静默初始化，不显示初始化消息
+      // this.info(LogCategory.SYSTEM, '日志系统初始化完成');
     } catch (error) {
       console.error('日志系统初始化失败:', error);
     }
@@ -928,9 +929,10 @@ export class EnhancedLogger {
     this.performanceMetrics.clear();
     this.aggregationData.clear();
 
-    await this.log(LogLevel.INFO, LogCategory.SYSTEM, 'EnhancedLogger 已清理', {
-      timestamp: new Date().toISOString()
-    });
+    // 静默清理，不显示清理消息
+    // await this.log(LogLevel.INFO, LogCategory.SYSTEM, 'EnhancedLogger 已清理', {
+    //   timestamp: new Date().toISOString()
+    // });
   }
 
   /**
@@ -983,18 +985,36 @@ export class EnhancedLogger {
   }
 }
 
-// 创建全局日志记录器实例
-export const globalLogger = new EnhancedLogger({
-  level: LogLevel.INFO,
-  enableConsole: true,
-  enableFile: true,
-  enablePerformance: true,
-  enableAggregation: true, // 保留聚合功能但调整频率
-  logDir: './logs',
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  maxFiles: 10,
-  aggregationInterval: 300000, // 改为5分钟，减少文件生成频率
-  minAggregationLogs: 10 // 只有当有足够日志时才生成聚合文件
+// 延迟初始化的全局日志记录器实例
+let _globalLoggerInstance: EnhancedLogger | null = null;
+
+/**
+ * 获取全局日志记录器实例（按需初始化）
+ */
+export function getGlobalLogger(): EnhancedLogger {
+  if (!_globalLoggerInstance) {
+    _globalLoggerInstance = new EnhancedLogger({
+      level: LogLevel.INFO,
+      enableConsole: true,
+      enableFile: true,
+      enablePerformance: true,
+      enableAggregation: true, // 保留聚合功能但调整频率
+      logDir: './logs',
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+      maxFiles: 10,
+      aggregationInterval: 300000, // 改为5分钟，减少文件生成频率
+      minAggregationLogs: 10 // 只有当有足够日志时才生成聚合文件
+    });
+  }
+  return _globalLoggerInstance;
+}
+
+// 为了向后兼容，导出一个访问器
+export const globalLogger = new Proxy({} as EnhancedLogger, {
+  get(target, prop) {
+    const logger = getGlobalLogger();
+    return logger[prop as keyof EnhancedLogger];
+  }
 });
 
 /**

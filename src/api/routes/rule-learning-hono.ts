@@ -9,6 +9,7 @@ import { getIntelligentRuleLearner } from '../../services/rule-learning/rule-lea
 import { getLLMService } from '../../core/llm-service.js';
 import { getHistoryService } from '../../services/history-service.js';
 import { info, error as logError, logApiRequest, logApiError, LogCategory } from '../../utils/logger.js';
+import { updateEnvFile } from '../../utils/env-helper.js';
 
 const router = new Hono();
 
@@ -20,6 +21,24 @@ return config.getRuleLearningConfig();
 // 更新学习配置
 function updateLearningConfig(newConfig) {
 config.set('ruleLearning', config.deepMerge(config.getRuleLearningConfig(), newConfig));
+
+  // 同时更新.env文件中的对应环境变量
+  if (newConfig.enabled !== undefined) {
+    updateEnvFile('RULE_LEARNING_ENABLED', newConfig.enabled ? 'true' : 'false');
+    info(`已更新规则学习启用状态: ${newConfig.enabled}`, LogCategory.SYSTEM);
+  }
+  if (newConfig.minConfidence !== undefined) {
+    updateEnvFile('RULE_LEARNING_MIN_CONFIDENCE', String(newConfig.minConfidence));
+    info(`已更新规则学习最小置信度: ${newConfig.minConfidence}`, LogCategory.SYSTEM);
+  }
+  if (newConfig.batchSize !== undefined) {
+    updateEnvFile('RULE_LEARNING_BATCH_SIZE', String(newConfig.batchSize));
+    info(`已更新规则学习批处理大小: ${newConfig.batchSize}`, LogCategory.SYSTEM);
+  }
+  if (newConfig.autoApproveThreshold !== undefined) {
+    updateEnvFile('RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD', String(newConfig.autoApproveThreshold * 100));
+    info(`已更新规则学习自动批准阈值: ${newConfig.autoApproveThreshold}`, LogCategory.SYSTEM);
+  }
 }
 
 // 重置配置

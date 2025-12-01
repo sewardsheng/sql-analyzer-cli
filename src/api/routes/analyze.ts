@@ -5,7 +5,16 @@
 
 import { Context } from 'hono';
 import { Hono } from 'hono';
-import { sqlAnalyzer } from '../../core/index.js';
+import { createSQLAnalyzer } from '../../core/index.js';
+import { getGlobalLogger } from '../../utils/logger.js';
+import { llmJsonParser } from '../../core/llm-json-parser.js';
+
+// 创建SQL分析器实例
+const sqlAnalyzer = createSQLAnalyzer({
+  enableCaching: true,
+  enableKnowledgeBase: true,
+  maxConcurrency: 3
+});
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 // @ts-ignore
@@ -81,7 +90,7 @@ export function registerAnalyzeRoutes(app: Hono): void {
 
       
       // 执行SQL分析
-      const result = await sqlAnalyzer.analyze(sqlQuery, options);
+      const result = await sqlAnalyzer.analyzeSQL(sqlQuery, options);
 
       const responseTime = Date.now() - startTime;
 
@@ -91,53 +100,79 @@ export function registerAnalyzeRoutes(app: Hono): void {
           const { getHistoryService } = await import('../../services/history-service.js');
           const historyService = await getHistoryService();
 
-          // 保存历史记录
-          const recordId = await historyService.saveAnalysis({
-            sql: sqlQuery,
-            result: result,
-            type: 'command'
-          });
+          // 使用统一的JSON解析器提取维度分析结果，添加安全检查
+          const analysisData = result.data || result; // 如果data不存在，使用result本身
+          const dimensionAnalysis = llmJsonParser.extractDimensionAnalysis(analysisData);
 
-          // 触发智能规则学习（如果启用且有高质量分析结果）
-          if (body.options?.learn !== false && result.success) {
-            const config = getLearningConfig();
+        // 保存历史记录（与CLI保持一致格式）
+        const recordId = await historyService.saveAnalysis({
+          id: `api_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: new Date().toISOString(),
+          databaseType: 'unknown',
+          type: 'api',
+          sql: sqlQuery, // 添加原始SQL字段
+          input: {
+            content: sqlQuery.length > 500 ? sqlQuery.substring(0, 500) + '...' : sqlQuery,
+            path: 'api-request',
+            name: 'API请求'
+          },
+          result: {
+            success: result.success !== false, // 添加成功标志
+            summary: dimensionAnalysis.summary,
+            confidence: 0.85, // 移除置信度依赖，使用固定默认值
+            issues: dimensionAnalysis.allIssues || [],
+            recommendations: dimensionAnalysis.allRecommendations || [],
+            sqlFix: dimensionAnalysis.sqlFixData || null
+          },
+          metadata: {
+            processingTime: result.metadata?.processingTime || 0,
+            analyzer: 'api',
+            version: '1.0.0'
+          }
+        });
 
-            if (config.learning?.enabled) {
-              const avgConfidence = calculateAverageConfidence(result);
-              const minConfidence = config.learning?.minConfidence ?? 0.7;
+          // 触发智能规则学习（与CLI保持一致）
+          if (body.options?.learn !== false) {
+            try {
+              const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
+              const { getLLMService } = await import('../../core/llm-service.js');
 
-              // 只对高质量分析结果进行学习
-              if (avgConfidence >= minConfidence) {
-                try {
-                  const { getIntelligentRuleLearner } = await import('../../services/rule-learning/rule-learner.js');
-                  const { getLLMService } = await import('../../core/llm-service.js');
+              const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
 
-                  const ruleLearner = getIntelligentRuleLearner(getLLMService(), historyService);
+              // 异步执行批量规则学习，与CLI保持一致的参数
+              ruleLearner.performBatchLearning({
+                minConfidence: 0.1, // 与CLI保持一致
+                maxRules: 10,
+                forceLearn: true, // 强制学习
+                batchSize: 20
+              }).catch((error: any) => {
+                logWarn(LogCategory.RULE_LEARNING, `API规则学习失败: ${error.message}`, {
+                  sql: sqlQuery,
+                  error: error.stack
+                });
+              });
 
-                  // 异步执行规则学习，不阻塞主流程
-                  ruleLearner.learnFromAnalysis(result, sqlQuery).catch((error: any) => {
-                    logWarn(LogCategory.RULE_LEARNING, `规则学习失败: ${error.message}`, {
-                      sql: sqlQuery,
-                      error: error.stack
-                    });
-                  });
-                } catch (learnError: any) {
-                  logError(LogCategory.RULE_LEARNING, `规则学习初始化失败: ${learnError.message}`, learnError, {
-                    sql: sqlQuery
-                  });
-                }
-              }
+              const logger = getGlobalLogger();
+              logger.info('API规则学习已触发', {
+                sql: sqlQuery.substring(0, 100)
+              });
+            } catch (learnError: any) {
+              const logger = getGlobalLogger();
+              logger.error(`API规则学习初始化失败: ${learnError.message}`, learnError, {
+                sql: sqlQuery
+              });
             }
           }
         } catch (historyError: any) {
-          logError(LogCategory.HISTORY, `异步保存失败: ${historyError.message}`, historyError, {
+          const logger = getGlobalLogger();
+          logger.error(`异步保存失败: ${historyError.message}`, historyError, {
             sql: sqlQuery
           });
         }
       });
 
       // 使用响应格式化工具
-      return c.json(formatSuccessResponse(result.data, {
+      return c.json(formatSuccessResponse(result, {
         ...result.metadata,
         responseTime
       }));
@@ -275,7 +310,7 @@ export function registerAnalyzeRoutes(app: Hono): void {
    */
   app.get('/analyze/status', async (c: Context) => {
     try {
-      const status = sqlAnalyzer.getStatus();
+      const status = sqlAnalyzer.getStats();
 
       return c.json(formatSuccessResponse(status, {
         timestamp: new Date().toISOString()
@@ -298,17 +333,20 @@ export function registerAnalyzeRoutes(app: Hono): void {
  * @param analysisResult - 分析结果
  * @returns 平均置信度
  */
-function calculateAverageConfidence(analysisResult: AnalysisResult): number {
+function calculateAverageConfidence(analysisResult: any): number {
   const confidences: number[] = [];
 
-  if (analysisResult.data?.performance?.metadata?.confidence) {
-    confidences.push(analysisResult.data.performance.metadata.confidence);
+  // 兼容新旧两种格式
+  const data = analysisResult.data || analysisResult;
+
+  if (data?.performance?.metadata?.confidence) {
+    confidences.push(data.performance.metadata.confidence);
   }
-  if (analysisResult.data?.security?.metadata?.confidence) {
-    confidences.push(analysisResult.data.security.metadata.confidence);
+  if (data?.security?.metadata?.confidence) {
+    confidences.push(data.security.metadata.confidence);
   }
-  if (analysisResult.data?.standards?.metadata?.confidence) {
-    confidences.push(analysisResult.data.standards.metadata.confidence);
+  if (data?.standards?.metadata?.confidence) {
+    confidences.push(data.standards.metadata.confidence);
   }
 
   return confidences.length > 0

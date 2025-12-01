@@ -3,14 +3,12 @@
 * 优化上下文信息管理，提升LLM调用效率
 */
 
-// 导出增强型分析器
+// 导出SQL分析器
 export {
-EnhancedSQLAnalyzer,
-createEnhancedSQLAnalyzer
-} from './EnhancedSQLAnalyzer.js';
+SQLAnalyzer,
+createSQLAnalyzer
+} from './SQLAnalyzer.js';
 
-// 导出原有分析器（兼容性）
-export { SQLAnalyzer, sqlAnalyzer } from './sql-analyzer.js';
 export { LlmJsonParser, llmJsonParser } from './llm-json-parser.js';
 export { LLMService, llmService } from './llm-service.js';
 
@@ -35,5 +33,5 @@ retrieveKnowledge
 // 导出数据库识别
 export { DatabaseIdentifier } from './identification/db-identifier.js';
 
-// 默认导出增强型分析器
-export { default } from './EnhancedSQLAnalyzer.js';
+// 默认导出SQL分析器
+export { SQLAnalyzer as default } from './SQLAnalyzer.js';

@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 
 // 获取项目根目录
 const projectRoot = join(__dirname, '..');
-const cliPath = join(projectRoot, 'src', 'cli', 'sql-analyzer-cli.ts');
+const cliPath = join(projectRoot, 'src', 'cli', 'index.ts');
 
 // 使用tsk执行TypeScript CLI
 const child = spawn('npx', ['tsx', cliPath, ...process.argv.slice(2)], {

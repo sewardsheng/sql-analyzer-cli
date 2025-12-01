@@ -4,9 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Bun
-bun.lockb
-bun.lock
 
 # Environment variables
 .env

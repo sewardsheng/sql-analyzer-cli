@@ -88,11 +88,9 @@ class HealthService {
   private async checkCoreModules(): Promise<CheckResult> {
     const startTime = Date.now();
     const coreModules = [
-      'src/core/EnhancedSQLAnalyzer.js',
-      'src/core/context/ContextManager.js',
-      'src/core/llm-service.js',
-      'src/core/tools/index.js',
-      'src/utils/logger.js'
+      'src/core/SQLAnalyzer.ts',
+      'src/core/context/ContextManager.ts',
+      'src/utils/logger.ts'
     ];
 
     const results: CheckResult = {

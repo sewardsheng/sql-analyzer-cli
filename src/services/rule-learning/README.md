@@ -425,13 +425,13 @@ try {
 
 ```bash
 # 运行所有测试
-bun test tests/rule-learning.test.js
+pnpm test tests/rule-learning.test.js
 
 # 运行特定测试
-bun test tests/rule-learning.test.js --grep "配置管理"
+pnpm test tests/rule-learning.test.js --grep "配置管理"
 
 # 运行演示
-bun run examples/rule-learning-demo.js
+pnpm run examples/rule-learning-demo.js
 ```
 
 ## 扩展性

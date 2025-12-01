@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 /**
  * SQL Analyzer API 服务器入口点
@@ -32,7 +32,7 @@ try {
   const server = await createApiServer(serverConfig);
 
   // 优雅关闭处理
-  const gracefulShutdown = (signal: string): void => {
+  const gracefulShutdown = async (signal: string): Promise<void> => {
     logInfo(LogCategory.SYSTEM, `收到 ${signal} 信号，正在优雅关闭服务器...`);
 
     if (server && typeof server.stop === 'function') {
@@ -40,8 +40,19 @@ try {
     }
 
     // 给予一些时间完成正在进行的请求
-    setTimeout(() => {
-      logInfo(LogCategory.SYSTEM, '服务器已优雅关闭');
+    setTimeout(async () => {
+      try {
+        // 清理日志系统定时器
+        const { getGlobalLogger } = await import('./utils/logger.js');
+        const logger = getGlobalLogger();
+        if (logger && typeof logger.cleanup === 'function') {
+          await logger.cleanup();
+          console.log('✅ 日志系统已清理');
+        }
+        logInfo(LogCategory.SYSTEM, '服务器已优雅关闭');
+      } catch (error) {
+        console.error('清理资源时出错:', error);
+      }
       process.exit(0);
     }, 5000);
   };

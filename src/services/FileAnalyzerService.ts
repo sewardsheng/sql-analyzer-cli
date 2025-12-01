@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import { resolve, join, dirname, extname, basename, isAbsolute } from 'pathe';
-import { createEnhancedSQLAnalyzer } from '../core/EnhancedSQLAnalyzer.js';
+import { createSQLAnalyzer } from '../core/SQLAnalyzer.js';
 import { logError } from '../utils/logger.js';
 
 // 分析选项接口
@@ -42,8 +42,8 @@ export class FileAnalyzerService {
       ...options
     };
 
-    // 初始化增强型分析器
-    this.analyzer = createEnhancedSQLAnalyzer({
+    // 初始化SQL分析器
+    this.analyzer = createSQLAnalyzer({
       enableCaching: this.options.enableCache,
       enableKnowledgeBase: this.options.enableKnowledgeBase,
       maxConcurrency: 3
@@ -196,8 +196,9 @@ export class FileAnalyzerService {
    */
   async findSQLFiles(dirPath, recursive = true) {
     const sqlFiles = [];
+    const supportedExtensions = this.supportedExtensions; // 保存this引用
 
-    async function scanDirectory(currentPath) {
+    const scanDirectory = async (currentPath: string) => {
       try {
         const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
@@ -212,7 +213,7 @@ export class FileAnalyzerService {
           } else if (entry.isFile()) {
             // 检查文件扩展名
             const ext = extname(entry.name);
-            if (sqlFiles[0] && sqlFiles[0].supportedExtensions.includes(ext)) {
+            if (supportedExtensions.includes(ext)) {
               sqlFiles.push(fullPath);
             }
           }
@@ -220,7 +221,7 @@ export class FileAnalyzerService {
       } catch (error) {
         logError(`扫描目录失败: ${currentPath}`, error);
       }
-    }
+    };
 
     await scanDirectory(dirPath);
     return sqlFiles;

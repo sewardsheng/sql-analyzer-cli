@@ -21,7 +21,7 @@ this.historyService = historyService;
 * @param {number} minConfidence - 最小置信度
 * @returns {Promise<Array>} 高质量历史记录
 */
-async getQualityHistory(minConfidence = 0.7) {
+async getQualityHistory(minConfidence = 0) {
 try {
 const allHistory = await this.historyService.getAllHistory();
 
@@ -31,11 +31,7 @@ if (!record.result?.success) {
 return false;
 }
 
-// 2. 检查置信度
-const avgConfidence = this.calculateAverageConfidence(record.result);
-if (avgConfidence < minConfidence) {
-return false;
-}
+// 2. 置信度检查已移除 - 所有成功的分析都应被学习
 
 // 3. 检查数据完整性
 const hasIssues = this.hasIdentifiableIssues(record.result);

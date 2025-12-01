@@ -32,7 +32,6 @@ private config: {
 enabled: boolean;
 autoApproveThreshold: number;
 minConfidence: number;
-maxRulesPerDay: number;
 learningFromHistory: {
 enabled: boolean;
 batchSize: number;
@@ -55,7 +54,6 @@ this.config = {
 enabled: process.env.RULE_LEARNING_ENABLED !== 'false',
 autoApproveThreshold: 0.7,  // 与统一配置保持一致
 minConfidence: 0.7,
-maxRulesPerDay: 50,
 learningFromHistory: {
 enabled: true,
 batchSize: 10

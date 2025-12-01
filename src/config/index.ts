@@ -52,7 +52,6 @@ ruleLearning: {
 enabled: process.env.RULE_LEARNING_ENABLED !== 'false',
 minConfidence: parseFloat(process.env.RULE_LEARNING_MIN_CONFIDENCE) || 0.7,
 batchSize: parseInt(process.env.RULE_LEARNING_BATCH_SIZE) || 5,
-maxRulesPerDay: parseInt(process.env.RULE_GENERATION_MAX_RULES) || 10,
 autoApproveThreshold: parseFloat(process.env.RULE_EVALUATION_AUTO_APPROVAL_THRESHOLD) / 100 || 0.7
 },
 
@@ -60,7 +59,6 @@ autoApproveThreshold: parseFloat(process.env.RULE_EVALUATION_AUTO_APPROVAL_THRES
 knowledge: {
 enabled: process.env.KNOWLEDGE_BASE_ENABLED !== 'false',
 rulesDir: process.env.KNOWLEDGE_RULES_DIR || 'rules',
-maxFileSize: parseInt(process.env.KNOWLEDGE_MAX_FILE_SIZE) || 10 * 1024 * 1024 // 10MB
 },
 
 // 速率限制配置

@@ -4,7 +4,8 @@
 */
 
 import { buildPrompt } from '../../utils/format/prompt-loader.js';
-import { llmJsonParser } from '../../core/llm-json-parser.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 /**
 * 规则生成器类
@@ -73,26 +74,40 @@ analysisResults: this.formatAnalysisResults(learningContext.currentAnalysis),
 existingRules: await this.getExistingRulesSummary()
 };
 
-// 2. 构建提示词（使用优化版本）
-const { systemPrompt, userPrompt } = await buildPrompt('rule-generation-optimized.md', variables, { category: 'rule-learning' });
+// 2. 构建提示词（使用新的Markdown版本）
+const { systemPrompt, userPrompt } = await buildPrompt('rule-generation-markdown.md', variables, { category: 'rule-learning' });
 
 // 3. 调用LLM
 const llmResult = await this.llmService.call(`${systemPrompt}\n\n${userPrompt}`);
 
-// 4. 解析结果
-const result = this.parseLLMResponse(llmResult.content);
+// 4. 直接保存Markdown内容到文件
+const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+const rulesDir = path.join(process.cwd(), 'rules', 'learning-rules', 'approved');
 
-if (result.success) {
-// 尝试多种可能的字段名
-const resultData = result as any;
-const rules = resultData.learnedRules || resultData.rules || resultData.data?.rules || [];
-if (rules && rules.length > 0) {
-return rules;
-}
-}
+// 确保目录存在
+await fs.mkdir(rulesDir, { recursive: true });
 
-console.warn(`[RuleGenerator] 规则生成提示词未返回有效规则`);
-return [];
+// 保存Markdown文件
+const markdownFile = path.join(rulesDir, `api-generated-rules_${timestamp}.md`);
+await fs.writeFile(markdownFile, llmResult.content, 'utf-8');
+console.log(`[RuleGenerator] Markdown规则已保存到: ${markdownFile}`);
+
+// 5. 从Markdown中提取规则数量
+const ruleCount = (llmResult.content.match(/### \d+\./g) || []).length;
+console.log(`[RuleGenerator] 生成了 ${ruleCount} 条规则`);
+
+// 返回基本的规则信息用于API响应
+return [{
+  id: `api-rules-${timestamp}`,
+  title: '批量生成的SQL分析规则',
+  category: 'batch',
+  type: 'markdown-rules',
+  severity: 'mixed',
+  description: `从历史记录生成了${ruleCount}条规则`,
+  markdownFile: markdownFile,
+  ruleCount: ruleCount,
+  timestamp: new Date().toISOString()
+}];
 
 } catch (error) {
 console.error(`[RuleGenerator] 规则生成提示词失败: ${error.message}`);

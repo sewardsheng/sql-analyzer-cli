@@ -1,6 +1,6 @@
 /**
-* 增强型SQL分析器
-* 集成智能上下文管理系统，告别SB的原始分析模式
+* SQL分析器
+* 集成智能上下文管理系统，提供专业的SQL分析功能
 */
 
 import { createTool, ToolFactory, sortToolsByPriority } from './tools/index.js';
@@ -22,9 +22,9 @@ interface BatchAnalysisOptions {
 }
 
 /**
-* 增强型SQL分析器类
+* SQL分析器类
 */
-export class EnhancedSQLAnalyzer {
+export class SQLAnalyzer {
   private options: {
     enableCaching: boolean;
     enableKnowledgeBase: boolean;
@@ -512,12 +512,12 @@ this.toolFactory.clearCache();
 }
 
 /**
-* 创建增强型SQL分析器
+* 创建SQL分析器
 * @param {Object} options - 配置选项
-* @returns {EnhancedSQLAnalyzer} 分析器实例
+* @returns {SQLAnalyzer} 分析器实例
 */
-export function createEnhancedSQLAnalyzer(options = {}) {
-return new EnhancedSQLAnalyzer(options);
+export function createSQLAnalyzer(options = {}) {
+return new SQLAnalyzer(options);
 }
 
-export default EnhancedSQLAnalyzer;
+export default SQLAnalyzer;
