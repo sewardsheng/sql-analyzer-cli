@@ -964,7 +964,6 @@ const content = await fs.readFile(entryPath, 'utf8');
 rules.push(content);
 }
 }
-}
 
 return rules.join('\n\n---\n\n');
 

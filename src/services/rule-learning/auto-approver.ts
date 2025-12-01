@@ -191,20 +191,19 @@ async loadExistingRules(approvedDir) {
 const existingRules = [];
 
 try {
-const entries = await fs.readdir(approvedDir);
+const monthDirs = await fs.readdir(approvedDir);
 
-for (const entry of entries) {
-const entryPath = path.join(approvedDir, entry);
-const stat = await fs.stat(entryPath);
+for (const monthDir of monthDirs) {
+const monthPath = path.join(approvedDir, monthDir);
+const stat = await fs.stat(monthPath);
 
 if (stat.isDirectory()) {
-// 可能是年月子目录，读取其中的规则文件
-const files = await fs.readdir(entryPath);
+const files = await fs.readdir(monthPath);
 
 for (const file of files) {
 if (file.endsWith('.md')) {
 try {
-const filePath = path.join(entryPath, file);
+const filePath = path.join(monthPath, file);
 const content = await fs.readFile(filePath, 'utf8');
 const rule = this.parseRuleFromFile(content);
 if (rule) {
@@ -214,16 +213,6 @@ existingRules.push(rule);
 console.warn(`[AutoApprover] 读取规则文件失败 ${file}: ${error.message}`);
 }
 }
-} else if (stat.isFile() && entry.endsWith('.md')) {
-// 直接在根目录的规则文件
-try {
-const content = await fs.readFile(entryPath, 'utf8');
-const rule = this.parseRuleFromFile(content);
-if (rule) {
-existingRules.push(rule);
-}
-} catch (error) {
-console.warn(`[AutoApprover] 读取规则文件失败 ${entryPath}: ${error.message}`);
 }
 }
 }
@@ -394,16 +383,17 @@ return rules;
 async moveToApproved(rules) {
 try {
 const approvedDir = path.join(process.cwd(), 'rules', 'learning-rules', 'approved');
+const monthDir = path.join(approvedDir, new Date().toISOString().substring(0, 7));
 
 // 确保目录存在
-await fs.mkdir(approvedDir, { recursive: true });
+await fs.mkdir(monthDir, { recursive: true });
 
 const movedRules = [];
 
 for (const rule of rules) {
 try {
 const fileName = this.generateRuleFileName(rule);
-const filePath = path.join(approvedDir, fileName);
+const filePath = path.join(monthDir, fileName);
 
 // 构建规则文件内容
 const content = this.buildApprovedRuleContent(rule);
@@ -439,14 +429,15 @@ return [];
 async moveToManualReview(rules) {
 try {
 const manualReviewDir = path.join(process.cwd(), 'rules', 'learning-rules', 'manual_review');
+const monthDir = path.join(manualReviewDir, new Date().toISOString().substring(0, 7));
 
 // 确保目录存在
-await fs.mkdir(manualReviewDir, { recursive: true });
+await fs.mkdir(monthDir, { recursive: true });
 
 for (const rule of rules) {
 try {
 const fileName = this.generateRuleFileName(rule);
-const filePath = path.join(manualReviewDir, fileName);
+const filePath = path.join(monthDir, fileName);
 
 // 构建规则文件内容
 const content = this.buildManualReviewRuleContent(rule);
