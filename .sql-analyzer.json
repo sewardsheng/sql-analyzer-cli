@@ -1,0 +1,90 @@
+{
+  "detection": {
+    "strictMode": true,
+    "ignoreComments": true,
+    "ignoreExamples": true,
+    "filePatterns": {
+      "strict": [
+        "**/production/**/*.sql",
+        "**/migrations/**/*.sql",
+        "**/src/main/**/*.sql",
+        "**/resources/**/*.sql",
+        "**/db/**/*.sql"
+      ],
+      "relaxed": [
+        "**/test/**/*_test.sql",
+        "**/test/**/*.sql",
+        "**/*_test.sql",
+        "**/examples/**",
+        "**/samples/**",
+        "**/demo/**"
+      ],
+      "ignore": [
+        "**/README.md",
+        "**/docs/**",
+        "**/*.md",
+        "**/*.txt",
+        "**/.git/**",
+        "**/node_modules/**"
+      ]
+    },
+    "severityLevels": {
+      "critical": [
+        "sql_injection_executable",
+        "hardcoded_credentials_executable",
+        "unconditional_delete_executable",
+        "unconditional_update_executable",
+        "sensitive_data_exposure_executable"
+      ],
+      "high": [
+        "performance_risks_production",
+        "missing_indexes_critical",
+        "select_star_production",
+        "security_bypass_executable"
+      ],
+      "medium": [
+        "coding_standards",
+        "naming_conventions",
+        "sql_syntax_issues",
+        "example_code_issues"
+      ]
+    },
+    "whitelist": {
+      "files": [
+        "**/test/**/fixtures/*.sql",
+        "**/examples/sample-data.sql"
+      ],
+      "patterns": [
+        "-- example:",
+        "-- 示例:",
+        "-- test case:",
+        "-- 测试用例:"
+      ]
+    }
+  },
+  "hooks": {
+    "preCommit": {
+      "enabled": true,
+      "blockOnCritical": true,
+      "blockOnHigh": false,
+      "allowBypass": true
+    },
+    "ci": {
+      "failOnCritical": true,
+      "failOnHigh": true,
+      "generateReport": true
+    }
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "recipients": [],
+      "severityThreshold": "high"
+    },
+    "slack": {
+      "enabled": false,
+      "webhook": "",
+      "channel": "#security-alerts"
+    }
+  }
+}

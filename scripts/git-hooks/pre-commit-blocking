@@ -1,0 +1,133 @@
+#!/bin/bash
+# Pre-commit Hook - 阻止包含严重SQL安全问题的提交
+
+set -e
+
+echo "🔍 SQL Security Pre-commit Check"
+echo "================================"
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 检查是否在git仓库中
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo -e "${RED}❌ 错误: 不在Git仓库中${NC}"
+    exit 1
+fi
+
+# 获取暂存的SQL文件
+STAGED_SQL=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(sql|SQL)$" || true)
+
+if [ -z "$STAGED_SQL" ]; then
+    echo -e "${GREEN}✅ 没有SQL文件需要检查${NC}"
+    exit 0
+fi
+
+echo -e "${BLUE}📁 检查暂存的SQL文件:${NC}"
+for file in $STAGED_SQL; do
+    echo "  - $file"
+done
+
+# 检查项目根目录
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cd "$PROJECT_ROOT"
+
+# 检查tsx是否可用
+if ! command -v tsx &> /dev/null; then
+    echo -e "${YELLOW}⚠️  tsx未安装，正在安装...${NC}"
+    npm install -g tsx
+fi
+
+# 检查依赖是否安装
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}⚠️  依赖未安装，正在安装...${NC}"
+    npm install
+fi
+
+# 创建临时目录
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+echo -e "\n${BLUE}🔍 开始SQL安全分析...${NC}"
+
+HAS_CRITICAL_ISSUES=false
+HAS_HIGH_ISSUES=false
+ISSUES_FOUND=false
+
+# 检查每个文件
+for file in $STAGED_SQL; do
+    echo -e "\n${BLUE}📄 分析文件: $file${NC}"
+
+    # 从暂存区获取文件内容
+    git show ":$file" > "$TEMP_DIR/$(basename "$file")"
+
+    # 运行SQL分析
+    ANALYSIS_OUTPUT=$(tsx src/cli/index.ts analyze --file "$TEMP_DIR/$(basename "$file")" --json 2>/dev/null || echo "{}")
+
+    # 过滤出JSON部分
+    JSON_OUTPUT=$(echo "$ANALYSIS_OUTPUT" | sed '1,/^{/d' | sed '/^}/!d;$d' || echo "{}")
+
+    # 直接分析原始输出（因为JSON过滤可能有问题）
+    echo "$ANALYSIS_OUTPUT" > /tmp/debug-analysis.log 2>&1 || true
+
+    if echo "$ANALYSIS_OUTPUT" | grep -q "critical\|SQL注入\|硬编码密码\|无条件删除\|DROP.*无WHERE"; then
+        echo -e "${RED}❌ 发现严重安全问题!${NC}"
+        HAS_CRITICAL_ISSUES=true
+        ISSUES_FOUND=true
+
+        # 提取具体问题
+        echo -e "${RED}严重问题:${NC}"
+        echo "$ANALYSIS_OUTPUT" | grep -o '"title":"[^"]*"' | sed 's/"title":"//g' | sed 's/"//g' | head -3 | sed 's/^/  - /'
+    elif echo "$ANALYSIS_OUTPUT" | grep -q '"severity":"high"'; then
+        echo -e "${YELLOW}⚠️  发现高风险问题${NC}"
+        HAS_HIGH_ISSUES=true
+        ISSUES_FOUND=true
+    fi
+done
+
+echo -e "\n${BLUE}📊 分析结果:${NC}"
+
+if [ "$HAS_CRITICAL_ISSUES" = true ]; then
+    echo -e "${RED}"
+    echo "╔══════════════════════════════════════╗"
+    echo "║     🚫 提交被阻止 - 严重安全问题     ║"
+    echo "╚══════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo -e "${RED}❌ 发现严重SQL安全问题，提交被阻止！${NC}"
+    echo ""
+    echo -e "${YELLOW}修复建议:${NC}"
+    echo "  1. 修复所有严重安全问题（SQL注入、硬编码密码等）"
+    echo "  2. 重新暂存修复后的文件"
+    echo "  3. 再次尝试提交"
+    echo ""
+    echo -e "${BLUE}跳过检查（紧急情况）:${NC}"
+    echo "  git commit --no-verify -m \"你的提交信息\""
+    echo ""
+    echo -e "${RED}🔥 为了代码安全，请勿在生产环境中使用包含这些问题的代码！${NC}"
+    exit 1
+
+elif [ "$HAS_HIGH_ISSUES" = true ]; then
+    echo -e "${YELLOW}⚠️  警告: 发现高风险SQL安全问题${NC}"
+    echo ""
+    echo "建议在提交前修复以下问题:"
+    echo "- 缺少索引的查询"
+    echo "- 敏感数据过度暴露"
+    echo "- 性能问题"
+    echo ""
+    read -p "是否继续提交? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}❌ 提交被取消${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ 继续提交${NC}"
+
+else
+    echo -e "${GREEN}✅ SQL安全检查通过${NC}"
+fi
+
+exit 0

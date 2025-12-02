@@ -1,0 +1,390 @@
+#!/bin/bash
+# 生产环境SQL安全Pre-commit Hook
+# 专为生产环境设计，平衡安全性和实用性
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🔒 生产环境SQL安全检查${NC}"
+echo "========================================"
+
+# 检查是否在git仓库中
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo -e "${RED}❌ 错误: 不在Git仓库中${NC}"
+    exit 1
+fi
+
+# 获取暂存的SQL文件
+STAGED_SQL=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(sql|SQL)$" || true)
+
+if [ -z "$STAGED_SQL" ]; then
+    echo -e "${GREEN}✅ 没有SQL文件需要检查${NC}"
+    exit 0
+fi
+
+echo -e "${BLUE}📁 检查暂存的SQL文件:${NC}"
+for file in $STAGED_SQL; do
+    echo "  - ${file}"
+done
+
+# 检查项目根目录
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cd "$PROJECT_ROOT"
+
+# 检查tsx是否可用
+if ! command -v tsx &> /dev/null; then
+    echo -e "${YELLOW}⚠️  tsx未安装，正在安装...${NC}"
+    npm install -g tsx
+fi
+
+# 检查依赖是否安装
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}⚠️  依赖未安装，正在安装...${NC}"
+    npm install
+fi
+
+# 创建临时目录
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+echo -e "\n${BLUE}🔍 开始生产环境安全分析...${NC}"
+
+HAS_CRITICAL_ISSUES=false
+HAS_HIGH_ISSUES=false
+HAS_MEDIUM_ISSUES=false
+TOTAL_ISSUES=0
+
+# 使用Node.js脚本来进行生产环境检测
+NODE_SCRIPT="$TEMP_DIR/production-check.js"
+
+cat > "$NODE_SCRIPT" << 'EOF'
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// 模拟生产环境检测器的核心逻辑
+class ProductionDetector {
+  constructor() {
+    this.config = {
+      strictMode: true,
+      ignoreComments: true,
+      ignoreExamples: true,
+      filePatterns: {
+        strict: ['**/production/**/*.sql', '**/migrations/**/*.sql', '**/src/**/*.sql'],
+        relaxed: ['**/test/**/*_test.sql', '**/examples/**'],
+        ignore: ['**/README.md', '**/docs/**']
+      }
+    };
+  }
+
+  determineDetectionLevel(filePath) {
+    const normalizedPath = filePath.replace(/\\/g, '/');
+
+    for (const pattern of this.config.filePatterns.ignore) {
+      if (this.matchPattern(normalizedPath, pattern)) return 'ignore';
+    }
+    for (const pattern of this.config.filePatterns.strict) {
+      if (this.matchPattern(normalizedPath, pattern)) return 'strict';
+    }
+    for (const pattern of this.config.filePatterns.relaxed) {
+      if (this.matchPattern(normalizedPath, pattern)) return 'relaxed';
+    }
+    return 'strict';
+  }
+
+  matchPattern(path, pattern) {
+    const regex = new RegExp(
+      '^' + pattern
+        .replace(/\*\*/g, '.*')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\?/g, '[^/]') + '$'
+    );
+    return regex.test(path);
+  }
+
+  preprocessSQL(sql) {
+    const lines = sql.split('\n');
+    const executableLines = [];
+    let inMultilineComment = false;
+
+    for (let line of lines) {
+      const trimmedLine = line.trim();
+
+      if (trimmedLine.startsWith('/*')) {
+        inMultilineComment = true;
+        continue;
+      }
+      if (trimmedLine.endsWith('*/')) {
+        inMultilineComment = false;
+        continue;
+      }
+      if (inMultilineComment) continue;
+      if (trimmedLine.startsWith('--')) continue;
+
+      const codeWithoutInlineComment = this.removeInlineComments(line);
+      if (codeWithoutInlineComment.trim()) {
+        executableLines.push(codeWithoutInlineComment);
+      }
+    }
+
+    return executableLines.join('\n');
+  }
+
+  removeInlineComments(line) {
+    const singleLineCommentIndex = line.indexOf('--');
+    if (singleLineCommentIndex > 0) {
+      const beforeComment = line.substring(0, singleLineCommentIndex);
+      const singleQuoteCount = (beforeComment.match(/'/g) || []).length;
+      const doubleQuoteCount = (beforeComment.match(/"/g) || []).length;
+      if (singleQuoteCount % 2 === 0 && doubleQuoteCount % 2 === 0) {
+        return beforeComment;
+      }
+    }
+    return line;
+  }
+
+  detectIssues(code, filePath) {
+    const results = [];
+    const lines = code.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNumber = i + 1;
+
+      // 检测硬编码凭证（只在实际执行代码中）
+      const credentialPattern = /(password|pwd|passwd|secret|key)\s*=\s*['"][^'"]*['"]\s*(where|,|\)|;|$)/i;
+      if (credentialPattern.test(line)) {
+        results.push({
+          severity: 'critical',
+          type: 'hardcoded_credentials',
+          location: `第${lineNumber}行`,
+          message: '在实际SQL语句中发现硬编码凭证',
+          line: line.trim()
+        });
+      }
+
+      // 检测SQL注入
+      const injectionPattern = /(where|and|or)\s+[^=]*\s*=\s*['"][^'"]*['"]?\s*[\+]\s*[^;]*/i;
+      if (injectionPattern.test(line)) {
+        results.push({
+          severity: 'critical',
+          type: 'sql_injection',
+          location: `第${lineNumber}行`,
+          message: '发现SQL注入风险：字符串拼接',
+          line: line.trim()
+        });
+      }
+
+      // 检测无条件删除
+      const deletePattern = /^\s*delete\s+from\s+\w+\s*;?\s*$/i;
+      if (deletePattern.test(line)) {
+        results.push({
+          severity: 'critical',
+          type: 'unconditional_delete',
+          location: `第${lineNumber}行`,
+          message: '发现无条件DELETE操作',
+          line: line.trim()
+        });
+      }
+
+      // 检测无条件更新
+      const updatePattern = /^\s*update\s+\w+\s+set\s+[^;]+;?\s*$/i;
+      if (updatePattern.test(line) && !line.toLowerCase().includes('where')) {
+        results.push({
+          severity: 'critical',
+          type: 'unconditional_update',
+          location: `第${lineNumber}行`,
+          message: '发现无条件UPDATE操作',
+          line: line.trim()
+        });
+      }
+
+      // 检测SELECT *（高严重性）
+      if (/\bselect\s+\*\s+from/i.test(line)) {
+        results.push({
+          severity: 'high',
+          type: 'select_star',
+          location: `第${lineNumber}行`,
+          message: '建议避免使用SELECT *',
+          line: line.trim()
+        });
+      }
+    }
+
+    return results;
+  }
+
+  analyze(filePath) {
+    const detectionLevel = this.determineDetectionLevel(filePath);
+
+    if (detectionLevel === 'ignore') {
+      return { level: 'ignore', issues: [] };
+    }
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const executableCode = this.preprocessSQL(content);
+      const issues = this.detectIssues(executableCode, filePath);
+
+      return {
+        level: detectionLevel,
+        issues: issues,
+        hasCritical: issues.some(i => i.severity === 'critical'),
+        hasHigh: issues.some(i => i.severity === 'high'),
+        hasMedium: issues.some(i => i.severity === 'medium')
+      };
+    } catch (error) {
+      return { level: detectionLevel, issues: [], error: error.message };
+    }
+  }
+}
+
+// 主逻辑
+const filePaths = process.argv.slice(2);
+const detector = new ProductionDetector();
+let hasCritical = false;
+let hasHigh = false;
+let totalIssues = 0;
+
+for (const filePath of filePaths) {
+  console.log(`\n📄 分析文件: ${filePath}`);
+
+  const result = detector.analyze(filePath);
+
+  if (result.error) {
+    console.log(`  ${YELLOW}⚠️  分析错误: ${result.error}${NC}`);
+    continue;
+  }
+
+  console.log(`  检测级别: ${result.level}`);
+
+  if (result.issues.length > 0) {
+    console.log(`  发现问题: ${result.issues.length} 个`);
+
+    result.issues.forEach(issue => {
+      totalIssues++;
+
+      const severityIcon = issue.severity === 'critical' ? '🚨' :
+                         issue.severity === 'high' ? '⚠️' : '💡';
+
+      console.log(`    ${severityIcon} ${issue.severity.toUpperCase()}: ${issue.message}`);
+      console.log(`       ${issue.location}: ${issue.line}`);
+
+      if (issue.severity === 'critical') hasCritical = true;
+      if (issue.severity === 'high') hasHigh = true;
+    });
+  } else {
+    console.log(`  ${GREEN}✅ 未检测到安全问题${NC}`);
+  }
+}
+
+// 输出汇总结果
+console.log(`\n📊 检测汇总:`);
+console.log(`  总问题数: ${totalIssues}`);
+console.log(`  严重问题: ${hasCritical ? '是' : '否'}`);
+console.log(`  高风险问题: ${hasHigh ? '是' : '否'}`);
+
+if (hasCritical) {
+  process.exit(1); // 严重问题，阻止提交
+} else if (hasHigh) {
+  process.exit(2); // 高风险问题，警告但不阻止
+} else {
+  process.exit(0); // 安全，允许提交
+}
+EOF
+
+# 检查每个文件
+for file in $STAGED_SQL; do
+    echo -e "\n${BLUE}📄 分析文件: $file${NC}"
+
+    # 从暂存区获取文件内容
+    git show ":$file" > "$TEMP_DIR/$(basename "$file")"
+
+    # 使用Node.js脚本分析
+    ANALYSIS_RESULT=$(node "$NODE_SCRIPT" "$TEMP_DIR/$(basename "$file")" 2>/dev/null || echo "ERROR")
+
+    if [ "$ANALYSIS_RESULT" = "ERROR" ]; then
+        echo -e "${RED}❌ 分析失败${NC}"
+        continue
+    fi
+
+    # 解析结果
+    if echo "$ANALYSIS_RESULT" | grep -q "严重问题: 是"; then
+        HAS_CRITICAL_ISSUES=true
+        CRITICAL_COUNT=$(echo "$ANALYSIS_RESULT" | grep -c "🚨" || echo 0)
+        TOTAL_ISSUES=$((TOTAL_ISSUES + CRITICAL_COUNT))
+    fi
+
+    if echo "$ANALYSIS_RESULT" | grep -q "高风险问题: 是"; then
+        HAS_HIGH_ISSUES=true
+        HIGH_COUNT=$(echo "$ANALYSIS_RESULT" | grep -c "⚠️" || echo 0)
+        TOTAL_ISSUES=$((TOTAL_ISSUES + HIGH_COUNT))
+    fi
+done
+
+echo -e "\n${BLUE}📊 最终分析结果:${NC}"
+echo "  总问题数: $TOTAL_ISSUES"
+echo "  严重问题: $(if [ "$HAS_CRITICAL_ISSUES" = true ]; then echo "是"; else echo "否"; fi)"
+echo "  高风险问题: $(if [ "$HAS_HIGH_ISSUES" = true ]; then echo "是"; else echo "否"; fi)"
+
+# 处理结果
+if [ "$HAS_CRITICAL_ISSUES" = true ]; then
+    echo -e "\n${RED}"
+    echo "╔══════════════════════════════════════╗"
+    echo "║    🚫 提交被阻止 - 检测到严重安全问题     ║"
+    echo "╚══════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo -e "${RED}❌ 检测到严重SQL安全问题，提交被阻止！${NC}"
+    echo ""
+    echo -e "${YELLOW}必须修复的问题:${NC}"
+    echo "  - 硬编码凭证（密码、密钥等）"
+    echo "  - SQL注入漏洞"
+    echo "  - 无条件的数据删除/更新"
+    echo ""
+    echo -e "${YELLOW}修复建议:${NC}"
+    echo "  1. 使用参数化查询防止SQL注入"
+    echo "  2. 通过环境变量或配置文件管理敏感信息"
+    echo "  3. 为所有DELETE/UPDATE操作添加WHERE条件"
+    echo ""
+    echo -e "${BLUE}紧急情况处理:${NC}"
+    echo "  git commit --no-verify -m \"紧急提交\""
+    echo ""
+    echo -e "${RED}🔥 为了数据库安全，请勿在生产代码中使用这些有问题的SQL！${NC}"
+    exit 1
+
+elif [ "$HAS_HIGH_ISSUES" = true ]; then
+    echo -e "\n${YELLOW}⚠️  警告: 检测到高风险SQL问题${NC}"
+    echo ""
+    echo -e "${YELLOW}发现的问题:${NC}"
+    echo "  - 性能风险（SELECT *、缺少索引等）"
+    echo "  - 编码规范问题"
+    echo ""
+    echo -e "${YELLOW}建议:${NC}"
+    echo "  虽然这些不会阻止提交，但建议尽快修复以提升代码质量"
+    echo ""
+    read -p "是否继续提交? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}❌ 提交被取消${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ 继续提交${NC}"
+    exit 0
+
+else
+    echo -e "\n${GREEN}"
+    echo "╔══════════════════════════════════════╗"
+    echo "║      ✅ 生产环境SQL安全检查通过      ║"
+    echo "╚══════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo -e "${GREEN}🎉 恭喜！您的SQL代码符合生产环境安全标准${NC}"
+    echo -e "${GREEN}   可以安全地提交到代码库${NC}"
+    exit 0
+fi

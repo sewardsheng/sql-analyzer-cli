@@ -1,0 +1,186 @@
+# GitLab CI Configuration for SQL Security Scan
+
+stages:
+  - test
+  - security
+
+variables:
+  NODE_VERSION: "18"
+
+# 基础镜像定义
+.image: node:${NODE_VERSION}
+
+# 缓存配置
+cache:
+  paths:
+    - node_modules/
+
+# 安装依赖的基础作业
+install_dependencies:
+  stage: test
+  script:
+    - echo "📦 Installing dependencies..."
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour
+
+# SQL安全扫描作业
+sql_security_scan:
+  stage: security
+  dependencies:
+    - install_dependencies
+  script:
+    - echo "🔍 Starting SQL Security Scan..."
+
+    # 查找SQL文件
+    - |
+      SQL_FILES=$(find . -type f \( -name "*.sql" -o -name "*.SQL" \) -not -path "./node_modules/*" -not -path "./.git/*" | tr '\n' ' ')
+      echo "Found SQL files: $SQL_FILES"
+
+      if [ -n "$SQL_FILES" ]; then
+        # 创建结果目录
+        mkdir -p sql-analysis-results
+
+        # 运行SQL分析
+        echo "Analyzing SQL files..."
+        node dist/cli/index.js analyze $SQL_FILES --format json > sql-analysis-results/scan-results.json
+        node dist/cli/index.js analyze $SQL_FILES --format junit > sql-analysis-results/scan-results.xml
+
+        # 检查结果
+        HIGH_ISSUES=$(node -e "
+          const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+          const summary = results.scanInfo || {};
+          console.log((summary.issuesBySeverity?.high || 0) + (summary.issuesBySeverity?.critical || 0));
+        ")
+
+        echo "📊 Scan Summary:"
+        echo "Critical+High Issues: $HIGH_ISSUES"
+
+        # 如果有严重问题，构建失败
+        if [ "$HIGH_ISSUES" -gt 0 ]; then
+          echo "❌ Found high/critical SQL security issues!"
+          echo "Please fix these issues before merging."
+          exit 1
+        else
+          echo "✅ No high/critical SQL security issues found"
+        fi
+      else
+        echo "✅ No SQL files found to scan"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - sql-analysis-results/
+    reports:
+      junit: sql-analysis-results/scan-results.xml
+    expire_in: 1 week
+  coverage: '/Coverage: \d+\.\d+%/'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+    - when: manual
+      allow_failure: true
+
+# 简化的SQL扫描作业
+sql_scan_simple:
+  stage: security
+  dependencies:
+    - install_dependencies
+  script:
+    - echo "🔍 Simple SQL Scan..."
+    - npm run build
+    - |
+      # 直接扫描，失败时不阻止流水线
+      if node dist/cli/index.js analyze ./sql --format json > sql-results.json 2>/dev/null; then
+        echo "✅ SQL scan completed"
+      else
+        echo "⚠️ SQL scan had issues"
+        echo "📊 Check artifacts for details"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - sql-results.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# 合并请求专用作业
+mr_security_check:
+  stage: security
+  dependencies:
+    - install_dependencies
+  script:
+    - echo "🔍 MR Security Check..."
+    - echo "Analyzing changes since $CI_MERGE_REQUEST_TARGET_BRANCH_NAME..."
+
+    # 获取变更的SQL文件
+    - |
+      CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD | grep -E "\.(sql|SQL)$" || echo "")
+      echo "Changed SQL files: $CHANGED_FILES"
+
+      if [ -n "$CHANGED_FILES" ]; then
+        # 创建临时目录存放变更文件
+        mkdir -p mr-scan
+        for file in $CHANGED_FILES; do
+          if [ -f "$file" ]; then
+            mkdir -p mr-scan/$(dirname "$file")
+            cp "$file" "mr-scan/$file"
+          fi
+        done
+
+        # 扫描变更的文件
+        node dist/cli/index.js analyze mr-scan --format json > mr-scan-results.json
+
+        # 检查结果
+        ISSUE_COUNT=$(node -e "
+          const results = JSON.parse(require('fs').readFileSync('mr-scan-results.json', 'utf8'));
+          const summary = results.scanInfo || {};
+          console.log(summary.totalIssues || 0);
+        ")
+
+        echo "📊 MR Scan Results:"
+        echo "Total Issues: $ISSUE_COUNT"
+
+        # 在MR中添加评论
+        if [ "$ISSUE_COUNT" -gt 0 ]; then
+          echo "❌ Found $ISSUE_COUNT SQL security issues in MR!"
+          echo "Please review and fix before merging."
+          exit 1
+        else
+          echo "✅ No SQL security issues in MR"
+        fi
+      else
+        echo "✅ No SQL files changed in this MR"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - mr-scan-results.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# 定期安全扫描（可选）
+scheduled_security_scan:
+  stage: security
+  dependencies:
+    - install_dependencies
+  script:
+    - echo "🔍 Scheduled Security Scan..."
+    - npm run build
+    - node dist/cli/index.js analyze . --format json > scheduled-scan-results.json
+    - echo "✅ Scheduled scan completed"
+  artifacts:
+    when: always
+    paths:
+      - scheduled-scan-results.json
+    expire_in: 2 weeks
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  allow_failure: true

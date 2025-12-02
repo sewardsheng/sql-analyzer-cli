@@ -1,0 +1,44 @@
+#!/bin/bash
+# Simple Pre-commit Hook for SQL Security Check
+
+set -e
+
+echo "🔍 SQL Security Pre-commit Check"
+
+# 获取暂存的SQL文件
+STAGED_SQL=$(git diff --cached --name-only --diff-filter=ACM | grep -E "\.(sql|SQL)$" || true)
+
+if [ -z "$STAGED_SQL" ]; then
+    echo "✅ No SQL files to check"
+    exit 0
+fi
+
+echo "Checking files: $STAGED_SQL"
+
+# 检查SQL Analyzer是否安装
+if ! command -v sql-analyzer &> /dev/null; then
+    echo "Installing SQL Analyzer CLI..."
+    npm install -g sql-analyzer-cli
+fi
+
+# 创建临时目录
+TEMP_DIR=$(mktemp -d)
+
+# 复制暂存文件
+for file in $STAGED_SQL; do
+    mkdir -p "$TEMP_DIR/$(dirname "$file")"
+    git show ":$file" > "$TEMP_DIR/$file"
+done
+
+# 运行分析
+if sql-analyzer analyze "$TEMP_DIR" --format json > /dev/null 2>&1; then
+    echo "✅ SQL security check passed"
+else
+    echo "❌ SQL security check failed!"
+    echo "Please fix SQL security issues before committing"
+    rm -rf "$TEMP_DIR"
+    exit 1
+fi
+
+# 清理
+rm -rf "$TEMP_DIR"
