@@ -5,7 +5,7 @@
 
 import { buildPrompt } from '../../utils/format/prompt-loader.js';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
-import { getPerformanceMonitor } from './performance-monitor.js';
+import { getRuleLearningOptimizer } from './rule-optimizer.js';
 
 /**
 * 集成规则处理器类
@@ -14,13 +14,13 @@ export class IntegratedRuleProcessor {
 private llmService: any;
 private ruleCache: Map<string, any>;
 private processingCache: Map<string, any>;
-private performanceMonitor: any;
+private optimizer: any;
 
 constructor(llmService) {
 this.llmService = llmService;
 this.ruleCache = new Map(); // 规则缓存
 this.processingCache = new Map(); // 处理中缓存
-this.performanceMonitor = getPerformanceMonitor();
+this.optimizer = getRuleLearningOptimizer();
 }
 
 /**
@@ -36,14 +36,14 @@ const cacheKey = this.generateCacheKey(learningContext);
 if (this.ruleCache.has(cacheKey)) {
 
 if (sessionId) {
-this.performanceMonitor.recordCacheHit(sessionId, true);
+this.optimizer.recordCacheHit(sessionId, true);
 }
 return this.ruleCache.get(cacheKey);
 }
 
 // 记录缓存未命中
 if (sessionId) {
-this.performanceMonitor.recordCacheHit(sessionId, false);
+this.optimizer.recordCacheHit(sessionId, false);
 }
 
 // 检查是否正在处理中
@@ -90,7 +90,7 @@ const llmResult = await this.llmService.call(integratedPrompt);
 // 记录LLM调用完成
 const llmDuration = Date.now() - llmStartTime;
 if (sessionId) {
-this.performanceMonitor.recordLLMCall(sessionId, 'integratedGeneration', {
+this.optimizer.recordLLMCall(sessionId, 'integratedGeneration', {
 promptLength: integratedPrompt.length,
 responseLength: llmResult.content?.length || 0,
 duration: llmDuration

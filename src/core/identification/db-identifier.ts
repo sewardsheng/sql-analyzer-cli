@@ -29,18 +29,27 @@ this.cacheMisses = 0;
 // 核心识别规则
 this.corePatterns = {
 mysql: [
-/LIMIT\s+\d+(?!\s+OFFSET)/i,
+/LIMIT\s+\d+$/i,  // 只匹配行末的LIMIT，确保没有OFFSET
 /AUTO_INCREMENT/i,
 /ENGINE\s*=\s*(InnoDB|MyISAM)/i,
 /GROUP_CONCAT\s*\(/i,
-/DATE_FORMAT\s*\(/i
+/DATE_FORMAT\s*\(/i,
+/TINYINT\s*\(\d+\)/i,  // MySQL特有数据类型
+/MEDIUMINT\s*\(\d+\)/i,
+/ENUM\s*\(/i,
+/SET\s*\(/i,
+/ON\s+DUPLICATE\s+KEY\s+UPDATE/i  // MySQL特有语法
 ],
 postgresql: [
-/LIMIT\s+\d+\s+OFFSET/i,
+/LIMIT\s+\d+\s+OFFSET\s+\d+/i,  // 更精确的LIMIT OFFSET匹配
 /RETURNING/i,
 /ILIKE/i,
 /JSONB/i,
-/WITH\s+RECURSIVE/i
+/WITH\s+RECURSIVE/i,
+/FETCH\s+FIRST\s+\d+\s+ROWS?\s+ONLY/i,
+/\$\d+/i,  // PostgreSQL风格的参数占位符 ($1, $2...)
+/SERIAL\s+PRIMARY\s+KEY/i,  // SERIAL关键字
+/BIGSERIAL\s+PRIMARY\s+KEY/i  // BIGSERIAL关键字
 ],
 oracle: [
 /ROWNUM/i,
@@ -51,10 +60,18 @@ oracle: [
 ],
 sqlserver: [
 /TOP\s+\d+/i,
-/NVARCHAR/i,
+/NVARCHAR\s*\(\s*\d+\s*\)/i,  // SQL Server数据类型
 /IDENTITY\s*\(/i,
 /ROW_NUMBER\s*\(\s*\)\s+OVER\s*\(/i,
-/PIVOT\s*\(/i
+/PIVOT\s*\(/i,
+/@@IDENTITY/i,  // SQL Server系统函数
+/GETDATE\s*\(\s*\)/i,  // SQL Server函数
+/CONVERT\s*\(/i,       // SQL Server CONVERT函数
+/\[.*?\]/,             // SQL Server方括号标识符
+/VARCHAR\s*\(\s*MAX\s*\)/i,  // VARCHAR(MAX)语法
+/UNIQUEIDENTIFIER/i,   // SQL Server唯一标识符类型
+/DATETIME2/i,          // SQL Server DATETIME2
+/ROWVERSION/i          // SQL Server时间戳类型
 ],
 clickhouse: [
 /ENGINE\s*=\s*MergeTree/i,
@@ -72,8 +89,8 @@ sqlite: [
 ]
 };
 
-// 数据库优先级（按常见程度排序）
-this.databasePriority = ['mysql', 'postgresql', 'sqlserver', 'oracle', 'sqlite', 'clickhouse'];
+// 数据库优先级（按常见程度排序，PostgreSQL优先处理LIMIT OFFSET）
+this.databasePriority = ['postgresql', 'mysql', 'sqlserver', 'oracle', 'sqlite', 'clickhouse', 'generic'];
 }
 
 /**
@@ -195,13 +212,13 @@ candidates: [dbType]
 getDefaultDatabaseType(normalizedSql) {
 // 检查基本SQL语法特征
 if (normalizedSql.includes('SELECT') && normalizedSql.includes('FROM')) {
-// 基于常见使用情况，MySQL作为默认选择
+// 通用SQL语法，返回generic类型
 return {
-type: 'mysql',
-confidence: 0.4,
-method: 'default-fallback',
-reasoning: '基本SQL语法，使用MySQL作为默认数据库类型',
-scores: { mysql: 0.4 },
+type: 'generic',
+confidence: 0.3,
+method: 'generic-fallback',
+reasoning: '标准SQL语法，无法确定具体数据库类型',
+scores: { generic: 0.3 },
 matches: []
 };
 }
@@ -215,6 +232,18 @@ method: 'syntax-fallback',
 reasoning: '检测到LIMIT语法（无OFFSET），倾向于MySQL',
 scores: { mysql: 0.6 },
 matches: [{ type: 'pattern', pattern: 'LIMIT without OFFSET' }]
+};
+}
+
+// 检查SQL Server特征
+if (normalizedSql.includes('TOP ') || normalizedSql.includes('@@IDENTITY')) {
+return {
+type: 'sqlserver',
+confidence: 0.8,
+method: 'syntax-fallback',
+reasoning: '检测到SQL Server语法特征',
+scores: { sqlserver: 0.8 },
+matches: []
 };
 }
 
@@ -242,11 +271,11 @@ matches: [{ type: 'pattern', pattern: 'TOP' }]
 
 // 最后的默认选择
 return {
-type: 'mysql',
-confidence: 0.3,
+type: 'generic',
+confidence: 0.2,
 method: 'final-fallback',
-reasoning: '无法识别特定语法，使用MySQL作为默认选择',
-scores: { mysql: 0.3 },
+reasoning: '无法识别特定语法，归类为通用SQL',
+scores: { generic: 0.2 },
 matches: []
 };
 }

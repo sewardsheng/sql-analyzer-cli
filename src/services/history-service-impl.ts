@@ -1,6 +1,16 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  AnalysisType,
+  DatabaseType,
+  normalizeAnalysisType,
+  getAnalysisTypeLabel,
+  getDatabaseTypeLabel,
+  isValidAnalysisType,
+  isValidDatabaseType,
+  matchAnalysisTypeByKeyword
+} from '../types/analysis.js';
 
 // 定义接口
 interface HistoryRecord {
@@ -117,17 +127,23 @@ const filename = `${timestamp}_${uniqueId}.json`;
 const yearMonthDir = path.join(this.historyDir, yearMonth);
 await fs.mkdir(yearMonthDir, { recursive: true });
 
+// 标准化处理类型
+const analysisType = this.normalizeAndValidateType(analysisResult.type);
+const databaseType = this.normalizeAndValidateDatabaseType(analysisResult.databaseType);
+
 const historyRecord = {
 id: `${timestamp}_${uniqueId}`,
 timestamp: now.toISOString(),
 sql: analysisResult.sql,
 sqlPreview: analysisResult.sqlPreview || analysisResult.sql,
-databaseType: analysisResult.databaseType || 'unknown',
-type: analysisResult.type || 'analysis',
+databaseType: databaseType,
+type: analysisType,
 result: analysisResult.result,
 metadata: {
-version: '1.0',
+version: '2.0', // 标记为新版本，支持标准化类型
 source: 'sql-analyzer-cli',
+originalType: analysisResult.type, // 保留原始类型用于兼容
+originalDatabaseType: analysisResult.databaseType,
 ...analysisResult.metadata
 }
 };
@@ -267,21 +283,39 @@ averageDuration: 0
 }
 
 /**
-* 搜索历史记录
+* 搜索历史记录（支持SQL内容和类型过滤）
 */
 async searchHistory(query: string, options: SearchOptions = {}) {
 await this.initialize();
-const { limit = 50, offset = 0 } = options;
+const { limit = 50, offset = 0, databaseType, type } = options;
 
 try {
 const allRecords = await this.loadAllHistoryRecords();
 const lowerQuery = query.toLowerCase();
 
 const filteredRecords = allRecords.filter(record => {
-return record.sql.toLowerCase().includes(lowerQuery) ||
-record.sqlPreview?.toLowerCase().includes(lowerQuery) ||
-record.databaseType?.toLowerCase().includes(lowerQuery) ||
-record.type?.toLowerCase().includes(lowerQuery);
+  // SQL内容搜索
+  let matchesQuery = true;
+  if (query.trim()) {
+    matchesQuery = record.sql.toLowerCase().includes(lowerQuery) ||
+                  record.sqlPreview?.toLowerCase().includes(lowerQuery);
+  }
+
+  // 数据库类型过滤
+  let matchesDatabaseType = true;
+  if (databaseType && databaseType.trim()) {
+    const dbTypes = this.expandDatabaseTypeKeywords(databaseType.toLowerCase().trim());
+    matchesDatabaseType = dbTypes.includes(record.databaseType?.toLowerCase() || '');
+  }
+
+  // 分析类型过滤
+  let matchesAnalysisType = true;
+  if (type && type.trim()) {
+    const analysisTypes = this.expandAnalysisTypeKeywords(type.toLowerCase().trim());
+    matchesAnalysisType = analysisTypes.includes(record.type?.toLowerCase() || '');
+  }
+
+  return matchesQuery && matchesDatabaseType && matchesAnalysisType;
 });
 
 // 按时间戳倒序排列
@@ -293,6 +327,51 @@ return filteredRecords.slice(offset, offset + limit);
 console.error('搜索历史记录失败:', error);
 return [];
 }
+}
+
+/**
+* 扩展数据库类型关键词（支持同义词搜索）
+*/
+private expandDatabaseTypeKeywords(keyword: string): string[] {
+const dbTypeMap: Record<string, string[]> = {
+  'mysql': ['mysql', 'mariadb', 'maria'],
+  'postgresql': ['postgresql', 'postgres', 'pgsql'],
+  'postgres': ['postgresql', 'postgres', 'pgsql'],
+  'pgsql': ['postgresql', 'postgres', 'pgsql'],
+  'sqlserver': ['sqlserver', 'sql_server', 'mssql', 'ms sql'],
+  'sql_server': ['sqlserver', 'sql_server', 'mssql', 'ms sql'],
+  'mssql': ['sqlserver', 'sql_server', 'mssql', 'ms sql'],
+  'sqlite': ['sqlite', 'sqlite3'],
+  'sqlite3': ['sqlite', 'sqlite3'],
+  'oracle': ['oracle', 'oracledb'],
+  'mongodb': ['mongodb', 'mongo'],
+  'mongo': ['mongodb', 'mongo'],
+  'unknown': ['unknown', '']
+};
+
+return dbTypeMap[keyword] || [keyword];
+}
+
+/**
+* 扩展分析类型关键词（支持同义词搜索）
+*/
+private expandAnalysisTypeKeywords(keyword: string): string[] {
+const typeMap: Record<string, string[]> = {
+  'sql': ['sql', 'sql_statement', 'analysis'],
+  'sql_statement': ['sql', 'sql_statement', 'analysis'],
+  'sql语句': ['sql', 'sql_statement', 'analysis'],
+  'file': ['file', 'file_analysis'],
+  'file_analysis': ['file', 'file_analysis'],
+  '文件分析': ['file', 'file_analysis'],
+  'directory': ['directory', 'directory_analysis'],
+  'directory_analysis': ['directory', 'directory_analysis'],
+  '目录分析': ['directory', 'directory_analysis'],
+  'batch': ['batch', 'batch_analysis'],
+  'batch_analysis': ['batch', 'batch_analysis'],
+  '批量分析': ['batch', 'batch_analysis']
+};
+
+return typeMap[keyword] || matchAnalysisTypeByKeyword(keyword);
 }
 
 /**
@@ -333,6 +412,79 @@ throw new Error(`不支持的导出格式: ${format}`);
 } catch (error) {
 console.error('导出历史记录失败:', error);
 throw error;
+}
+}
+
+/**
+* 标准化和验证分析类型
+*/
+private normalizeAndValidateType(type?: string): AnalysisType {
+if (!type) {
+return AnalysisType.SQL_STATEMENT; // 默认值
+}
+
+// 如果已经是标准类型，直接返回
+if (isValidAnalysisType(type)) {
+return normalizeAnalysisType(type);
+}
+
+// 尝试映射旧类型
+const normalized = normalizeAnalysisType(type);
+if (isValidAnalysisType(normalized)) {
+return normalized;
+}
+
+// 无法识别的类型，返回默认值
+console.warn(`未知的分析类型: ${type}，使用默认值: ${AnalysisType.SQL_STATEMENT}`);
+return AnalysisType.SQL_STATEMENT;
+}
+
+/**
+* 标准化和验证数据库类型
+*/
+private normalizeAndValidateDatabaseType(dbType?: string): DatabaseType {
+if (!dbType) {
+return DatabaseType.UNKNOWN; // 默认值
+}
+
+const lowerType = dbType.toLowerCase();
+
+// 如果已经是标准类型，直接返回
+if (isValidDatabaseType(lowerType)) {
+return lowerType as DatabaseType;
+}
+
+// 尝试匹配常见变体
+switch (lowerType) {
+case 'mysql':
+case 'mariadb':
+case 'maria':
+return DatabaseType.MYSQL;
+case 'postgresql':
+case 'postgres':
+case 'pgsql':
+case 'postgres_db':
+return DatabaseType.POSTGRESQL;
+case 'sqlserver':
+case 'sql_server':
+case 'mssql':
+case 'ms sql':
+return DatabaseType.SQLSERVER;
+case 'sqlite':
+case 'sqlite3':
+case 'sqlite_db':
+return DatabaseType.SQLITE;
+case 'oracle':
+case 'oracle_db':
+case 'oracledb':
+return DatabaseType.ORACLE;
+case 'mongodb':
+case 'mongo':
+case 'mongo_db':
+return DatabaseType.MONGODB;
+default:
+console.warn(`未知的数据库类型: ${dbType}，标记为未知`);
+return DatabaseType.UNKNOWN;
 }
 }
 

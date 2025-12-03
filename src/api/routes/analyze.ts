@@ -8,9 +8,11 @@ import { Hono } from 'hono';
 import { getGlobalLogger } from '../../utils/logger.js';
 import { llmJsonParser } from '../../core/llm-json-parser.js';
 import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+import { getConfig } from '../../config/AppConstants.js';
 import { DatabaseIdentifier } from '../../core/identification/db-identifier.js';
+import { DisplayService, DisplayMode, getDisplayService } from '../../services/display-service.js';
 
-// 使用ServiceContainer获取SQL分析器实例
+// 使用ServiceContainer统一管理服务
 const serviceContainer = ServiceContainer.getInstance();
 const sqlAnalyzer = serviceContainer.getSQLAnalyzer();
 
@@ -119,14 +121,16 @@ export function registerAnalyzeRoutes(app: Hono): void {
           type: 'api',
           sql: sqlQuery, // 添加原始SQL字段
           input: {
-            content: sqlQuery.length > 500 ? sqlQuery.substring(0, 500) + '...' : sqlQuery,
+            content: sqlQuery.length > getConfig('API.REQUEST_LIMITS.MAX_INPUT_LENGTH', 500)
+              ? sqlQuery.substring(0, getConfig('API.REQUEST_LIMITS.MAX_INPUT_LENGTH', 500)) + '...'
+              : sqlQuery,
             path: 'api-request',
             name: 'API请求'
           },
           result: {
             success: result.success !== false, // 添加成功标志
             summary: dimensionAnalysis.summary,
-            confidence: 0.85, // 移除置信度依赖，使用固定默认值
+            confidence: getConfig('API.RESPONSE.DEFAULT_CONFIDENCE', 0.85), // 使用配置化的默认置信度
             issues: dimensionAnalysis.allIssues || [],
             recommendations: dimensionAnalysis.allRecommendations || [],
             sqlFix: dimensionAnalysis.sqlFixData || null
@@ -138,58 +142,48 @@ export function registerAnalyzeRoutes(app: Hono): void {
           }
         });
 
-          // 触发测试驱动规则学习（新的简化架构）
+          // 触发统一规则学习
           if (body.options?.learn !== false) {
             try {
-              const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
+              const { getUnifiedRuleLearner } = await import('../../services/rule-learning/unified-rule-learner.js');
 
-              // 构建测试用例
-              const testCase = {
-                sql: sqlQuery,
-                analysisResult: result.data || result,
-                databaseType: databaseType,
-                timestamp: new Date().toISOString(),
-                context: {
-                  performance: dimensionAnalysis.performance || {},
-                  security: dimensionAnalysis.security || {},
-                  standards: dimensionAnalysis.standards || {}
-                }
-              };
-
-              // 异步执行规则生成，直接保存到manual_review
-              generateRulesFromAnalysis(
+              // 异步执行规则生成，直接保存到generated
+              getUnifiedRuleLearner().learnFromAnalysis(
                 sqlQuery,
-                testCase.analysisResult,
+                result.data || result,
                 databaseType,
-                'rules/learning-rules/manual_review'
+                'rules/learning-rules/generated'
               ).catch((error: any) => {
-                logWarn(LogCategory.RULE_LEARNING, `测试驱动规则生成失败: ${error.message}`, {
+                logWarn(LogCategory.RULE_LEARNING, `统一规则学习失败: ${error.message}`, {
                   sql: sqlQuery,
                   error: error.stack
                 });
               });
 
               const logger = getGlobalLogger();
-              logger.info('测试驱动规则生成已触发', {
-                sql: sqlQuery.substring(0, 100)
+              logger.info(LogCategory.RULE_LEARNING, '测试驱动规则生成已触发', {
+                sql: sqlQuery.substring(0, getConfig('API.REQUEST_LIMITS.MAX_INPUT_LENGTH', 100))
               });
             } catch (learnError: any) {
               const logger = getGlobalLogger();
-              logger.error(`测试驱动规则学习初始化失败: ${learnError.message}`, learnError, {
-                sql: sqlQuery
-              });
+              logger.error(LogCategory.RULE_LEARNING, `测试驱动规则学习初始化失败: ${learnError.message}`, learnError);
             }
           }
         } catch (historyError: any) {
           const logger = getGlobalLogger();
-          logger.error(`异步保存失败: ${historyError.message}`, historyError, {
-            sql: sqlQuery
-          });
+          logger.error(LogCategory.HISTORY, `异步保存失败: ${historyError.message}`, historyError);
         }
       });
 
+      // 使用DisplayService提取和格式化分析数据
+      const displayService = getDisplayService();
+      const extractedData = displayService.extractAnalysisData(result);
+
       // 使用响应格式化工具
-      return c.json(formatSuccessResponse(result, {
+      return c.json(formatSuccessResponse({
+        ...result,
+        extractedData: extractedData // 添加结构化的分析数据
+      }, {
         ...result.metadata,
         responseTime
       }));
@@ -227,8 +221,8 @@ export function registerAnalyzeRoutes(app: Hono): void {
         throw createValidationError('请求体必须包含 "sqls" 数组字段，且不能为空');
       }
 
-      if (body.sqls.length > 50) {
-        throw createValidationError('批量分析最多支持50条SQL语句');
+      if (body.sqls.length > getConfig('API.REQUEST_LIMITS.MAX_BATCH_SIZE', 50)) {
+        throw createValidationError(`批量分析最多支持${getConfig('API.REQUEST_LIMITS.MAX_BATCH_SIZE', 50)}条SQL语句`);
       }
 
       // 准备分析选项
@@ -263,37 +257,19 @@ export function registerAnalyzeRoutes(app: Hono): void {
                   type: 'batch'
                 });
 
-                // 触发测试驱动规则学习（新的简化架构）
+                // 触发统一规则学习
                 if (body.options?.learn !== false) {
                   try {
-                    const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
-                    const llmJsonParser = await import('../../core/llm-json-parser.js');
+                    const { learnRulesFromAnalysis } = await import('../../services/rule-learning/unified-rule-learner.js');
 
-                    // 提取维度分析结果
-                    const analysisData = result.data || result;
-                    const dimensionAnalysis = llmJsonParser.extractDimensionAnalysis(analysisData);
-
-                    // 构建测试用例
-                    const testCase = {
-                      sql: result.sql,
-                      analysisResult: analysisData,
-                      databaseType: 'unknown', // 批量处理时暂不识别具体类型
-                      timestamp: new Date().toISOString(),
-                      context: {
-                        performance: dimensionAnalysis.performance || {},
-                        security: dimensionAnalysis.security || {},
-                        standards: dimensionAnalysis.standards || {}
-                      }
-                    };
-
-                    // 异步执行规则生成，直接保存到manual_review
-                    generateRulesFromAnalysis(
+                    // 异步执行规则生成，直接保存到generated
+                    learnRulesFromAnalysis(
                       result.sql,
-                      testCase.analysisResult,
-                      testCase.databaseType,
-                      'rules/learning-rules/manual_review'
+                      result.data || result,
+                      'unknown', // 批量处理时暂不识别具体类型
+                      'rules/learning-rules/generated'
                     ).catch((error: any) => {
-                      logWarn(LogCategory.RULE_LEARNING, `批量测试驱动规则生成失败: ${error.message}`, {
+                      logWarn(LogCategory.RULE_LEARNING, `批量规则学习失败: ${error.message}`, {
                         sql: result.sql,
                         error: error.stack
                       });
@@ -312,8 +288,15 @@ export function registerAnalyzeRoutes(app: Hono): void {
         }
       });
 
+      // 使用DisplayService提取和格式化批量分析数据
+      const displayService = getDisplayService();
+      const enrichedResults = results.map(result => ({
+        ...result,
+        extractedData: result.data ? displayService.extractAnalysisData(result) : null
+      }));
+
       // 使用响应格式化工具
-      return c.json(formatSuccessResponse(results, {
+      return c.json(formatSuccessResponse(enrichedResults, {
         total: results.length,
         succeeded,
         failed,

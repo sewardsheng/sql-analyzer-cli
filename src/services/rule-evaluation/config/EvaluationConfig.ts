@@ -86,7 +86,7 @@ export class EvaluationConfigManager {
   private static instance: EvaluationConfigManager;
   private config: EvaluationConfig;
   private lastLoadTime: Date;
-  private watchers: fs.FileWatcher[] = [];
+  private watchers: any[] = []; // TODO: 使用正确的文件监视器类型
 
   private constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -314,7 +314,10 @@ export class EvaluationConfigManager {
     // 验证权重总和
     if (config.duplicateDetection?.weights) {
       const weights = config.duplicateDetection.weights;
-      const totalWeight = Object.values(weights).reduce((sum: number, weight: number) => sum + weight, 0);
+      const totalWeight = Object.values(weights).reduce((sum: number, weight: any) => {
+      const numWeight = Number(weight);
+      return sum + (isNaN(numWeight) ? 0 : numWeight);
+    }, 0);
       if (Math.abs(totalWeight - 1.0) > 0.01) {
         throw new Error(`去重权重总和必须等于1.0，当前为${totalWeight}`);
       }
@@ -389,7 +392,7 @@ export class EvaluationConfigManager {
     try {
       const configPath = path.join(CONFIG_PATHS.base, CONFIG_PATHS.main);
 
-      const watcher = fs.watch(configPath, async (eventType) => {
+      const watcher = fs.watch(configPath, { recursive: false }, async (eventType) => {
         if (eventType === 'change') {
           console.log('检测到配置文件变更，重新加载...');
           try {

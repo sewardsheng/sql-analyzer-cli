@@ -106,94 +106,58 @@ app.use('*', createDefaultCorsMiddleware());
 app.use('*', createDefaultRateLimiterMiddleware()); // 修复Hono兼容性问题后重新启用
 app.use('*', createDefaultRequestLoggerMiddleware()); // 修复Hono兼容性问题后重新启用
 
-// 临时添加简单测试路由
-app.get('/api/test', (c) => {
-  return c.json({ message: 'Test route working!', timestamp: new Date().toISOString() });
-});
-
 // 注册路由到/api路径下
 const apiRoutes = new Hono();
 
-console.log('开始注册路由...');
 
 try {
-  console.log('注册分析路由...');
   registerAnalyzeRoutes(apiRoutes);
-  console.log('分析路由注册成功');
 } catch (error) {
   console.error('分析路由注册失败:', error);
   throw error;
 }
 
 try {
-  console.log('注册历史路由...');
   registerHistoryRoutes(apiRoutes);
-  console.log('历史路由注册成功');
 } catch (error) {
   console.error('历史路由注册失败:', error);
   throw error;
 }
 
 try {
-  console.log('注册知识库路由...');
   registerKnowledgeRoutes(apiRoutes);
-  console.log('知识库路由注册成功');
   } catch (error) {
   console.error('知识库路由注册失败:', error);
   throw error;
 }
 
 try {
-  console.log('注册配置路由...');
   registerConfigRoutes(apiRoutes);
-  console.log('配置路由注册成功');
 } catch (error) {
   console.error('配置路由注册失败:', error);
   throw error;
 }
 
 try {
-  console.log('注册系统路由...');
   registerSystemRoutes(apiRoutes);
-  console.log('系统路由注册成功');
 } catch (error) {
   console.error('系统路由注册失败:', error);
   throw error;
 }
 
 try {
-  console.log('注册规则学习路由...');
   registerRuleLearningRoutes(apiRoutes);
-  console.log('规则学习路由注册成功');
 } catch (error) {
   console.error('规则学习路由注册失败:', error);
   throw error;
 }
 
-// 添加一个简单的测试路由到apiRoutes
-apiRoutes.get('/simple-health', (c) => {
-  return c.json({ message: 'Simple health works!', timestamp: new Date().toISOString() });
-});
 
-console.log('所有路由注册完成，挂载到 /api 路径下');
 app.route('/api', apiRoutes);
-console.log('路由挂载完成');
 
 
 // 调试：打印实际的路由信息
-
-
-
-
-// 添加一个简单的测试路由到主应用
-app.get('/debug', (c) => {
-  return c.json({ message: 'Debug route on main app works!', timestamp: new Date().toISOString() });
-});
-
-// 添加一个测试路由到API路由
-apiRoutes.get('/debug', (c) => {
-  return c.json({ message: 'Debug route on API routes works!', timestamp: new Date().toISOString() });
-});
+// console.log('已注册的路由:', app.routes); // 如需调试可取消注释
 
 
 

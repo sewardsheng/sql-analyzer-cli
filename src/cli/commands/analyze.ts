@@ -11,6 +11,7 @@ import { ResultFormatter, resultFormatter } from '../../utils/formatter.js';
 import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
 import { ISQLAnalyzer, IFileAnalyzerService, IHistoryService } from '../../services/interfaces/ServiceInterfaces.js';
 import { DatabaseIdentifier } from '../../core/identification/index.js';
+import { DisplayService, DisplayMode, getDisplayService } from '../../services/display-service.js';
 
 /**
  * 分析命令类 - 重构版
@@ -105,34 +106,14 @@ export class AnalyzeCommand {
         // 使用analyzeSQL方法分析SQL内容
         const analysisResult = await this.analyzer.analyzeSQL(sqlContent, analysisOptions);
 
-        // 提取真实的分析结果
-        const realAnalysis = analysisResult.parsedContent || analysisResult;
+        // 使用新的显示服务处理分析结果
+        const displayService = getDisplayService();
 
-        // 调试输出
-        if (options.debug || true) { // 强制启用调试
-          console.log(cliTools.colors.magenta`\n🔍 调试信息 - 原始分析结果:`);
-          console.log(JSON.stringify(analysisResult, null, 2));
-          console.log(cliTools.colors.magenta`\n🔍 调试信息 - 提取的分析结果:`);
-          console.log(JSON.stringify(realAnalysis, null, 2));
-          console.log(cliTools.colors.yellow(`\n🔍 realAnalysis.issues 数量: ${realAnalysis.issues?.length || 0}`));
-          if (realAnalysis.issues && realAnalysis.issues.length > 0) {
-            console.log(cliTools.colors.yellow(`第一个问题的维度: ${realAnalysis.issues[0].dimension}`));
-          }
-        }
+        // CLI模式下友好显示分析结果
+        displayService.displayAnalysis(analysisResult, DisplayMode.CLI, cliTools.colors);
 
-        // 使用统一的JSON解析器提取维度分析结果
-        const dimensionAnalysis = llmJsonParser.extractDimensionAnalysis(realAnalysis);
-
-        if (options.debug) {
-          console.log(cliTools.colors.magenta`\n🔍 调试信息 - 提取的维度分析结果:`);
-          console.log(JSON.stringify(dimensionAnalysis, null, 2));
-        }
-
-        // 按维度重新组织问题和建议
-        const issuesByDimension = this.groupIssuesByDimension(dimensionAnalysis.allIssues);
-        const recommendationsByDimension = this.groupRecommendationsByDimension(dimensionAnalysis.allRecommendations);
-
-        // 构建最终结果 - 添加兼容规则学习器的数据结构
+        // 构建兼容规则学习器的数据结构
+        const extractedData = displayService.extractAnalysisData(analysisResult);
         const result = {
           fileInfo: {
             fileName: inputType === 'file' ?
@@ -146,67 +127,46 @@ export class AnalyzeCommand {
             overallScore: 75
           },
           analysis: {
-            summary: dimensionAnalysis.summary,
-            issues: issuesByDimension,
-            recommendations: recommendationsByDimension,
-            confidence: 0.85,
-            sqlFix: dimensionAnalysis.sqlFixData,
-            learning: realAnalysis.learning || null
+            summary: extractedData.summary,
+            issues: {
+              performance: extractedData.performance.issues,
+              security: extractedData.security.issues,
+              standards: extractedData.standards.issues
+            },
+            recommendations: {
+              performance: extractedData.performance.recommendations,
+              security: extractedData.security.recommendations,
+              standards: extractedData.standards.recommendations
+            },
+            sqlFix: extractedData.sqlFix,
+            learning: null
           },
           // 为规则学习器提供兼容的数据结构
           data: {
             performance: {
               metadata: { confidence: 0.85 },
               data: {
-                issues: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'performance') || []
+                issues: extractedData.performance.issues
               }
             },
             security: {
               metadata: { confidence: 0.85 },
               data: {
-                vulnerabilities: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'security') || []
+                vulnerabilities: extractedData.security.issues
               }
             },
             standards: {
               metadata: { confidence: 0.85 },
               data: {
-                violations: dimensionAnalysis.allIssues?.filter(i => i.dimension === 'standards') || []
+                violations: extractedData.standards.issues
               }
             }
           },
           rawResult: analysisResult
         };
 
-        // 显示分析结果
-        resultFormatter.displaySummary(result);
-        resultFormatter.displayIssues(result.analysis.issues);
-        resultFormatter.displayRecommendations(result.analysis.recommendations);
-        resultFormatter.displaySummaryInfo(result.analysis);
-        resultFormatter.displaySQLFix(result.analysis.sqlFix);
-        resultFormatter.displayCompletionInfo(startTime);
-
-        // 显示规则学习状态
-        if (result.analysis.learning) {
-          console.log(`\n${cliTools.colors.purple('🧠 规则学习状态:')}`);
-          console.log(`已处理模式: ${result.analysis.learning.patternsProcessed || 0}`);
-          console.log(`新规则生成: ${result.analysis.learning.newRulesGenerated || 0}`);
-          console.log(`学习建议: ${result.analysis.learning.suggestions?.length || 0}`);
-
-          if (result.analysis.learning.newRules && result.analysis.learning.newRules.length > 0) {
-            console.log(`\n🆕 新生成规则: ${cliTools.colors.green(result.analysis.learning.newRules.length + '个')}`);
-            result.analysis.learning.newRules.forEach((rule: any) => {
-              console.log(`   - ${cliTools.colors.cyan(rule.name)} (${cliTools.colors.gray(rule.confidence + ' 置信度')})`);
-            });
-          }
-        }
-
-        // 触发规则学习（改为同步执行以调试）
-        console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
-        try {
-          await this.asyncTriggerRuleLearning(sqlContent, inputType, inputPath, dimensionAnalysis, result);
-        } catch (error: any) {
-          console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
-        }
+        // 显示完成时间
+        console.log(`\n${cliTools.colors.blue('💡 完成时间:')} ${new Date().toLocaleString()}`);
 
         // 保存分析结果到历史记录
         try {
@@ -229,7 +189,7 @@ export class AnalyzeCommand {
               summary: result.analysis.summary,
               issues: result.analysis.issues,
               recommendations: result.analysis.recommendations,
-              confidence: result.analysis.confidence,
+              confidence: 0.85, // 使用默认置信度
               sqlFix: result.analysis.sqlFix
             },
             metadata: {
@@ -241,6 +201,14 @@ export class AnalyzeCommand {
           cliTools.log.success('✅ 分析结果已保存到历史记录');
         } catch (historyError: any) {
           cliTools.log.warn(`⚠️  历史记录保存失败: ${historyError.message}`);
+        }
+
+        // 触发规则学习（在保存历史记录后执行）
+        console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
+        try {
+          await this.asyncTriggerRuleLearning(sqlContent, inputType, inputPath, result);
+        } catch (error: any) {
+          console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
         }
 
       } catch (error: any) {
@@ -508,57 +476,31 @@ export class AnalyzeCommand {
    * @param sqlContent SQL内容
    * @param inputType 输入类型
    * @param inputPath 输入路径
-   * @param dimensionAnalysis 维度分析结果
    * @param result 完整的分析结果（包含规则学习需要的data结构）
    */
-  private async asyncTriggerRuleLearning(sqlContent: string, inputType: string, inputPath: string, dimensionAnalysis: any, result: any): Promise<void> {
+  private async asyncTriggerRuleLearning(sqlContent: string, inputType: string, inputPath: string, result: any): Promise<void> {
     try {
       console.log(cliTools.colors.blue('📥 开始导入规则学习模块...'));
 
-      // 动态导入规则生成器
-      const { generateRulesFromAnalysis } = await import('../../services/rule-learning/rule-generator.js');
-
+      
       console.log(cliTools.colors.blue('🔧 初始化服务...'));
 
       console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
 
-      // 调试：打印完整的分析结果结构
-      if (true) { // 强制启用调试
-        console.log(cliTools.colors.magenta(`\n🔍 规则生成器接收的数据结构:`));
-        console.log(`data.performance.data.issues 数量: ${result.data?.performance?.data?.issues?.length || 0}`);
-        console.log(`data.security.data.vulnerabilities 数量: ${result.data?.security?.data?.vulnerabilities?.length || 0}`);
-        console.log(`data.standards.data.violations 数量: ${result.data?.standards?.data?.violations?.length || 0}`);
-        console.log(`\n🔍 data.performance.data.issues 示例:`);
-        console.log(JSON.stringify(result.data?.performance?.data?.issues?.[0] || null, null, 2));
-      }
+  
+      // 使用统一规则学习器
+      const { getUnifiedRuleLearner } = await import('../../services/rule-learning/unified-rule-learner.js');
+      const learner = getUnifiedRuleLearner();
 
-      // 直接从当前分析结果生成规则，无需依赖历史记录
-      const learningResult = await generateRulesFromAnalysis(
+      const learningResult = await learner.learnFromAnalysis(
         sqlContent,
         result,
         'unknown', // 数据库类型，可以后续优化
-        'rules/learning-rules/manual_review'
+        'rules/learning-rules/generated'
       );
 
-      console.log(cliTools.colors.blue('✅ 规则学习执行完成'));
-      console.log(cliTools.colors.magenta(`🔍 规则学习结果: ${JSON.stringify(learningResult, null, 2)}`));
-
-      // 显示详细的学习结果
-      console.log(cliTools.colors.magenta(`\n🔍 规则生成调试信息:`));
-      console.log(`   生成规则: ${learningResult.length || 0}`);
-
-      if (learningResult && learningResult.length > 0) {
-        console.log(`${cliTools.colors.green('\n✅ 规则生成完成!')}`);
-        console.log(`   生成规则: ${learningResult.length} 条`);
-
-        console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
-        learningResult.forEach((rule: any, index: number) => {
-          console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
-        });
-      } else {
-        console.log(`${cliTools.colors.yellow('\n⚠️ 本次未生成新规则')}`);
-        console.log(`   可能原因：分析结果中无问题或质量评估未通过`);
-      }
+      // 显示学习结果
+      learner.printResult(learningResult, cliTools.colors);
 
     } catch (error) {
       console.log(`${cliTools.colors.red('❌ 规则学习失败:')} ${error.message}`);

@@ -8,6 +8,10 @@
  */
 export interface ISQLAnalyzer {
   analyzeSQL(sql: string, options?: any): Promise<any>;
+  analyzeBatch(sqls: string[], options?: any): Promise<any>;
+  getStats(): any;
+  resetStats(): void;
+  cleanup?(): void;
   analyzePerformance?(sql: string): Promise<any>;
   analyzeSecurity?(sql: string): Promise<any>;
   analyzeStandards?(sql: string): Promise<any>;
@@ -33,6 +37,7 @@ export interface IHistoryService {
   deleteHistory(id: string): Promise<boolean>;
   clearHistory(): Promise<boolean>;
   addAnalysis?(analysis: any): Promise<string>;
+  exportHistory?(format: string): Promise<any>;
 }
 
 /**
@@ -41,7 +46,7 @@ export interface IHistoryService {
 export interface IKnowledgeService {
   searchKnowledge(query: string, k?: number): Promise<any[]>;
   learnDocuments(options?: any): Promise<any>;
-  getKnowledgeStatus(): Promise<any>;
+  getStatus(): Promise<any>;  // 修复方法名
   resetKnowledge(): Promise<any>;
 }
 

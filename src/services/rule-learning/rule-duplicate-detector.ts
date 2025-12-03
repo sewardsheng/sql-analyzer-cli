@@ -45,7 +45,6 @@ export class RuleDuplicateDetector {
    * 加载现有规则
    */
   async loadExistingRules(): Promise<void> {
-    console.log(`=== 调试：开始加载现有规则从 ${this.rulesDir} ===`);
 
     try {
       const subdirs = await fs.readdir(this.rulesDir, { withFileTypes: true });
@@ -57,7 +56,6 @@ export class RuleDuplicateDetector {
         }
       }
 
-      console.log(`=== 调试：加载完成，总共加载了 ${this.getTotalRulesCount()} 个规则 ===`);
     } catch (error) {
       console.warn('加载现有规则失败:', error.message);
     }
@@ -97,7 +95,6 @@ export class RuleDuplicateDetector {
         }
 
         this.existingRules.get(category)!.push(ruleInfo);
-        console.log(`=== 调试：加载规则 [${category}] ${ruleInfo.title} ===`);
       }
     } catch (error) {
       console.warn(`解析规则文件失败 ${filePath}:`, error.message);
@@ -170,7 +167,6 @@ export class RuleDuplicateDetector {
    * 检查规则是否重复
    */
   async checkDuplicate(newRule: BaseRule): Promise<DuplicateCheckResult> {
-    console.log(`=== 调试：开始检查规则重复性: ${newRule.title} ===`);
 
     const newRuleInfo: RuleInfo = {
       id: newRule.id,
@@ -185,7 +181,6 @@ export class RuleDuplicateDetector {
     // 1. 检查完全相同的规则
     const exactDuplicate = this.findExactDuplicate(newRuleInfo);
     if (exactDuplicate) {
-      console.log(`=== 调试：发现完全重复的规则: ${exactDuplicate.title} ===`);
       return {
         isDuplicate: true,
         similarity: 1.0,
@@ -197,7 +192,6 @@ export class RuleDuplicateDetector {
     // 2. 检查高相似度规则
     const similarRules = this.findSimilarRules(newRuleInfo, 0.8);
     if (similarRules.length > 0) {
-      console.log(`=== 调试：发现 ${similarRules.length} 个高相似度规则 ===`);
       return {
         isDuplicate: true,
         similarity: Math.max(...similarRules.map(r => this.calculateSimilarity(newRuleInfo, r))),
@@ -209,7 +203,6 @@ export class RuleDuplicateDetector {
     // 3. 检查中等相似度规则（用于警告）
     const mediumSimilarRules = this.findSimilarRules(newRuleInfo, 0.6);
     if (mediumSimilarRules.length > 0) {
-      console.log(`=== 调试：发现 ${mediumSimilarRules.length} 个中等相似度规则（仅警告） ===`);
       return {
         isDuplicate: false,
         similarity: Math.max(...mediumSimilarRules.map(r => this.calculateSimilarity(newRuleInfo, r))),
@@ -218,7 +211,6 @@ export class RuleDuplicateDetector {
       };
     }
 
-    console.log(`=== 调试：未发现重复规则 ===`);
     return {
       isDuplicate: false,
       similarity: 0,
@@ -366,7 +358,6 @@ export class RuleDuplicateDetector {
    */
   clearCache(): void {
     this.existingRules.clear();
-    console.log('=== 调试：规则缓存已清空 ===');
   }
 }
 

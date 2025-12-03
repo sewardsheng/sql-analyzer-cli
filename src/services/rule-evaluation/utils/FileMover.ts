@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { EvaluationResult } from '../models/EvaluationModels';
 import { RuleInfo } from '../models/RuleModels';
+import { getConfig } from '../../../config/AppConstants.js';
 
 /**
  * 文件移动工具类
@@ -23,7 +24,10 @@ export class FileMover {
     error?: string;
   }> {
     try {
-      const sourcePath = result.rule.metadata?.filePath;
+      // 从evaluationMetadata或rule metadata中获取文件路径
+      const sourcePath = (result as any).evaluationMetadata?.filePath ||
+                         (result as any).rule?.metadata?.filePath ||
+                         (result as any).filePath;
 
       if (!sourcePath || !(await fs.access(sourcePath).then(() => true).catch(() => false))) {
         return {
@@ -108,28 +112,52 @@ export class FileMover {
 
     // 优先级：重复 > 质量 > 格式
     if (duplicateCheck.isDuplicate) {
-      return 'rules/learning-rules/duplicates';
+      return 'rules/learning-rules/issues';
     }
 
     if (overallStatus === 'rejected') {
-      return 'rules/learning-rules/invalid_format';
+      return 'rules/learning-rules/issues';
     }
 
-    // 基于质量分数分类 - 直接保存到分类根目录
-    const qualityScore = qualityEvaluation.qualityScore;
-    const qualityLevel = qualityEvaluation.qualityLevel;
+    // 使用RuleEvaluationEngine的分类结果
+    if (classification && classification.category) {
+      switch (classification.category) {
+        case 'approved':
+          return 'rules/learning-rules/approved';
+        case 'manual_review':
+          return 'rules/learning-rules/manual_review';
+        case 'low_quality':
+          return 'rules/learning-rules/low_quality';
+        case 'duplicate':
+          return 'rules/learning-rules/duplicates';
+        case 'invalid_format':
+          return 'rules/learning-rules/issues';
+        default:
+          // 兜底逻辑：基于质量分数分类
+          return this.classifyByQualityScore(qualityEvaluation.qualityScore);
+      }
+    }
 
-    if (qualityScore >= 90 || qualityLevel === 'excellent') {
-      // 高质量规则，直接通过
+    // 兜底逻辑：基于质量分数分类
+    return this.classifyByQualityScore(qualityEvaluation.qualityScore);
+  }
+
+  /**
+   * 基于质量分数的分类兜底逻辑
+   */
+  private static classifyByQualityScore(qualityScore: number): string {
+    // 使用配置化的分类阈值
+    const approvedThreshold = getConfig('RULE_MANAGEMENT.CLASSIFICATION_THRESHOLDS.APPROVED', 85);
+    const manualReviewThreshold = getConfig('RULE_MANAGEMENT.CLASSIFICATION_THRESHOLDS.MANUAL_REVIEW', 65);
+
+    if (qualityScore >= approvedThreshold) {
+      // 高质量规则，建议批准
       return 'rules/learning-rules/approved';
-    } else if (qualityScore >= 70 || qualityLevel === 'good') {
+    } else if (qualityScore >= manualReviewThreshold) {
       // 良好质量，需要人工审核
       return 'rules/learning-rules/manual_review';
-    } else if (qualityScore >= 50 || qualityLevel === 'fair') {
-      // 一般质量，需要人工审核
-      return 'rules/learning-rules/manual_review';
     } else {
-      // 低质量，问题规则
+      // 低质量规则
       return 'rules/learning-rules/low_quality';
     }
   }

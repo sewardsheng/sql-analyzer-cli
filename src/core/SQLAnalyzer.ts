@@ -9,6 +9,7 @@ import { getLLMService } from './llm-service.js';
 import { retrieveKnowledge } from './knowledge/knowledge-base.js';
 import { logError } from '../utils/logger.js';
 import { config } from '../config/index.js';
+import { DatabaseIdentifier } from './identification/db-identifier.js';
 
 // 分析选项接口
 interface AnalysisOptions {
@@ -36,6 +37,7 @@ export class SQLAnalyzer {
   private toolFactory: any;
   private contextManager: any;
   private promptBuilder: any;
+  private dbIdentifier: DatabaseIdentifier;
   private stats: {
     totalAnalyses: number;
     successfulAnalyses: number;
@@ -73,6 +75,12 @@ null, // 延迟初始化知识库
 enableCaching: this.options.enableCaching
 }
 );
+
+// 初始化数据库类型识别器
+this.dbIdentifier = new DatabaseIdentifier({
+cacheMaxSize: 1000,
+cacheTTL: 3600000 // 1小时
+});
 
 // 分析统计
 this.stats = {
@@ -114,12 +122,21 @@ this.stats.totalAnalyses++;
 try {
 // 验证输入
 if (!sql || typeof sql !== 'string') {
+if (!sql) {
+throw new Error('SQL语句为空');
+}
 throw new Error('无效的SQL语句');
 }
 
 // 解析分析选项
 const analysisTypes = this.parseAnalysisTypes(options);
-const databaseType = options.databaseType || 'auto-detected';
+
+// 识别数据库类型
+let databaseType = options.databaseType;
+if (!databaseType) {
+const identification = this.dbIdentifier.identify(sql);
+databaseType = identification.type || 'auto-detected';
+}
 
 // 根据优先级排序分析类型
 const sortedTypes = sortToolsByPriority(analysisTypes);
@@ -446,7 +463,7 @@ return parts.join(' ');
 * @returns {Object} 错误结果
 */
 handleAnalysisError(error, sql, options) {
-logError('SQL分析失败', error);
+logError('SQL分析失败', error.message, error);
 
 return {
 success: false,

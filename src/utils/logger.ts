@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'crypto';
 import { createRequire } from 'module';
+import { sanitizeLogObject, sanitizeLog } from './log-sanitizer.js';
 
 const require = createRequire(import.meta.url);
 const os = require('os');
@@ -356,7 +357,12 @@ export class EnhancedLogger {
    */
   private createLogEntry(level: LogLevelType, category: LogCategoryType, message: string, metadata: LogMetadata): LogEntry {
     const timestamp = new Date().toISOString();
-    const logId = this.generateLogId(timestamp, category, message);
+
+    // 脱敏处理
+    const sanitizedMessage = sanitizeLog(message, this.getSanitizationLevel(level));
+    const sanitizedMetadata = sanitizeLogObject(metadata, this.getSanitizationLevel(level));
+
+    const logId = this.generateLogId(timestamp, category, sanitizedMessage);
 
     return {
       id: logId,
@@ -364,8 +370,8 @@ export class EnhancedLogger {
       level: this.getLevelName(level),
       levelValue: level,
       category,
-      message,
-      metadata,
+      message: sanitizedMessage,
+      metadata: sanitizedMetadata,
       process: {
         pid: process.pid,
         uptime: process.uptime(),
@@ -375,6 +381,20 @@ export class EnhancedLogger {
       hostname: require('os').hostname(),
       thread: metadata.threadId || 'main'
     };
+  }
+
+  /**
+   * 根据日志级别确定脱敏级别
+   */
+  private getSanitizationLevel(level: LogLevelType): 'low' | 'medium' | 'high' {
+    // 错误级别使用更严格的脱敏
+    if (level >= LogLevel.WARN) {
+      return 'high';
+    } else if (level >= LogLevel.INFO) {
+      return 'medium';
+    } else {
+      return 'low';
+    }
   }
 
   /**

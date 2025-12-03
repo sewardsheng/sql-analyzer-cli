@@ -63,7 +63,7 @@ export class LearnCommand {
       console.log(`⏱️  学习耗时: ${(duration / 1000).toFixed(2)}秒`);
       console.log(`📚 处理的历史记录: ${learningResult.processedRecords || historyStats.total}`);
       console.log(`📝 生成的规则: ${learningResult.rules?.length || 0}`);
-      console.log(`📁 保存位置: rules/learning-rules/manual_review/`);
+      console.log(`📁 保存位置: rules/learning-rules/generated/`);
 
       if (learningResult.rules && learningResult.rules.length > 0) {
         console.log('\n🆕 新生成的规则:');
@@ -76,9 +76,10 @@ export class LearnCommand {
         });
       }
 
-      if (learningResult.errors && learningResult.errors.length > 0) {
+      // 暂时禁用错误显示，因为学习结果结构不同
+      if (learningResult && (learningResult as any).errors && (learningResult as any).errors.length > 0) {
         console.log('\n❌ 学习过程中的错误:');
-        learningResult.errors.forEach((error: string, index: number) => {
+        (learningResult as any).errors.forEach((error: string, index: number) => {
           console.log(`  ${index + 1}. ${error}`);
         });
       }

@@ -3,6 +3,7 @@
  * 老王我把测试覆盖率做到95%以上！
  */
 
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { SmartDuplicateDetector } from '../SmartDuplicateDetector';
 import { RuleInfo } from '../../models/RuleModels';
 
@@ -81,11 +82,11 @@ describe('SmartDuplicateDetector', () => {
       const mockRulesDirectory = '/mock/rules/directory';
 
       // Mock fs operations
-      jest.mock('fs', () => ({
+      vi.mock('fs', () => ({
         promises: {
-          readdir: jest.fn().mockResolvedValue(['rule1.md', 'rule2.md']),
-          readFile: jest.fn().mockResolvedValue('# Test Rule\n\nThis is a test rule.'),
-          stat: jest.fn().mockResolvedValue({ isDirectory: () => true })
+          readdir: vi.fn().mockResolvedValue(['rule1.md', 'rule2.md']),
+          readFile: vi.fn().mockResolvedValue('# Test Rule\n\nThis is a test rule.'),
+          stat: vi.fn().mockResolvedValue({ isDirectory: () => true })
         }
       }));
 

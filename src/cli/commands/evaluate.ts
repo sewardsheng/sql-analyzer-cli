@@ -24,7 +24,7 @@ interface EvaluateOptions {
   concurrency?: number;     // 并发数量
   dryRun?: boolean;         // 预演模式
   verbose?: boolean;        // 详细输出
-  move?: boolean;           // 是否移动文件
+  noMove?: boolean;          // 不移动文件
 }
 
 /**
@@ -32,9 +32,9 @@ interface EvaluateOptions {
  */
 export function createEvaluateCommand(): Command {
   const cmd = new Command('evaluate')
-    .description('🔍 智能规则评估：批量处理、自动分类、质量分析')
-    .option('-s, --source <path>', '源目录路径', 'rules/learning-rules/manual_review/2025-12')
-    .option('-o, --output <path>', '输出报告路径', 'evaluation-report.json')
+    .description('🔍 智能规则评估：批量处理、自动分类、移动文件')
+    .option('-s, --source <path>', '源目录路径', 'rules/learning-rules/generated')
+    .option('-o, --output <path>', '输出报告路径（可选）')
     .option('-b, --batch', '批量处理模式')
     .option('-i, --interactive', '交互式模式')
     .option('-f, --force', '强制重新评估')
@@ -42,7 +42,7 @@ export function createEvaluateCommand(): Command {
     .option('-c, --concurrency <number>', '并发数量', '3')
     .option('--dry-run', '预演模式，不实际移动文件')
     .option('-v, --verbose', '详细输出')
-    .option('--move', '评估完成后自动移动文件到对应目录')
+    .option('--no-move', '评估完成后不移动文件（默认会自动移动）')
     .action(async (options: EvaluateOptions) => {
       try {
         await executeEvaluate(options);
@@ -63,13 +63,7 @@ export async function executeEvaluate(options: EvaluateOptions): Promise<void> {
   const serviceContainer = ServiceContainer.getInstance();
   const ruleEvaluationService = serviceContainer.getRuleEvaluationService();
 
-  console.log('🚀 启动规则评估引擎...');
-  console.log(`📁 源目录: ${options.source}`);
-  console.log(`📊 质量阈值: ${options.threshold}`);
-  console.log(`⚡ 并发数量: ${options.concurrency}`);
-  console.log('');
-
-  console.log(`🚀 启动智能规则评估引擎...`);
+  console.log('🚀 启动智能规则评估引擎...');
   console.log(`📁 源目录: ${options.source}`);
   console.log(`📊 质量阈值: ${options.threshold}`);
   console.log(`⚡ 并发数量: ${options.concurrency}`);
@@ -169,8 +163,9 @@ export async function executeEvaluate(options: EvaluateOptions): Promise<void> {
       displayDetailedResults(result);
     }
 
-    // 保存报告
-    if (options.output) {
+    // 保存报告（可选，默认不保存JSON文件）
+    // 用户可以通过 --output 手动指定保存
+    if (options.output && options.output !== 'evaluation-report.json') {
       saveEvaluationReport(result, options.output!);
     }
 
@@ -185,8 +180,8 @@ export async function executeEvaluate(options: EvaluateOptions): Promise<void> {
     const totalTime = (result.performance.totalTime / 1000);
     console.log(`\n🎉 评估任务完成！总用时: ${totalTime.toFixed(2)} 秒`);
 
-    // 文件移动处理
-    if (options.move && result.results && result.results.length > 0) {
+    // 文件移动处理（默认自动移动，除非明确指定 --no-move）
+    if (!options.noMove && result.results && result.results.length > 0 && !options.dryRun) {
       console.log('\n📁 开始文件分类移动...');
       console.log('='.repeat(50));
 
@@ -226,17 +221,7 @@ export async function executeEvaluate(options: EvaluateOptions): Promise<void> {
           });
         }
 
-        // 保存移动报告
-        if (options.output) {
-          const moveReportPath = options.output.replace('.json', '-move-report.json');
-          try {
-            await fs.writeFile(moveReportPath, JSON.stringify(moveReport, null, 2));
-            console.log(`\n📄 移动报告已保存到: ${moveReportPath}`);
-          } catch (reportError) {
-            console.warn('保存移动报告失败:', reportError.message);
-          }
-        }
-
+  
       } catch (moveError) {
         console.error('💥 文件移动过程中发生错误:', moveError.message);
       }
@@ -295,12 +280,21 @@ async function loadRulesFromFiles(ruleFiles: string[]): Promise<any[]> {
       const titleMatch = content.match(/^#\s+(.+)$/m);
       const title = titleMatch ? titleMatch[1].trim() : path.basename(filePath, '.md');
 
-      const descriptionMatch = content.match(/#\s+.+\n\n(.+?)(?:\n\n|$)/m);
+      // 改进的描述解析 - 获取规则描述部分
+      const descriptionMatch = content.match(/## 规则描述\s*\n\n(.+?)(?=\n##|\n---|\n\*\*|$)/s) ||
+                             content.match(/#\s+.+\n\n(.+?)(?:\n\n|$)/m);
       const description = descriptionMatch ? descriptionMatch[1].trim() : content.substring(0, 200);
 
-      // 提取其他信息
-      const categoryMatch = content.match(/category:\s*(.+)/i) || content.match(/类别:\s*(.+)/);
-      const severityMatch = content.match(/severity:\s*(.+)/i) || content.match(/严重程度:\s*(.+)/);
+      // 提取其他信息 - 支持更复杂的Markdown格式
+      const categoryMatch = content.match(/\*\*规则类别\*\*:\s*(.+)/i) ||
+                           content.match(/规则类别:\s*(.+)/i) ||
+                           content.match(/\*\*Category\*\*:\s*(.+)/i) ||
+                           content.match(/category:\s*(.+)/i);
+
+      const severityMatch = content.match(/\*\*严重程度\*\*:\s*(.+)/i) ||
+                            content.match(/严重程度:\s*(.+)/i) ||
+                            content.match(/\*\*Severity\*\*:\s*(.+)/i) ||
+                            content.match(/severity:\s*(.+)/i);
 
       const rule = {
         id: generateRuleId(title),

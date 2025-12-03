@@ -13,6 +13,7 @@ import { ServiceConfig } from '../configs/ServiceConfig.js';
 import { AnalysisConfig } from '../configs/AnalysisConfig.js';
 import { ISQLAnalyzer, IFileAnalyzerService, IHistoryService, IKnowledgeService } from '../interfaces/ServiceInterfaces.js';
 import { RuleEvaluationService } from '../rule-evaluation/RuleEvaluationService.js';
+import HealthService from '../health-service.js';
 
 /**
  * 服务容器类
@@ -101,6 +102,17 @@ export class ServiceContainer {
     const key = 'ruleEvaluationService';
     if (!this.services.has(key)) {
       this.services.set(key, RuleEvaluationService.getInstance());
+    }
+    return this.services.get(key);
+  }
+
+  /**
+   * 获取健康检查服务
+   */
+  getHealthService(): HealthService {
+    const key = 'healthService';
+    if (!this.services.has(key)) {
+      this.services.set(key, new HealthService());
     }
     return this.services.get(key);
   }

@@ -87,7 +87,7 @@ export class SemanticMatcher {
       this.mergeConfig(config);
     }
     this.initializeDomainDictionary();
-    console.log('🧠 初始化语义匹配器');
+    // console.log('🧠 初始化语义匹配器'); // 静默初始化日志
   }
 
   /**

@@ -4,6 +4,8 @@
 */
 
 import { config } from '../config/index.js';
+import { executeWithRetry, ErrorType } from '../utils/enhanced-error-handler.js';
+import { getGlobalLogger, LogCategory } from '../utils/logger.js';
 
 // 定义接口
 interface LLMConfig {

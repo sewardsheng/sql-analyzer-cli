@@ -6,9 +6,24 @@
  */
 
 import { Command } from 'commander';
+import { ServiceContainer } from '../services/factories/ServiceContainer.js';
 import { AnalyzeCommand, StatsCommand, HealthCommand, KnowledgeCommand, HistoryCommand, LearnCommand, MenuCommand } from './commands/index.js';
 import { cli as cliTools } from '../utils/cli/index.js';
-import { executeEvaluate, type EvaluateOptions } from './commands/evaluate.js';
+import { executeEvaluate } from './commands/evaluate.js';
+
+// 定义EvaluateOptions接口，因为导出有问题
+interface EvaluateOptions {
+  source?: string;
+  output?: string;
+  batch?: boolean;
+  interactive?: boolean;
+  force?: boolean;
+  threshold?: number;
+  concurrency?: number;
+  dryRun?: boolean;
+  verbose?: boolean;
+  noMove?: boolean;
+}
 
 /**
  * SQL分析器CLI主类 - 大大简化！
@@ -26,15 +41,18 @@ export class SQLAnalyzerCLI {
   };
 
   constructor() {
+    // 使用ServiceContainer初始化
+    const serviceContainer = ServiceContainer.getInstance();
+
     this.program = new Command();
     this.commands = {
-      analyze: new AnalyzeCommand(),
-      stats: new StatsCommand(),
+      analyze: new AnalyzeCommand(serviceContainer),
+      stats: new StatsCommand(serviceContainer),
       health: new HealthCommand(),
-      knowledge: new KnowledgeCommand(),
+      knowledge: new KnowledgeCommand(serviceContainer),
       history: new HistoryCommand(),
-      learn: new LearnCommand(),
-      menu: new MenuCommand()
+      learn: new LearnCommand(serviceContainer),
+      menu: new MenuCommand(serviceContainer)
     };
     this.setupProgram();
   }
@@ -218,8 +236,8 @@ export class SQLAnalyzerCLI {
       .command('evaluate')
       .alias('eval')
       .description('🔍 智能规则评估：批量处理、自动分类、质量分析')
-      .option('-s, --source <path>', '源目录路径', 'rules/learning-rules/manual_review/2025-12')
-      .option('-o, --output <path>', '输出报告路径', 'evaluation-report.json')
+      .option('-s, --source <path>', '源目录路径', 'rules/learning-rules/generated')
+      .option('-o, --output <path>', '输出报告路径（可选）')
       .option('-b, --batch', '批量处理模式')
       .option('-i, --interactive', '交互式模式')
       .option('-f, --force', '强制重新评估')
@@ -227,8 +245,8 @@ export class SQLAnalyzerCLI {
       .option('-c, --concurrency <number>', '并发数量', '3')
       .option('--dry-run', '预演模式，不实际移动文件')
       .option('-v, --verbose', '详细输出')
-      .option('--move', '评估完成后自动移动文件到对应目录')
-      .action(async (options: EvaluateOptions) => {
+      .option('--no-move', '评估完成后不移动文件（默认会自动移动）')
+      .action(async (options: any) => {
         try {
           await executeEvaluate(options);
         } catch (error: any) {
@@ -252,9 +270,27 @@ export class SQLAnalyzerCLI {
     };
 
     try {
+      // 检查是否有命令参数
+      const processedArgv = argv.slice(2); // 移除 node 和脚本路径
+
+      if (processedArgv.length === 0) {
+        // 完全没有参数，默认启动menu界面
+        await this.commands.menu.execute();
+        await doCleanupAndExit();
+        return;
+      }
+
+      if (processedArgv.length === 1 && processedArgv[0] === '--debug') {
+        // 只有--debug参数，启动menu（带调试模式）
+        await this.commands.menu.execute();
+        await doCleanupAndExit();
+        return;
+      }
+
+      // 其他情况让commander处理，包括正确命令和错误命令
+      // commander会自动处理未知命令并显示帮助信息
       await this.program.parseAsync(argv);
       // parseAsync会等待命令完成，完成后清理并退出
-      // 正常完成，退出码为0
       await doCleanupAndExit();
     } catch (error: any) {
       cliTools.log.error(`CLI运行错误: ${error.message}`);

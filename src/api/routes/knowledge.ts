@@ -58,19 +58,18 @@ export function registerKnowledgeRoutes(app: Hono): void {
       const knowledgeService = container.getKnowledgeService();
       const result = await knowledgeService.searchKnowledge(body.query, k);
 
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
       console.log(chalk.blue(`[API] 搜索知识库: "${body.query}"`));
+
+      // result直接是数组，不需要包装对象
+      const documents = Array.isArray(result) ? result : [];
 
       return c.json(formatSuccessResponse({
         query: body.query,
-        results: result.data.documents.map((doc: any) => ({
+        results: documents.map((doc: any) => ({
           content: doc.pageContent,
           metadata: doc.metadata
         })),
-        count: result.data.documents.length
+        count: documents.length
       }, '搜索知识库成功'));
     } catch (error: any) {
       console.error(chalk.red(`[API] 搜索知识库失败: ${error.message}`));

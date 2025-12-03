@@ -6,8 +6,6 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 
 interface CheckResult {
   name?: string;
@@ -35,12 +33,10 @@ interface HealthReport {
 class HealthService {
   private projectRoot: string;
   private checks: Map<string, any>;
-  private execAsync: any;
 
   constructor() {
     this.projectRoot = path.resolve(process.cwd());
     this.checks = new Map();
-    this.execAsync = promisify(exec);
     this.setupDefaultChecks();
   }
 

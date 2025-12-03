@@ -26,6 +26,46 @@ import { shouldIncludeDirectory, getValidRuleDirectories } from '../../services/
 let vectorStore = null;
 let embeddings = null; // 添加全局嵌入模型实例
 
+/**
+ * 从markdown内容中解析规则类型
+ * @param {string} content - markdown文件内容
+ * @returns {string} 规则类型 (performance/security/standards/unknown)
+ */
+function parseRuleTypeFromMarkdown(content: string): string {
+  try {
+    // 尝试匹配规则类别字段
+    const categoryMatch = content.match(/^\*\*规则类别\*\*:\s*(.+)$/m);
+    if (categoryMatch) {
+      const category = categoryMatch[1].trim().toLowerCase();
+      if (['performance', 'security', 'standards'].includes(category)) {
+        return category;
+      }
+    }
+
+    // 尝试匹配规则类型字段
+    const typeMatch = content.match(/^\*\*规则类型\*\*:\s*(.+)$/m);
+    if (typeMatch) {
+      const type = typeMatch[1].trim().toLowerCase();
+      if (['performance', 'security', 'standards'].includes(type)) {
+        return type;
+      }
+    }
+
+    // 如果都找不到，根据内容推断类型
+    if (content.includes('性能') || content.includes('索引') || content.includes('查询') || content.includes('优化')) {
+      return 'performance';
+    } else if (content.includes('安全') || content.includes('注入') || content.includes('权限') || content.includes('泄露')) {
+      return 'security';
+    } else if (content.includes('规范') || content.includes('格式') || content.includes('命名') || content.includes('可读性')) {
+      return 'standards';
+    }
+
+    return 'unknown';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
 // 向量存储持久化路径
 const VECTOR_STORE_PATH = path.join(process.cwd(), '.vector-store');
 
@@ -155,6 +195,42 @@ chunkOverlap: 200,
 // 分割文档
 const splitDocs = await textSplitter.splitDocuments(docs);
 
+// 处理markdown文档的元数据，提取规则类型
+const processedDocs = splitDocs.map(doc => {
+  if (doc.metadata && doc.metadata.source && doc.metadata.source.endsWith('.md')) {
+    try {
+      // 尝试从文件路径读取markdown内容以解析规则类型
+      const fs = require('fs');
+      const content = fs.readFileSync(doc.metadata.source, 'utf8');
+
+      // 解析规则类型
+      const ruleType = parseRuleTypeFromMarkdown(content);
+
+      // 更新元数据，添加类型信息
+      return {
+        ...doc,
+        type: ruleType,
+        metadata: {
+          ...doc.metadata,
+          ruleType: ruleType,
+          type: ruleType
+        }
+      };
+    } catch (error) {
+      // 如果读取失败，保持原有元数据
+      return {
+        ...doc,
+        type: 'unknown',
+        metadata: {
+          ...doc.metadata,
+          ruleType: 'unknown',
+          type: 'unknown'
+        }
+      };
+    }
+  }
+  return doc;
+});
 
 // 初始化向量存储
 await initializeVectorStore();
@@ -165,8 +241,8 @@ const PARALLEL_BATCHES = 3; // 并行处理的批次数量
 
 // 将文档分成批次
 const batches = [];
-for (let i = 0; i < splitDocs.length; i += BATCH_SIZE) {
-batches.push(splitDocs.slice(i, i + BATCH_SIZE));
+for (let i = 0; i < processedDocs.length; i += BATCH_SIZE) {
+batches.push(processedDocs.slice(i, i + BATCH_SIZE));
 }
 
 // 并行处理多个批次
@@ -193,16 +269,17 @@ const embeddingModel = process.env.VECTOR_STORE_EMBEDDING_MODEL || 'text-embeddi
 
 // 保存分割后的文档到磁盘
 const docsPath = path.join(VECTOR_STORE_PATH, 'documents.json');
-const serializedDocs = splitDocs.map(doc => ({
+const serializedDocs = processedDocs.map(doc => ({
 pageContent: doc.pageContent,
-metadata: doc.metadata
+metadata: doc.metadata,
+type: (doc as any).type || 'document'
 }));
 fs.writeFileSync(docsPath, JSON.stringify(serializedDocs, null, 2));
 
 // 获取并保存向量数据
 const vectors = [];
-for (let i = 0; i < splitDocs.length; i++) {
-const doc = splitDocs[i];
+for (let i = 0; i < processedDocs.length; i++) {
+const doc = processedDocs[i];
 // 为每个文档生成向量
 const vector = await embeddings.embedQuery(doc.pageContent);
 vectors.push({
@@ -212,7 +289,7 @@ metadata: doc.metadata
 });
 
 // 显示进度
-if ((i + 1) % 50 === 0 || i === splitDocs.length - 1) {
+if ((i + 1) % 50 === 0 || i === processedDocs.length - 1) {
 
 }
 }
@@ -272,7 +349,7 @@ fileTypes.add(ext);
 });
 
 return {
-documentCount: splitDocs.length,
+documentCount: processedDocs.length,
 fileTypes: Array.from(fileTypes)
 };
 } catch (error) {

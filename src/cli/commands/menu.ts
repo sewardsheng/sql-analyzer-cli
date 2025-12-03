@@ -13,6 +13,13 @@ import { getGlobalLogger } from '../../utils/logger.js';
 import { config } from '../../config/index.js';
 import { ResultFormatter } from '../../utils/formatter.js';
 import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+import { DisplayService, DisplayMode, getDisplayService } from '../../services/display-service.js';
+import {
+  AnalysisType,
+  DatabaseType,
+  getAnalysisTypeLabel,
+  getDatabaseTypeLabel
+} from '../../types/analysis.js';
 
 /**
  * 交互式菜单命令类 - 重构版
@@ -26,6 +33,7 @@ export class MenuCommand {
   private fileAnalyzer: any;
   private knowledgeService: any;
   private resultFormatter: ResultFormatter;
+  private historyService: any;
 
   constructor(serviceContainer?: ServiceContainer) {
     // 使用依赖注入，方便测试
@@ -37,13 +45,31 @@ export class MenuCommand {
     this.fileAnalyzer = this.serviceContainer.getFileAnalyzerService();
     this.knowledgeService = this.serviceContainer.getKnowledgeService();
     this.resultFormatter = this.serviceContainer.getResultFormatter();
+
+    // 异步初始化历史服务
+    this.initializeHistoryService();
   }
 
   /**
-   * 获取历史服务（直接从ServiceContainer获取，它会处理复用）
+   * 异步初始化历史服务
+   */
+  private async initializeHistoryService(): Promise<void> {
+    try {
+      this.historyService = await this.serviceContainer.getHistoryService();
+    } catch (error: any) {
+      console.warn(`历史服务初始化失败: ${error.message}`);
+      this.historyService = null;
+    }
+  }
+
+  /**
+   * 获取历史服务
    */
   private async getHistoryService(): Promise<any> {
-    return await this.serviceContainer.getHistoryService();
+    if (!this.historyService) {
+      this.historyService = await this.serviceContainer.getHistoryService();
+    }
+    return this.historyService;
   }
 
   /**
@@ -90,7 +116,7 @@ export class MenuCommand {
         { id: '1', name: '🔍 SQL分析', description: '分析SQL语句、文件或目录' },
         { id: '2', name: '🏥 系统状态', description: '查看系统健康状态和统计信息' },
         { id: '3', name: '📚 历史记录', description: '管理分析历史记录' },
-        { id: '4', name: '🧠 知识库', description: '管理SQL知识和规则' },
+        { id: '4', name: '🧠 知识库管理', description: '管理SQL知识和规则审批' },
         { id: '5', name: '⚙️  配置管理', description: '查看和修改系统配置' },
         { id: '6', name: '❓ 帮助', description: '使用帮助和文档' },
         { id: '0', name: '🚪 退出', description: '退出程序' }
@@ -230,75 +256,35 @@ export class MenuCommand {
         cliTools.log.warn(`⚠️  历史记录保存失败: ${historyError.message}`);
       }
 
-      // 触发规则学习
-      console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
-      this.asyncTriggerRuleLearning(sql, 'sql', 'SQL语句').catch(error => {
-        console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
+      // 触发规则学习 - 后台异步执行，不阻塞用户
+      console.log(`\n${cliTools.colors.gray('🔄 后台正在进行规则学习...')}`);
+      this.asyncTriggerRuleLearningFromResult(sql, analysisResult).catch(error => {
+        // 静默处理规则学习错误，不打扰用户体验
       });
+
+      // 等待用户查看完分析结果
+      await this.askQuestion('\n按回车键继续...');
 
     } catch (error: any) {
       cliTools.log.error(`❌ 分析失败: ${error.message}`);
+      await this.askQuestion('\n按回车键继续...');
     }
-
-    await this.askQuestion('\n按回车键继续...');
   }
 
   /**
    * 显示分析结果
    */
   private async displayAnalysisResult(result: any, sql: string): Promise<void> {
-    console.log(cliTools.colors.cyan('\n📋 分析结果'));
-    console.log(cliTools.colors.gray('═'.repeat(60)));
+    // 使用统一的显示服务处理分析结果
+    const displayService = getDisplayService();
 
-    // 基本信息
-    if (result.success) {
-      console.log(`总体评分: ${this.getScoreColor(result.overallScore || 0)}(result.overallScore || 0)分`);
-      console.log(`分析置信度: ${cliTools.colors.blue((result.confidence || 0).toFixed(2))}`);
+    // Menu模式下，显示友好的分析结果
+    displayService.displayAnalysis(result, DisplayMode.CLI, cliTools.colors);
 
-      if (result.summary) {
-        console.log(`\n${cliTools.colors.yellow('📝 分析摘要:')}`);
-        console.log(result.summary);
-      }
-
-      // 显示各种分析结果
-      if (result.performance) {
-        console.log(`\n${cliTools.colors.yellow('⚡ 性能分析:')}`);
-        if (result.performance.summary) {
-          console.log(result.performance.summary);
-        }
-      }
-
-      if (result.security) {
-        console.log(`\n${cliTools.colors.yellow('🔒 安全分析:')}`);
-        if (result.security.summary) {
-          console.log(result.security.summary);
-        }
-      }
-
-      if (result.standards) {
-        console.log(`\n${cliTools.colors.yellow('📏 规范分析:')}`);
-        if (result.standards.summary) {
-          console.log(result.standards.summary);
-        }
-
-        // 显示修复建议
-        if (result.standards.sqlFix) {
-          console.log(`\n${cliTools.colors.green('💡 修复建议:')}`);
-          console.log(`原始SQL: ${cliTools.colors.gray(sql)}`);
-          console.log(`修复后SQL: ${cliTools.colors.cyan(result.standards.sqlFix.fixedSql)}`);
-        }
-      }
-
-      // 显示问题和建议
-      this.displayIssuesAndRecommendations(result);
-    } else {
-      console.log(cliTools.colors.red('❌ 分析失败'));
-      if (result.error) {
-        console.log(`错误信息: ${result.error}`);
-      }
-    }
+    // 不需要额外显示SQL对比，DisplayService已经包含了SQL修复建议
   }
 
+  
   /**
    * 显示问题和建议
    */
@@ -308,39 +294,89 @@ export class MenuCommand {
 
     // 收集所有问题和建议
     ['performance', 'security', 'standards'].forEach(type => {
-      if (result[type] && result[type].issues) {
-        allIssues.push(...result[type].issues);
+      const dimensionData = result[type];
+      if (dimensionData?.issues && Array.isArray(dimensionData.issues)) {
+        allIssues.push(...dimensionData.issues.map(issue => ({ ...issue, dimension: type })));
       }
-      if (result[type] && result[type].recommendations) {
-        allRecommendations.push(...result[type].recommendations);
+      if (dimensionData?.recommendations && Array.isArray(dimensionData.recommendations)) {
+        allRecommendations.push(...dimensionData.recommendations.map(rec => ({ ...rec, dimension: type })));
       }
     });
 
+    // 显示问题
     if (allIssues.length > 0) {
-      console.log(`\n${cliTools.colors.red('⚠️ 发现的问题:')}`);
-      allIssues.forEach((issue: any, index: number) => {
-        const severityColor = issue.severity === 'critical' ? cliTools.colors.red :
-                            issue.severity === 'high' ? cliTools.colors.yellow :
-                            cliTools.colors.blue;
-        console.log(`  ${index + 1}. ${severityColor(issue.title)} (${issue.severity})`);
-        if (issue.description) {
-          console.log(`     ${cliTools.colors.gray(issue.description)}`);
-        }
+      console.log(`\n${cliTools.colors.cyan('⚠️  发现的问题 (${allIssues.length}):')}`);
+      allIssues.slice(0, 5).forEach((issue: any, index: number) => {
+        const dimensionName = this.getDimensionDisplayName(issue.dimension);
+        const dimensionColor = this.getDimensionColor(issue.dimension);
+        const severityColor = this.getSeverityColor(issue.severity);
+
+        console.log(`  ${index + 1}. [${dimensionName}][${severityColor(issue.severity?.toUpperCase() || 'MEDIUM')}] ${issue.title}`);
+        console.log(`     ${cliTools.colors.gray(issue.description)}`);
       });
+
+      if (allIssues.length > 5) {
+        console.log(`     ... 还有 ${allIssues.length - 5} 个问题未显示`);
+      }
+    } else {
+      console.log(`\n${cliTools.colors.green('🎉 太棒了！没有发现任何问题！')}`);
     }
 
+    // 显示建议
     if (allRecommendations.length > 0) {
-      console.log(`\n${cliTools.colors.green('💡 改进建议:')}`);
-      allRecommendations.forEach((rec: any, index: number) => {
-        const priorityColor = rec.priority === 'high' ? cliTools.colors.red :
-                            rec.priority === 'medium' ? cliTools.colors.yellow :
-                            cliTools.colors.blue;
-        console.log(`  ${index + 1}. ${priorityColor(rec.title)} (${rec.priority})`);
-        if (rec.description) {
-          console.log(`     ${cliTools.colors.gray(rec.description)}`);
-        }
+      console.log(`\n${cliTools.colors.blue('💡 建议 (${allRecommendations.length}):')}`);
+      allRecommendations.slice(0, 3).forEach((rec: any, index: number) => {
+        const dimensionName = this.getDimensionDisplayName(rec.dimension);
+        const dimensionColor = this.getDimensionColor(rec.dimension);
+        const priorityColor = rec.priority === 'HIGH' ? cliTools.colors.red : cliTools.colors.yellow;
+
+        console.log(`  ${index + 1}. [${dimensionName}][${priorityColor(rec.priority || 'MEDIUM')}] ${rec.title}`);
+        console.log(`     ${cliTools.colors.gray(rec.description)}`);
       });
+
+      if (allRecommendations.length > 3) {
+        console.log(`     ... 还有 ${allRecommendations.length - 3} 个建议未显示`);
+      }
     }
+  }
+
+  private getDimensionDisplayName(dimension: string): string {
+    const nameMap: Record<string, string> = {
+      'performance': '性能',
+      'security': '安全',
+      'standards': '规范'
+    };
+    return nameMap[dimension] || dimension;
+  }
+
+  private getDimensionColor(dimension: string): any {
+    const colorMap: Record<string, any> = {
+      'performance': cliTools.colors.yellow,
+      'security': cliTools.colors.red,
+      'standards': cliTools.colors.blue
+    };
+    return colorMap[dimension] || cliTools.colors.gray;
+  }
+
+  private getSeverityColor(severity: string): any {
+    switch (severity?.toUpperCase()) {
+      case 'CRITICAL': return cliTools.colors.red;
+      case 'HIGH': return cliTools.colors.red;
+      case 'MEDIUM': return cliTools.colors.yellow;
+      case 'LOW': return cliTools.colors.blue;
+      default: return cliTools.colors.gray;
+    }
+  }
+
+  /**
+   * 处理分析失败的情况
+   */
+  private async handleAnalysisError(result: any, sql: string): Promise<void> {
+    console.log(cliTools.colors.red('❌ 分析失败'));
+    if (result.error) {
+      console.log(`错误信息: ${result.error}`);
+    }
+    await this.askQuestion('\n按回车键继续...');
   }
 
   /**
@@ -396,18 +432,51 @@ export class MenuCommand {
 
       // 保存历史记录
       try {
+        // 分析文件中的SQL语句，确定主要数据库类型
+        let detectedDatabaseType = DatabaseType.UNKNOWN;
+        if (analysisResult.analyses && Array.isArray(analysisResult.analyses)) {
+          const dbTypeCounts: Record<string, number> = {};
+
+          analysisResult.analyses.forEach((sqlAnalysis: any) => {
+            const dbType = sqlAnalysis.databaseType || DatabaseType.UNKNOWN;
+            dbTypeCounts[dbType] = (dbTypeCounts[dbType] || 0) + 1;
+          });
+
+          // 选择出现频率最高的数据库类型
+          const maxCount = Math.max(...Object.values(dbTypeCounts));
+          const mostFrequentTypes = Object.entries(dbTypeCounts)
+            .filter(([_, count]) => count === maxCount)
+            .map(([type, _]) => type);
+
+          if (mostFrequentTypes.length > 0) {
+            detectedDatabaseType = mostFrequentTypes[0] as DatabaseType;
+          }
+        }
+
         const historyService = await this.getHistoryService();
         await historyService.addAnalysis({
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
+          databaseType: detectedDatabaseType,
+          type: AnalysisType.FILE_ANALYSIS,
           filePath: resolvedPath,
-          type: 'file',
-          result: analysisResult
+          result: analysisResult,
+          metadata: {
+            version: '2.0.0',
+            source: 'menu',
+            inputMethod: 'file_analysis'
+          }
         });
         console.log(cliTools.colors.green('✅ 分析结果已保存到历史记录'));
       } catch (historyError: any) {
         console.log(cliTools.colors.yellow(`⚠️ 历史记录保存失败: ${historyError.message}`));
       }
+
+      // 触发规则学习 - 基于当前分析结果
+      console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
+      this.asyncTriggerRuleLearningFromFile(analysisResult, resolvedPath).catch(error => {
+        console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
+      });
 
       // 显示分析结果
       if (analysisResult.summary) {
@@ -446,9 +515,9 @@ export class MenuCommand {
           }
 
           if (analysis.learning) {
-            console.log(`${cliTools.colors.purple('规则学习:')}`);
+            console.log(`${cliTools.colors.magenta('规则学习:')}`);
             analysis.learning.suggestions?.forEach((suggestion: any) => {
-              console.log(`  💡 ${cliTools.colors.purple(suggestion.type)}: ${cliTools.colors.gray(suggestion.description)}`);
+              console.log(`  💡 ${cliTools.colors.cyan(suggestion.type)}: ${cliTools.colors.gray(suggestion.description)}`);
             });
             if (analysis.learning.newRules && analysis.learning.newRules.length > 0) {
               console.log(`  🆕 新生成规则: ${cliTools.colors.green(analysis.learning.newRules.length + '个')}`);
@@ -464,10 +533,10 @@ export class MenuCommand {
 
       // 显示规则学习状态
       if (analysisResult.learning) {
-        console.log(`\n${cliTools.colors.purple('🧠 规则学习状态:')}`);
-        console.log(`已处理模式: ${analysis.learning.patternsProcessed || 0}`);
-        console.log(`新规则生成: ${analysis.learning.newRulesGenerated || 0}`);
-        console.log(`学习建议: ${analysis.learning.suggestions?.length || 0}`);
+        console.log(`\n${cliTools.colors.magenta('🧠 规则学习状态:')}`);
+        console.log(`已处理模式: ${analysisResult.learning.patternsProcessed || 0}`);
+        console.log(`新规则生成: ${analysisResult.learning.newRulesGenerated || 0}`);
+        console.log(`学习建议: ${analysisResult.learning.suggestions?.length || 0}`);
       } else {
         console.log(`\n${cliTools.colors.yellow('⚠️ 规则学习未启用')}`);
       }
@@ -536,9 +605,9 @@ export class MenuCommand {
         cliTools.log.warn(`⚠️  历史记录保存失败: ${historyError.message}`);
       }
 
-      // 触发规则学习
+      // 触发规则学习 - 基于当前分析结果
       console.log(`\n${cliTools.colors.blue('🔄 正在进行规则学习...')}`);
-      this.asyncTriggerRuleLearning('', 'directory', resolvedPath).catch(error => {
+      this.asyncTriggerRuleLearningFromDirectory(analysisResult, resolvedPath).catch(error => {
         console.log(`${cliTools.colors.yellow('⚠️ 规则学习出错:')} ${error.message}`);
       });
 
@@ -836,7 +905,7 @@ export class MenuCommand {
   }
 
   /**
-   * 查看历史记录
+   * 查看历史记录（增强版）
    */
   private async viewHistoryRecords(): Promise<void> {
     this.clearScreen();
@@ -852,18 +921,83 @@ export class MenuCommand {
 
       if (records.length === 0) {
         console.log(cliTools.colors.yellow('\n📭 暂无历史记录'));
+        console.log(cliTools.colors.gray('\n💡 提示: 开始分析SQL语句后，这里将显示分析历史'));
       } else {
-        console.log(`\n${cliTools.colors.green(`📋 找到 ${records.length} 条历史记录:`)}`);
-        console.log(cliTools.colors.gray('─'.repeat(80)));
+        console.log(`\n${cliTools.colors.green(`📋 最近的 ${records.length} 条历史记录:`)}`);
+        console.log(cliTools.colors.gray('═'.repeat(80)));
+
+        // 统计信息
+        const dbTypeStats: Record<string, number> = {};
+        const analysisTypeStats: Record<string, number> = {};
+
+        records.forEach((record: any) => {
+          const dbType = record.databaseType || DatabaseType.UNKNOWN;
+          const analysisType = record.type || 'unknown';
+          dbTypeStats[dbType] = (dbTypeStats[dbType] || 0) + 1;
+          analysisTypeStats[analysisType] = (analysisTypeStats[analysisType] || 0) + 1;
+        });
 
         records.forEach((record: any, index: number) => {
-          console.log(`${cliTools.colors.blue(`[${index + 1}]`)} ${record.timestamp}`);
+          // 使用友好的类型标签显示
+          const dbTypeLabel = getDatabaseTypeLabel(record.databaseType);
+          const analysisTypeLabel = getAnalysisTypeLabel(record.type);
+
+          // 时间格式化
+          const date = new Date(record.timestamp);
+          const timeStr = date.toLocaleString('zh-CN');
+
+          console.log(`${cliTools.colors.blue(`[${index + 1}]`)} ${cliTools.colors.gray(timeStr)}`);
           console.log(`  ID: ${cliTools.colors.cyan(record.id)}`);
-          console.log(`  数据库类型: ${cliTools.colors.yellow(record.databaseType || 'Unknown')}`);
-          console.log(`  SQL类型: ${cliTools.colors.green(record.type || 'Unknown')}`);
-          console.log(`  SQL预览: ${cliTools.colors.gray((record.sqlPreview || record.sql || '').substring(0, 100))}...`);
+          console.log(`  数据库类型: ${cliTools.colors.yellow(dbTypeLabel)}`);
+          console.log(`  分析类型: ${cliTools.colors.green(analysisTypeLabel)}`);
+
+          // 显示输入方式（如果有）
+          if (record.metadata?.inputMethod) {
+            const inputMethodMap: Record<string, string> = {
+              'direct_input': '直接输入',
+              'file_analysis': '文件分析',
+              'directory_analysis': '目录分析'
+            };
+            const inputMethodLabel = inputMethodMap[record.metadata.inputMethod] || record.metadata.inputMethod;
+            console.log(`  输入方式: ${cliTools.colors.blue(inputMethodLabel)}`);
+          }
+
+          // 显示SQL预览
+          const sqlPreview = record.sqlPreview || record.sql || '';
+          if (sqlPreview) {
+            const preview = sqlPreview.length > 80 ? sqlPreview.substring(0, 80) + '...' : sqlPreview;
+            console.log(`  SQL预览: ${cliTools.colors.gray(preview)}`);
+          }
+
+          // 显示处理时间（如果有）
+          if (record.metadata?.processingTime) {
+            const processingTime = record.metadata.processingTime;
+            console.log(`  处理时间: ${cliTools.colors.magenta(`${processingTime}ms`)}`);
+          }
+
           console.log(cliTools.colors.gray('─'.repeat(80)));
         });
+
+        // 显示统计摘要
+        console.log(`\n${cliTools.colors.blue('📊 统计摘要:')}`);
+
+        // 数据库类型统计
+        console.log(`${cliTools.colors.yellow('数据库类型:')}`);
+        Object.entries(dbTypeStats).forEach(([dbType, count]) => {
+          const label = getDatabaseTypeLabel(dbType);
+          const percentage = ((count / records.length) * 100).toFixed(1);
+          console.log(`  ${label}: ${count} 次 (${percentage}%)`);
+        });
+
+        // 分析类型统计
+        console.log(`\n${cliTools.colors.yellow('分析类型:')}`);
+        Object.entries(analysisTypeStats).forEach(([analysisType, count]) => {
+          const label = getAnalysisTypeLabel(analysisType);
+          const percentage = ((count / records.length) * 100).toFixed(1);
+          console.log(`  ${label}: ${count} 次 (${percentage}%)`);
+        });
+
+        console.log(`\n${cliTools.colors.gray(`总计: ${records.length} 条记录`)}`);
       }
 
       await this.askQuestion('\n按回车键继续...');
@@ -875,7 +1009,7 @@ export class MenuCommand {
   }
 
   /**
-   * 搜索历史记录
+   * 搜索历史记录（增强版）
    */
   private async searchHistoryRecords(): Promise<void> {
     this.clearScreen();
@@ -883,23 +1017,36 @@ export class MenuCommand {
     console.log(cliTools.colors.gray('─'.repeat(50)));
 
     try {
-      const searchTerm = await this.askQuestion('请输入搜索关键词 (留空查看所有): ');
-      const dbType = await this.askQuestion('数据库类型 (留空不限制): ');
-      const sqlType = await this.askQuestion('SQL类型 (留空不限制): ');
+      // 显示搜索提示
+      console.log(cliTools.colors.yellow('\n💡 搜索提示:'));
+      console.log('  • SQL内容: 在SQL语句中搜索关键词');
+      console.log('  • 数据库类型: mysql, postgresql, sqlserver, sqlite, oracle等');
+      console.log('  • 分析类型: sql语句, 文件分析, 目录分析, 批量分析');
+      console.log('  • 支持同义词: 如"postgres"可以匹配"postgresql"');
+      console.log('');
+
+      const searchTerm = await this.askQuestion('📝 SQL内容关键词 (留空不限制): ');
+      const dbType = await this.askQuestion('🗄️  数据库类型 (留空不限制): ');
+      const sqlType = await this.askQuestion('📋 分析类型 (留空不限制): ');
 
       // 构建搜索条件
-      const searchOptions: any = {};
+      const searchOptions: any = {
+        limit: 20
+      };
+
       if (searchTerm.trim()) {
         searchOptions.sql = searchTerm.trim();
       }
+
       if (dbType.trim()) {
         searchOptions.databaseType = dbType.trim();
       }
+
       if (sqlType.trim()) {
         searchOptions.type = sqlType.trim();
       }
-      searchOptions.limit = 20;
 
+      console.log('');
       cliTools.log.info('🔄 正在搜索历史记录...');
 
       const historyService = await this.getHistoryService();
@@ -907,18 +1054,50 @@ export class MenuCommand {
 
       if (records.length === 0) {
         console.log(cliTools.colors.yellow('\n📭 未找到匹配的历史记录'));
+        console.log(cliTools.colors.gray('\n💡 建议:'));
+        console.log('  • 尝试使用更简单的关键词');
+        console.log('  • 检查拼写是否正确');
+        console.log('  • 尝试使用数据库类型的别称 (如: pg, postgres)');
+        console.log('  • 减少搜索条件，只使用一个条件进行搜索');
       } else {
         console.log(`\n${cliTools.colors.green(`📋 找到 ${records.length} 条匹配记录:`)}`);
-        console.log(cliTools.colors.gray('─'.repeat(80)));
+        console.log(cliTools.colors.gray('═'.repeat(80)));
 
         records.forEach((record: any, index: number) => {
-          console.log(`${cliTools.colors.blue(`[${index + 1}]`)} ${record.timestamp}`);
+          // 使用友好的类型标签显示
+          const dbTypeLabel = getDatabaseTypeLabel(record.databaseType);
+          const analysisTypeLabel = getAnalysisTypeLabel(record.type);
+
+          console.log(`${cliTools.colors.blue(`[${index + 1}]`)} ${cliTools.colors.gray(record.timestamp)}`);
           console.log(`  ID: ${cliTools.colors.cyan(record.id)}`);
-          console.log(`  数据库类型: ${cliTools.colors.yellow(record.databaseType || 'Unknown')}`);
-          console.log(`  SQL类型: ${cliTools.colors.green(record.type || 'Unknown')}`);
-          console.log(`  SQL预览: ${cliTools.colors.gray((record.sqlPreview || record.sql || '').substring(0, 100))}...`);
+          console.log(`  数据库类型: ${cliTools.colors.yellow(dbTypeLabel)}`);
+          console.log(`  分析类型: ${cliTools.colors.green(analysisTypeLabel)}`);
+
+          // 显示输入方式（如果有）
+          if (record.metadata?.inputMethod) {
+            const inputMethodMap: Record<string, string> = {
+              'direct_input': '直接输入',
+              'file_analysis': '文件分析',
+              'directory_analysis': '目录分析'
+            };
+            const inputMethodLabel = inputMethodMap[record.metadata.inputMethod] || record.metadata.inputMethod;
+            console.log(`  输入方式: ${cliTools.colors.blue(inputMethodLabel)}`);
+          }
+
+          // 显示SQL预览
+          const sqlPreview = record.sqlPreview || record.sql || '';
+          if (sqlPreview) {
+            const preview = sqlPreview.length > 100 ? sqlPreview.substring(0, 100) + '...' : sqlPreview;
+            console.log(`  SQL预览: ${cliTools.colors.gray(preview)}`);
+          }
+
           console.log(cliTools.colors.gray('─'.repeat(80)));
         });
+
+        // 显示搜索统计
+        console.log(`\n${cliTools.colors.blue('📊 搜索统计:')}`);
+        console.log(`  匹配记录: ${records.length} 条`);
+        console.log(`  搜索条件: SQL="${searchTerm || '无'}" 数据库="${dbType || '无'}" 类型="${sqlType || '无'}"`);
       }
 
       await this.askQuestion('\n按回车键继续...');
@@ -930,7 +1109,7 @@ export class MenuCommand {
   }
 
   /**
-   * 查看历史统计信息
+   * 查看历史统计信息（增强版）
    */
   private async viewHistoryStatistics(): Promise<void> {
     this.clearScreen();
@@ -946,25 +1125,67 @@ export class MenuCommand {
       console.log(`\n${cliTools.colors.green('📈 历史记录统计信息:')}`);
       console.log(`总分析次数: ${cliTools.colors.yellow(statistics.total?.toString() || '0')}`);
 
+      // 按分析类型统计（使用友好标签）
       if (statistics.byType) {
-        console.log(`\n${cliTools.colors.cyan('按SQL类型统计:')}`);
-        Object.entries(statistics.byType).forEach(([type, count]: [string, any]) => {
-          console.log(`  ${type}: ${cliTools.colors.yellow(count.toString())}`);
-        });
+        console.log(`\n${cliTools.colors.cyan('📋 按分析类型统计:')}`);
+        const totalByType = Object.values(statistics.byType).reduce((sum: number, count: any) => sum + count, 0);
+
+        Object.entries(statistics.byType)
+          .sort(([_, a], [__, b]) => Number(b) - Number(a)) // 按数量降序排列
+          .forEach(([type, count]: [string, any]) => {
+            const typeLabel = getAnalysisTypeLabel(type);
+            const countNum = Number(count);
+            const percentage = totalByType > 0 ? ((countNum / totalByType) * 100).toFixed(1) : '0.0';
+            console.log(`  ${typeLabel}: ${cliTools.colors.yellow(count.toString())} 次 (${cliTools.colors.gray(percentage + '%')})`);
+          });
       }
 
+      // 按数据库类型统计（使用友好标签）
       if (statistics.byDatabase) {
-        console.log(`\n${cliTools.colors.cyan('按数据库类型统计:')}`);
-        Object.entries(statistics.byDatabase).forEach(([db, count]: [string, any]) => {
-          console.log(`  ${db}: ${cliTools.colors.yellow(count.toString())}`);
+        console.log(`\n${cliTools.colors.cyan('🗄️  按数据库类型统计:')}`);
+        const totalByDb = Object.values(statistics.byDatabase).reduce((sum: number, count: any) => sum + count, 0);
+
+        Object.entries(statistics.byDatabase)
+          .sort(([_, a], [__, b]) => Number(b) - Number(a)) // 按数量降序排列
+          .forEach(([db, count]: [string, any]) => {
+            const dbLabel = getDatabaseTypeLabel(db);
+            const countNum = Number(count);
+            const percentage = totalByDb > 0 ? ((countNum / totalByDb) * 100).toFixed(1) : '0.0';
+            console.log(`  ${dbLabel}: ${cliTools.colors.yellow(count.toString())} 次 (${cliTools.colors.gray(percentage + '%')})`);
+          });
+      }
+
+      // 按月份统计（格式化月份显示）
+      if (statistics.byMonth) {
+        console.log(`\n${cliTools.colors.cyan('📅 按月份统计:')}`);
+        const sortedMonths = Object.keys(statistics.byMonth).sort((a, b) => b.localeCompare(a)); // 降序排列
+
+        sortedMonths.forEach(month => {
+          const count = statistics.byMonth[month];
+          // 格式化月份显示 (如: 2025-01 -> 2025年1月)
+          const [year, monthNum] = month.split('-');
+          const monthStr = `${year}年${parseInt(monthNum)}月`;
+          console.log(`  ${monthStr}: ${cliTools.colors.yellow(count.toString())} 次`);
         });
       }
 
-      if (statistics.byMonth) {
-        console.log(`\n${cliTools.colors.cyan('按月份统计:')}`);
-        Object.entries(statistics.byMonth).forEach(([month, count]: [string, any]) => {
-          console.log(`  ${month}: ${cliTools.colors.yellow(count.toString())}`);
-        });
+      // 显示使用趋势
+      if (statistics.byMonth && Object.keys(statistics.byMonth).length > 1) {
+        console.log(`\n${cliTools.colors.blue('📈 使用趋势:')}`);
+        const months = Object.keys(statistics.byMonth).sort();
+        if (months.length >= 2) {
+          const latestMonth = months[months.length - 1];
+          const previousMonth = months[months.length - 2];
+          const latestCount = statistics.byMonth[latestMonth];
+          const previousCount = statistics.byMonth[previousMonth];
+
+          const trend = latestCount > previousCount ? '📈 上升' :
+                       latestCount < previousCount ? '📉 下降' : '➡️ 持平';
+          const change = latestCount - previousCount;
+          const changePercent = previousCount > 0 ? ((Math.abs(change) / previousCount) * 100).toFixed(1) : '0.0';
+
+          console.log(`  相比上月: ${trend} ${Math.abs(change)} 次 (${changePercent}%)`);
+        }
       }
 
       await this.askQuestion('\n按回车键继续...');
@@ -1022,7 +1243,8 @@ export class MenuCommand {
         { id: '1', name: '知识库状态', description: '查看知识库初始化状态和文档信息' },
         { id: '2', name: '加载文档', description: '从rules目录加载SQL规则文档到知识库' },
         { id: '3', name: '搜索知识库', description: '在知识库中搜索相关内容' },
-        { id: '4', name: '重置知识库', description: '清空并重新初始化知识库' },
+        { id: '4', name: '规则审批', description: '使用评估引擎智能审批generated中的待审核规则' },
+        { id: '5', name: '重置知识库', description: '清空并重新初始化知识库' },
         { id: '0', name: '返回主菜单', description: '返回主菜单' }
       ];
 
@@ -1045,6 +1267,9 @@ export class MenuCommand {
           await this.searchKnowledgeBase();
           break;
         case '4':
+          await this.approveRules();
+          break;
+        case '5':
           await this.resetKnowledgeBase();
           break;
         case '0':
@@ -1089,7 +1314,23 @@ export class MenuCommand {
             // 按类型统计文档
             const typeStats: Record<string, number> = {};
             docInfo.documents.forEach((doc: any) => {
-              const type = doc.type || 'Unknown';
+              // 优先使用文档的type字段，其次使用metadata中的ruleType，最后使用source路径推断
+              let type = doc.type;
+              if (!type && doc.metadata) {
+                type = doc.metadata.ruleType || doc.metadata.type;
+              }
+              if (!type && doc.metadata && doc.metadata.source) {
+                // 根据文件路径推断类型
+                const sourcePath = doc.metadata.source;
+                if (sourcePath.includes('performance') || sourcePath.includes('性能')) {
+                  type = 'performance';
+                } else if (sourcePath.includes('security') || sourcePath.includes('安全')) {
+                  type = 'security';
+                } else if (sourcePath.includes('standards') || sourcePath.includes('规范')) {
+                  type = 'standards';
+                }
+              }
+              type = type || 'unknown';
               typeStats[type] = (typeStats[type] || 0) + 1;
             });
 
@@ -1563,6 +1804,214 @@ export class MenuCommand {
   }
 
   /**
+   * 审批规则功能
+   */
+  private async approveRules(): Promise<void> {
+    this.clearScreen();
+    console.log(cliTools.colors.cyan('\n📋 规则审批'));
+    console.log(cliTools.colors.gray('═'.repeat(50)));
+
+    try {
+      cliTools.log.info('🔄 正在检查待审批规则...');
+
+      // 检查generated目录（待审核规则）
+      const manualReviewDir = 'rules/learning-rules/generated';
+      const approvedDir = 'rules/learning-rules/approved';
+
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      try {
+        const files = await fs.readdir(manualReviewDir);
+        const ruleFiles = files.filter(f => f.endsWith('.md'));
+
+        if (ruleFiles.length === 0) {
+          console.log(cliTools.colors.yellow('\n📭 暂无待审批规则'));
+          await this.askQuestion('\n按回车键继续...');
+          return;
+        }
+
+        // 使用现有的规则评估引擎进行审批
+        const { RuleEvaluationEngine } = await import('../../services/rule-evaluation/RuleEvaluationEngine.js');
+        const evaluationEngine = RuleEvaluationEngine.getInstance();
+
+        console.log(`\n${cliTools.colors.green(`📄 找到 ${ruleFiles.length} 个待审批规则:`)}`);
+        console.log(cliTools.colors.gray('─'.repeat(50)));
+
+        // 显示规则列表，但不进行复杂解析，因为评估引擎会处理
+        const ruleFilesData = [];
+        for (let i = 0; i < ruleFiles.length; i++) {
+          const file = ruleFiles[i];
+          const filePath = path.join(manualReviewDir, file);
+
+          try {
+            const content = await fs.readFile(filePath, 'utf8');
+
+            // 简单提取基本信息
+            const titleMatch = content.match(/^#\s+(.+)$/m);
+            const categoryMatch = content.match(/^\*\*规则类别\*\*:\s*(.+)$/m);
+            const confidenceMatch = content.match(/^\*\*置信度\*\*:\s*(.+)$/m);
+            const qualityMatch = content.match(/^\*\*质量分数\*\*:\s*(.+)$/m);
+
+            const title = titleMatch ? titleMatch[1] : file.replace('.md', '');
+            const category = categoryMatch ? categoryMatch[1] : 'Unknown';
+            const confidence = confidenceMatch ? confidenceMatch[1] : 'N/A';
+            const qualityScore = qualityMatch ? qualityMatch[1] : 'N/A';
+
+            ruleFilesData.push({
+              index: i + 1,
+              file,
+              title,
+              category,
+              confidence,
+              qualityScore,
+              filePath,
+              content
+            });
+
+            // 显示规则基本信息
+            console.log(`\n${cliTools.colors.yellow(`${i + 1}. ${title}`)}`);
+            console.log(`   文件: ${cliTools.colors.gray(file)}`);
+            console.log(`   类别: ${cliTools.colors.blue(category)}`);
+            console.log(`   置信度: ${cliTools.colors.green(confidence)}`);
+            if (qualityScore !== 'N/A') {
+              const score = parseFloat(qualityScore);
+              const qualityColor = score >= 90 ? cliTools.colors.green :
+                                 score >= 70 ? cliTools.colors.yellow : cliTools.colors.red;
+              console.log(`   质量分: ${qualityColor(qualityScore)}`);
+            }
+
+          } catch (error) {
+            console.log(`\n${cliTools.colors.red(`${i + 1}. ${file} (读取失败: ${error.message})`)}`);
+            ruleFilesData.push({ index: i + 1, file, error: true });
+          }
+        }
+
+        console.log(cliTools.colors.gray('\n─'.repeat(50)));
+
+        // 询问用户操作
+        console.log('\n' + cliTools.colors.cyan('请选择操作:'));
+        console.log('  1. 批量审批所有规则');
+        console.log('  2. 选择性审批');
+        console.log('  3. 查看规则详情');
+        console.log('  0. 返回');
+
+        const choice = await this.askQuestion('\n请输入选择: ');
+
+        switch (choice) {
+          case '1':
+            await this.batchApproveRulesWithEngine(evaluationEngine, manualReviewDir);
+            break;
+          case '2':
+          case '3':
+            console.log(cliTools.colors.yellow('\n⚠️ 此功能使用规则评估引擎，但选择界面暂未实现，请使用批量审批'));
+            break;
+          case '4':
+            console.log(cliTools.colors.yellow('\n⚠️ 重置知识库功能暂未实现'));
+            break;
+          case '5':
+            await this.resetKnowledgeBase();
+            break;
+          case '0':
+            return;
+          default:
+            cliTools.log.error('❌ 无效选择');
+        }
+
+      } catch (error) {
+        console.log(cliTools.colors.red(`❌ 无法读取manual_review目录: ${error.message}`));
+      }
+
+    } catch (error) {
+      cliTools.log.error(`❌ 规则审批失败: ${error.message}`);
+    }
+
+    await this.askQuestion('\n按回车键继续...');
+  }
+
+  /**
+   * 使用规则评估引擎进行批量审批
+   */
+  private async batchApproveRulesWithEngine(evaluationEngine: any, manualReviewDir: string): Promise<void> {
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      cliTools.log.info('\n🚀 开始批量评估和审批规则...');
+
+      console.log('\n📋 正在使用规则评估引擎进行智能分类...');
+
+      // 使用评估引擎进行批量评估
+      const batchResult = await evaluationEngine.evaluateBatch(manualReviewDir, {
+        batchSize: 10,
+        concurrency: 3
+      });
+
+      console.log('\n📊 评估结果汇总:');
+      console.log(`✅ 通过审批: ${cliTools.colors.green(batchResult.summary.approved.toString())} 个规则`);
+      console.log(`⚠️ 需要人工审核: ${cliTools.colors.yellow(batchResult.summary.needsReview.toString())} 个规则`);
+      console.log(`❌ 被拒绝: ${cliTools.colors.red(batchResult.summary.rejected.toString())} 个规则`);
+      console.log(`🔄 重复规则: ${cliTools.colors.blue(batchResult.summary.duplicates.toString())} 个规则`);
+
+      console.log('\n📁 文件分布:');
+      const stats = batchResult.classificationStats;
+      if (stats.approved > 0) {
+        console.log(`  🎯 Approved: ${cliTools.colors.green(stats.approved.toString())} 个规则`);
+      }
+      if (stats.duplicates > 0) {
+        console.log(`  🔄 Duplicates: ${cliTools.colors.blue(stats.duplicates.toString())} 个规则`);
+      }
+      if (stats.low_quality > 0) {
+        console.log(`  ⬇️ Low Quality: ${cliTools.colors.red(stats.low_quality.toString())} 个规则`);
+      }
+      if (stats.invalid_format > 0) {
+        console.log(`  ❌ Invalid Format: ${cliTools.colors.red(stats.invalid_format.toString())} 个规则`);
+      }
+
+      console.log('\n🎉 规则评估和审批完成！');
+      console.log(`平均质量分: ${cliTools.colors.yellow(batchResult.summary.averageQualityScore.toFixed(1))}`);
+      console.log(`总处理时间: ${((Date.now() - batchResult.batchInfo.startTime) / 1000).toFixed(2)}秒`);
+
+      // 自动移动文件到对应目录
+      if (batchResult.ruleResults.length > 0) {
+        console.log('\n📁 开始自动分类移动文件...');
+        console.log('='.repeat(50));
+
+        try {
+          const { FileMover } = await import('../../services/rule-evaluation/utils/FileMover.js');
+
+          const moveResults = await FileMover.moveRuleFiles(batchResult.ruleResults, false);
+          const moveReport = FileMover.generateMoveReport(moveResults);
+
+          // 显示移动统计
+          console.log('📊 文件移动统计:');
+          console.log(`  总文件数: ${moveReport.summary.total}`);
+          console.log(`  成功移动: ${cliTools.colors.green(moveReport.summary.successful.toString())}`);
+          console.log(`  移动失败: ${cliTools.colors.red(moveReport.summary.failed.toString())}`);
+          console.log(`  移动到approved: ${moveReport.summary.approved}`);
+          console.log(`  移动到manual_review: ${moveReport.summary.manualReview}`);
+          console.log(`  移动到issues: ${moveReport.summary.issues}`);
+
+          if (moveReport.summary.failed > 0) {
+            console.log('\n❌ 部分文件移动失败:');
+            moveReport.details
+              .filter(detail => !detail.success)
+              .forEach(detail => {
+                console.log(`  ${detail.fileName}: ${detail.error}`);
+              });
+          }
+
+        } catch (moveError) {
+          cliTools.log.error(`❌ 文件移动失败: ${moveError.message}`);
+        }
+      }
+
+    } catch (error) {
+      cliTools.log.error(`❌ 批量审批失败: ${error.message}`);
+    }
+  }
+
+  /**
    * 退出程序
    */
   private async exit(): Promise<void> {
@@ -1610,12 +2059,37 @@ export class MenuCommand {
       return;
     }
 
+    // 分析目录中的文件，确定主要数据库类型
+    let detectedDatabaseType = DatabaseType.UNKNOWN;
+    if (analysisResult.analyses && Array.isArray(analysisResult.analyses)) {
+      const dbTypeCounts: Record<string, number> = {};
+
+      analysisResult.analyses.forEach((fileAnalysis: any) => {
+        if (fileAnalysis.analyses && Array.isArray(fileAnalysis.analyses)) {
+          fileAnalysis.analyses.forEach((sqlAnalysis: any) => {
+            const dbType = sqlAnalysis.databaseType || DatabaseType.UNKNOWN;
+            dbTypeCounts[dbType] = (dbTypeCounts[dbType] || 0) + 1;
+          });
+        }
+      });
+
+      // 选择出现频率最高的数据库类型
+      const maxCount = Math.max(...Object.values(dbTypeCounts));
+      const mostFrequentTypes = Object.entries(dbTypeCounts)
+        .filter(([_, count]) => count === maxCount)
+        .map(([type, _]) => type);
+
+      if (mostFrequentTypes.length > 0) {
+        detectedDatabaseType = mostFrequentTypes[0] as DatabaseType;
+      }
+    }
+
     // 构建保存的数据结构
     const historyData = {
       id: `menu_dir_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
-      databaseType: 'unknown',
-      type: 'directory',
+      databaseType: detectedDatabaseType,
+      type: AnalysisType.DIRECTORY_ANALYSIS,
       input: {
         content: `目录分析: ${dirPath}`,
         path: dirPath,
@@ -1637,8 +2111,10 @@ export class MenuCommand {
       metadata: {
         processingTime: processingTime,
         analyzer: 'enhanced',
-        version: '1.0.0',
-        source: 'menu'
+        version: '2.0.0',
+        source: 'menu',
+        inputMethod: 'directory_analysis',
+        recursive: recursive
       }
     };
 
@@ -1647,57 +2123,143 @@ export class MenuCommand {
   }
 
   /**
-   * 触发规则学习
-   * @param sqlContent SQL内容（可为空，对于目录分析）
-   * @param inputType 输入类型
-   * @param inputPath 输入路径
+   * 从分析结果触发规则学习（使用统一规则学习器）
+   * @param sqlContent SQL内容
+   * @param analysisResult 分析结果
    */
-  private async asyncTriggerRuleLearning(sqlContent: string, inputType: string, inputPath: string): Promise<void> {
+  private async asyncTriggerRuleLearningFromResult(sqlContent: string, analysisResult: any): Promise<void> {
     try {
-      console.log(cliTools.colors.blue('📥 开始导入规则学习模块...'));
 
-      // 动态导入规则生成器
-      const { generateRulesFromHistory } = await import('../../services/rule-learning/rule-generator.js');
+      // 使用统一规则学习器
+      const { getUnifiedRuleLearner } = await import('../../services/rule-learning/unified-rule-learner.js');
+      const learner = getUnifiedRuleLearner();
 
-      console.log(cliTools.colors.blue('🔧 初始化服务...'));
+      const learningResult = await learner.learnFromAnalysis(
+        sqlContent,
+        analysisResult,
+        'unknown', // 数据库类型，可以后续优化
+        'rules/learning-rules/generated'
+      );
 
-      // 初始化服务
-      const historyService = await this.getHistoryService();
-
-      console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
-
-      // 执行规则学习
-      const learningResult = await generateRulesFromHistory(historyService, {
-        maxRules: 10,
-        minConfidence: 0.1 // 降低置信度阈值
-      });
-
-      console.log(cliTools.colors.blue('✅ 规则学习执行完成'));
-
-      // 显示详细的学习结果
-      console.log(cliTools.colors.magenta(`\n🔍 规则学习调试信息:`));
-      console.log(`   处理记录: ${learningResult.processedRecords || 0}`);
-      console.log(`   生成规则: ${learningResult.rules?.length || 0}`);
-
-      if (learningResult.rules && learningResult.rules.length > 0) {
-        console.log(`${cliTools.colors.green('\n✅ 规则学习完成!')}`);
-        console.log(`   生成规则: ${learningResult.rules.length} 条`);
-        console.log(`   处理记录: ${learningResult.processedRecords} 条`);
-
-        console.log(`\n${cliTools.colors.cyan('🆕 本次分析生成的规则:')}`);
-        learningResult.rules.forEach((rule: any, index: number) => {
-          console.log(`   ${index + 1}. ${cliTools.colors.yellow(rule.title || rule.id)} (${cliTools.colors.gray((rule.confidence * 100).toFixed(1) + '%')})`);
-        });
-      } else {
-        console.log(`${cliTools.colors.yellow('\n⚠️ 本次未生成新规则')}`);
-        console.log(`   可能原因：历史记录不足、置信度过低或没有符合要求的分析结果`);
+      // Menu模式下不显示规则学习结果，避免干扰用户界面
+      // 只在CLI模式下显示详细结果
+      if (learningResult.success && learningResult.rules.length > 0) {
+        // 可选：将规则学习结果保存到某个地方，供后续查看
+        console.log(`\n${cliTools.colors.green('✅ 规则学习完成，生成 ' + learningResult.rules.length + ' 条新规则')}`);
       }
 
     } catch (error) {
-      console.log(`${cliTools.colors.red('❌ 规则学习失败:')} ${error.message}`);
+      // 静默处理错误，不干扰用户体验
+      // 可以选择记录到日志文件，但不显示在用户界面
     }
   }
 
+  /**
+   * 从文件分析结果触发规则学习
+   * @param analysisResult 文件分析结果
+   * @param filePath 文件路径
+   */
+  private async asyncTriggerRuleLearningFromFile(analysisResult: any, filePath: string): Promise<void> {
+    try {
+      console.log(cliTools.colors.blue('📥 开始从文件分析结果生成规则...'));
+      console.log(cliTools.colors.blue('🔧 初始化服务...'));
+      console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
+
+      // 使用统一规则学习器
+      const { getUnifiedRuleLearner } = await import('../../services/rule-learning/unified-rule-learner.js');
+      const learner = getUnifiedRuleLearner();
+
+      // 提取所有SQL语句的分析结果
+      const analyses: Array<{ sql: string; analysisResult: any; databaseType?: string }> = [];
+
+      if (analysisResult.analyses && Array.isArray(analysisResult.analyses)) {
+        for (const analysis of analysisResult.analyses) {
+          if (analysis.sql && analysis.result) {
+            analyses.push({
+              sql: analysis.sql,
+              analysisResult: analysis.result,
+              databaseType: analysis.databaseType || 'unknown'
+            });
+          }
+        }
+      }
+
+      if (analyses.length === 0) {
+        console.log(cliTools.colors.yellow('⚠️ 未找到有效的SQL分析结果，跳过规则生成'));
+        return;
+      }
+
+      console.log(cliTools.colors.cyan(`📊 找到 ${analyses.length} 条SQL语句，开始生成规则...`));
+
+      const learningResult = await learner.learnFromMultipleAnalyses(
+        analyses,
+        'rules/learning-rules/generated'
+      );
+
+      // 显示学习结果
+      learner.printResult(learningResult, cliTools.colors);
+
+    } catch (error) {
+      console.log(`${cliTools.colors.red('❌ 文件规则学习失败:')} ${error.message}`);
+    }
+  }
+
+  /**
+   * 从目录分析结果触发规则学习
+   * @param analysisResult 目录分析结果
+   * @param dirPath 目录路径
+   */
+  private async asyncTriggerRuleLearningFromDirectory(analysisResult: any, dirPath: string): Promise<void> {
+    try {
+      console.log(cliTools.colors.blue('📥 开始从目录分析结果生成规则...'));
+      console.log(cliTools.colors.blue('🔧 初始化服务...'));
+      console.log(cliTools.colors.blue('🚀 开始执行规则学习...'));
+
+      // 使用统一规则学习器
+      const { getUnifiedRuleLearner } = await import('../../services/rule-learning/unified-rule-learner.js');
+      const learner = getUnifiedRuleLearner();
+
+      // 提取所有SQL语句的分析结果
+      const analyses: Array<{ sql: string; analysisResult: any; databaseType?: string }> = [];
+
+      // 目录分析结果可能包含多个文件的多个SQL语句
+      if (analysisResult.analyses && Array.isArray(analysisResult.analyses)) {
+        for (const fileAnalysis of analysisResult.analyses) {
+          if (fileAnalysis.analyses && Array.isArray(fileAnalysis.analyses)) {
+            for (const sqlAnalysis of fileAnalysis.analyses) {
+              if (sqlAnalysis.sql && sqlAnalysis.result) {
+                analyses.push({
+                  sql: sqlAnalysis.sql,
+                  analysisResult: sqlAnalysis.result,
+                  databaseType: sqlAnalysis.databaseType || 'unknown'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      if (analyses.length === 0) {
+        console.log(cliTools.colors.yellow('⚠️ 未找到有效的SQL分析结果，跳过规则生成'));
+        return;
+      }
+
+      console.log(cliTools.colors.cyan(`📊 找到 ${analyses.length} 条SQL语句，开始生成规则...`));
+
+      const learningResult = await learner.learnFromMultipleAnalyses(
+        analyses,
+        'rules/learning-rules/generated'
+      );
+
+      // 显示学习结果
+      learner.printResult(learningResult, cliTools.colors);
+
+    } catch (error) {
+      console.log(`${cliTools.colors.red('❌ 目录规则学习失败:')} ${error.message}`);
+    }
+  }
+
+  
   /**
    * 保存分析结果到历史记录
    */
@@ -1733,12 +2295,17 @@ export class MenuCommand {
       }
     });
 
+    // 获取数据库类型（从分析结果中提取）
+    const detectedDatabaseType = realAnalysis.databaseType ||
+                               (realAnalysis.metadata?.databaseType) ||
+                               DatabaseType.UNKNOWN;
+
     // 构建保存的数据结构
     const historyData = {
       id: `menu_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
-      databaseType: 'unknown',
-      type: 'sql',
+      databaseType: detectedDatabaseType,
+      type: AnalysisType.SQL_STATEMENT,
       sql: sql,
       sqlPreview: sql.length > 100 ? sql.substring(0, 100) + '...' : sql,
       result: {
@@ -1761,8 +2328,9 @@ export class MenuCommand {
       metadata: {
         processingTime: processingTime,
         analyzer: 'enhanced',
-        version: '1.0.0',
-        source: 'menu'
+        version: '2.0.0',
+        source: 'menu',
+        inputMethod: 'direct_input' // 标识输入方式
       }
     };
 

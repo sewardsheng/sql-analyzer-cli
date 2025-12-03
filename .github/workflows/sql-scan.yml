@@ -1,0 +1,203 @@
+name: SQL Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  sql-scan:
+    runs-on: ubuntu-latest
+    name: SQL Security Analysis
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm run build
+
+    - name: Find SQL files
+      id: find-sql
+      run: |
+        SQL_FILES=$(find . -type f \( -name "*.sql" -o -name "*.SQL" \) \
+          -not -path "./node_modules/*" \
+          -not -path "./.git/*" \
+          -not -path "./dist/*" \
+          -not -path "./coverage/*" | tr '\n' ' ')
+
+        echo "sql-files=$SQL_FILES" >> $GITHUB_OUTPUT
+
+        if [ -z "$SQL_FILES" ]; then
+          echo "has-sql-files=false" >> $GITHUB_OUTPUT
+          echo "📝 No SQL files found in the repository"
+        else
+          echo "has-sql-files=true" >> $GITHUB_OUTPUT
+          echo "📝 Found SQL files:"
+          echo "$SQL_FILES" | tr ' ' '\n' | sed 's/^/  - /'
+        fi
+
+    - name: Run SQL Security Analysis
+      if: steps.find-sql.outputs.has-sql-files == 'true'
+      run: |
+        echo "🔍 Starting SQL security scan..."
+
+        # 创建输出目录
+        mkdir -p sql-analysis-results
+
+        # 运行分析并生成多种格式报告
+        echo "📊 Running analysis..."
+        node dist/cli/index.js analyze ${{ steps.find-sql.outputs.sql-files }} \
+          --format json \
+          --output sql-analysis-results/scan-results.json
+
+        echo "📋 Generating JUnit report..."
+        node dist/cli/index.js analyze ${{ steps.find-sql.outputs.sql-files }} \
+          --format junit \
+          --output sql-analysis-results/scan-results.xml
+
+        echo "💬 Generating GitHub PR comment..."
+        node dist/cli/index.js analyze ${{ steps.find-sql.outputs.sql-files }} \
+          --format github \
+          --output sql-analysis-results/pr-comment.md
+
+        echo "🎯 Generating SonarQube report..."
+        node dist/cli/index.js analyze ${{ steps.find-sql.outputs.sql-files }} \
+          --format sonar \
+          --output sql-analysis-results/sonar-report.md
+
+        echo "✅ SQL security scan completed"
+
+    - name: Analyze scan results
+      if: steps.find-sql.outputs.has-sql-files == 'true'
+      run: |
+        if [ -f "sql-analysis-results/scan-results.json" ]; then
+          # 解析结果统计
+          CRITICAL_ISSUES=$(node -e "
+            try {
+              const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+              const summary = results.scanInfo || results.summary || {};
+              const critical = summary.issuesBySeverity?.critical || 0;
+              const high = summary.issuesBySeverity?.high || 0;
+              console.log(critical + high);
+            } catch (e) {
+              console.log('0');
+            }
+          ")
+
+          # 显示扫描摘要
+          echo "📊 Scan Summary:"
+          echo "- Critical Issues: $(node -e "
+            try {
+              const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+              const summary = results.scanInfo || results.summary || {};
+              console.log(summary.issuesBySeverity?.critical || 0);
+            } catch (e) { console.log('0'); }
+          ")"
+          echo "- High Issues: $(node -e "
+            try {
+              const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+              const summary = results.scanInfo || results.summary || {};
+              console.log(summary.issuesBySeverity?.high || 0);
+            } catch (e) { console.log('0'); }
+          ")"
+          echo "- Total Files: $(node -e "
+            try {
+              const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+              console.log(results.scanInfo?.totalFiles || 0);
+            } catch (e) { console.log('0'); }
+          ")"
+
+          # 检查是否应该失败
+          if [ "$CRITICAL_ISSUES" -gt 0 ]; then
+            echo "❌ Found $CRITICAL_ISSUES critical/high severity issues!"
+            echo "Please review the scan results and fix the issues."
+            exit 1
+          else
+            echo "✅ No critical or high severity issues found"
+          fi
+        else
+          echo "⚠️ Scan results file not found"
+          exit 1
+        fi
+
+    - name: Upload scan results
+      if: steps.find-sql.outputs.has-sql-files == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: sql-scan-results
+        path: sql-analysis-results/
+        retention-days: 30
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && steps.find-sql.outputs.has-sql-files == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const comment = fs.readFileSync('sql-analysis-results/pr-comment.md', 'utf8');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Failed to create PR comment:', error.message);
+          }
+
+    - name: Generate summary
+      if: always()
+      run: |
+        echo "## SQL Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.find-sql.outputs.has-sql-files }}" == "true" ]; then
+          echo "- **Scan Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files Scanned**: $(node -e "
+            try {
+              const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+              console.log(results.scanInfo?.totalFiles || 'Unknown');
+            } catch (e) { console.log('Unknown'); }
+          ")" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "sql-analysis-results/scan-results.json" ]; then
+            CRITICAL=$(node -e "
+              try {
+                const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+                console.log(results.scanInfo?.issuesBySeverity?.critical || 0);
+              } catch (e) { console.log('0'); }
+            ")
+            HIGH=$(node -e "
+              try {
+                const results = JSON.parse(require('fs').readFileSync('sql-analysis-results/scan-results.json', 'utf8'));
+                console.log(results.scanInfo?.issuesBySeverity?.high || 0);
+              } catch (e) { console.log('0'); }
+            ")
+
+            echo "- **Critical Issues**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- **High Issues**: $HIGH" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📄 [Download detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Scan Status**: ⏭️ Skipped (no SQL files found)" >> $GITHUB_STEP_SUMMARY
+        fi

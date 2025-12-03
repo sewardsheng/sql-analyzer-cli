@@ -48,7 +48,7 @@ export class SmartDuplicateDetector {
    * 构造函数
    */
   constructor() {
-    console.log('🔧 初始化智能去重检测器');
+    // console.log('🔧 初始化智能去重检测器'); // 静默初始化日志
   }
 
   /**
@@ -309,7 +309,7 @@ export class SmartDuplicateDetector {
     return {
       isDuplicate: bestMatch.similarity >= this.config.thresholds.warning,
       similarity: bestMatch.similarity,
-      duplicateType: bestMatch.matchType,
+      duplicateType: bestMatch.matchType === 'content' ? 'semantic' : bestMatch.matchType as 'exact' | 'semantic' | 'structural' | 'none',
       reason: `与规则${bestMatch.ruleId}高度相似 (${bestMatch.matchType})`,
       confidence: Math.min(bestMatch.similarity + 0.1, 1.0),
       matchedRules,
@@ -363,32 +363,50 @@ export class SmartDuplicateDetector {
   }
 
   /**
-   * 扫描规则目录
+   * 扫描规则目录 - 只扫描approved目录中的高质量规则
    */
   private async scanRulesDirectory(directory: string): Promise<void> {
     try {
-      const items = await fs.readdir(directory, { withFileTypes: true });
+      // 只扫描approved子目录中的高质量规则
+      const approvedDir = path.join(directory, 'approved');
 
-      for (const item of items) {
-        const fullPath = path.join(directory, item.name);
+      if (await this.directoryExists(approvedDir)) {
+        const items = await fs.readdir(approvedDir, { withFileTypes: true });
 
-        if (item.isDirectory()) {
-          // 递归扫描子目录
-          await this.scanRulesDirectory(fullPath);
-        } else if (item.isFile() && item.name.endsWith('.md')) {
-          // 加载规则文件
-          const rule = await this.loadRuleFromFile(fullPath);
-          if (rule) {
-            const category = rule.category || 'unknown';
-            if (!this.existingRules.has(category)) {
-              this.existingRules.set(category, []);
+        for (const item of items) {
+          const fullPath = path.join(approvedDir, item.name);
+
+          if (item.isFile() && item.name.endsWith('.md')) {
+            // 加载规则文件
+            const rule = await this.loadRuleFromFile(fullPath);
+            if (rule) {
+              const category = rule.category || 'unknown';
+              if (!this.existingRules.has(category)) {
+                this.existingRules.set(category, []);
+              }
+              this.existingRules.get(category)!.push(rule);
             }
-            this.existingRules.get(category)!.push(rule);
           }
         }
+
+        console.log(`✅ 从approved目录加载了高质量规则`);
+      } else {
+        console.log(`ℹ️ approved目录不存在，跳过去重检测（0条规则）`);
       }
     } catch (error) {
       console.warn(`扫描目录失败 ${directory}:`, error.message);
+    }
+  }
+
+  /**
+   * 检查目录是否存在
+   */
+  private async directoryExists(dirPath: string): Promise<boolean> {
+    try {
+      const stat = await fs.stat(dirPath);
+      return stat.isDirectory();
+    } catch {
+      return false;
     }
   }
 
@@ -449,8 +467,8 @@ export class SmartDuplicateDetector {
    */
   private getCachedResult(key: string): DuplicateResult | null {
     const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-      return cached.result;
+    if (cached && Date.now() - (cached as any).timestamp < this.cacheTimeout) {
+      return (cached as any).result;
     }
 
     if (cached) {
@@ -464,7 +482,7 @@ export class SmartDuplicateDetector {
    * 设置缓存结果
    */
   private setCachedResult(key: string, result: DuplicateResult): void {
-    this.cache.set(key, {
+    (this.cache as Map<string, any>).set(key, {
       result,
       timestamp: Date.now()
     });
@@ -473,7 +491,7 @@ export class SmartDuplicateDetector {
     if (this.cache.size > 1000) {
       const firstKey = this.cache.keys().next().value;
       if (firstKey) {
-        this.cache.delete(firstKey);
+        (this.cache as Map<string, any>).delete(firstKey);
       }
     }
   }
@@ -578,7 +596,7 @@ export class SmartDuplicateDetector {
 
       // 检查各个匹配器状态
       for (const [name, matcherStats] of Object.entries(stats.matchers)) {
-        if (matcherStats.cacheSize > 500) {
+        if ((matcherStats as any).cacheSize > 500) {
           issues++;
         }
       }

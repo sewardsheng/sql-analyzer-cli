@@ -64,7 +64,7 @@ export class ExactMatcher {
     if (config) {
       this.mergeConfig(config);
     }
-    console.log('🎯 初始化精确匹配器');
+    // console.log('🎯 初始化精确匹配器'); // 静默初始化日志
   }
 
   /**

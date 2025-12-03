@@ -59,7 +59,7 @@ export class ConfigFactory {
       if (userConfig[key] !== undefined) {
         if (typeof userConfig[key] === 'object' && userConfig[key] !== null && !Array.isArray(userConfig[key])) {
           // 深度合并对象
-          result[key] = this.mergeConfig(result[key] || {}, userConfig[key]);
+          result[key] = this.mergeConfig(result[key] || {}, userConfig[key]) as T[Extract<keyof T, string>];
         } else {
           result[key] = userConfig[key] as T[Extract<keyof T, string>];
         }
@@ -77,7 +77,10 @@ export class ConfigFactory {
       learn: true,
       service: {
         enableCaching: false,
-        maxConcurrency: 1
+        enableKnowledgeBase: false,
+        maxConcurrency: 1,
+        cacheSize: 1000,
+        timeout: 30000
       }
     });
   }

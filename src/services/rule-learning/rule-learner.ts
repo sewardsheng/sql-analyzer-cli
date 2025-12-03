@@ -12,8 +12,7 @@ import { RuleGenerator } from './rule-generator.js';
 import { QualityEvaluator } from './quality-evaluator.js';
 import { AutoApprover } from './auto-approver.js';
 import { IntegratedRuleProcessor } from './rule-processor.js';
-import { getPerformanceMonitor } from './performance-monitor.js';
-import { smartThresholdAdjuster } from './threshold-adjuster.js';
+import { getRuleLearningOptimizer } from './rule-optimizer.js';
 import config from '../../config/index.js';
 
 /**
@@ -27,8 +26,7 @@ private ruleGenerator: any;
 private qualityEvaluator: any;
 private autoApprover: any;
 private integratedProcessor: any;
-private performanceMonitor: any;
-private thresholdAdjuster: any;
+private optimizer: any;
 private config: {
 enabled: boolean;
 autoApproveThreshold: number;
@@ -48,8 +46,7 @@ this.ruleGenerator = new RuleGenerator(llmService);
 this.qualityEvaluator = new QualityEvaluator(llmService);
 this.autoApprover = new AutoApprover();
 this.integratedProcessor = new IntegratedRuleProcessor(llmService);
-this.performanceMonitor = getPerformanceMonitor();
-this.thresholdAdjuster = smartThresholdAdjuster;
+this.optimizer = getRuleLearningOptimizer();
 
 // 配置参数 - 使用全局配置
 const ruleLearningConfig = config.getRuleLearningConfig();
@@ -103,15 +100,14 @@ return { success: false, reason: '未生成有效规则' };
 // 4. 自动审批高质量规则（先审批，后保存）
 const approvedRules = await this.autoApprover.process(evaluatedRules);
 
-// 5. 记录质量数据并智能调整阈值
-this.thresholdAdjuster.recordQualityData(evaluatedRules, approvedRules);
-const thresholdAdjustment = this.thresholdAdjuster.applyAdjustment(this.config.autoApproveThreshold);
+// 5. 记录质量数据并智能调整阈值 - 临时禁用，因为thresholdAdjuster未实现
+// this.thresholdAdjuster.recordQualityData(evaluatedRules, approvedRules);
+// const thresholdAdjustment = this.thresholdAdjuster.applyAdjustment(this.config.autoApproveThreshold);
 
-if (thresholdAdjustment.adjustment !== 0) {
-this.config.autoApproveThreshold = thresholdAdjustment.recommendedThreshold;
-
-
-}
+// if (thresholdAdjustment.adjustment !== 0) {
+//   this.config.autoApproveThreshold = thresholdAdjustment.recommendedThreshold;
+//   console.log(`[RuleLearner] 自动调整阈值: ${this.config.autoApproveThreshold}`);
+// }
 
 // 6. 根据审批结果分别保存到不同目录
 await this.saveRulesByApproval(evaluatedRules, approvedRules, learningContext);

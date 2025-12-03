@@ -3,17 +3,29 @@
  * 老王我把历史记录管理独立出来了！
  */
 
-import { HistoryService } from '../../services/history-service-impl.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
 import { cli as cliTools } from '../../utils/cli/index.js';
 
 /**
  * 历史记录管理命令类
  */
 export class HistoryCommand {
-  private historyService: HistoryService;
+  private historyService: any;
 
   constructor() {
-    this.historyService = new HistoryService();
+    // 使用ServiceContainer统一管理服务
+    this.historyService = null; // 延迟初始化
+  }
+
+  /**
+   * 获取历史服务
+   */
+  private async getHistoryService() {
+    if (!this.historyService) {
+      const serviceContainer = ServiceContainer.getInstance();
+      this.historyService = await serviceContainer.getHistoryService();
+    }
+    return this.historyService;
   }
 
   /**
@@ -51,7 +63,8 @@ export class HistoryCommand {
   private async listHistory(options: any): Promise<void> {
     cliTools.log.info('📋 获取历史记录...');
 
-    const history = await this.historyService.getAllHistory({
+    const historyService = await this.getHistoryService();
+    const history = await historyService.getAllHistory({
       limit: options.limit || 20,
       offset: options.offset || 0
     });
@@ -90,7 +103,8 @@ export class HistoryCommand {
 
     cliTools.log.info(`🔍 获取历史记录详情: ${cliTools.colors.cyan(id)}`);
 
-    const record = await this.historyService.getHistoryById(id);
+    const historyService = await this.getHistoryService();
+    const record = await historyService.getHistoryById(id);
 
     if (!record) {
       console.log(cliTools.colors.red(`❌ 未找到ID为 ${id} 的历史记录`));
@@ -134,7 +148,8 @@ export class HistoryCommand {
 
     cliTools.log.info(`🔍 搜索历史记录: ${cliTools.colors.cyan(query)}`);
 
-    const results = await this.historyService.searchHistory(query, {
+    const historyService = await this.getHistoryService();
+    const results = await historyService.searchHistory(query, {
       limit: 10
     });
 
@@ -162,7 +177,8 @@ export class HistoryCommand {
     // 模拟用户确认（在实际应用中可以添加交互式确认）
     console.log(cliTools.colors.yellow('⚠️  这将删除所有历史记录，此操作不可恢复！'));
 
-    await this.historyService.clearHistory();
+    const historyService = await this.getHistoryService();
+    await historyService.clearHistory();
     console.log(cliTools.colors.green('✅ 历史记录已清空'));
   }
 

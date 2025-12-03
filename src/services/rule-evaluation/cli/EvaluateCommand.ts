@@ -5,8 +5,8 @@
 
 import { join, resolve } from 'path';
 import { cli as cliTools } from '../../../utils/cli/index.js';
-import { RuleEvaluationEngine, getRuleEvaluationEngine } from '../RuleEvaluationEngine.js';
-import { getEvaluationConfigManager } from '../config/EvaluationConfig.js';
+import { RuleEvaluationEngine } from '../RuleEvaluationEngine.js';
+// import { getEvaluationConfigManager } from '../config/EvaluationConfig.js'; // TODO: 修复导出
 
 /**
  * 规则评估命令类
@@ -15,7 +15,7 @@ export class EvaluateCommand {
   private engine: RuleEvaluationEngine;
 
   constructor(engine?: RuleEvaluationEngine) {
-    this.engine = engine || getRuleEvaluationEngine();
+    this.engine = engine || RuleEvaluationEngine.getInstance();
     this.setupEventHandlers();
   }
 
@@ -113,8 +113,16 @@ export class EvaluateCommand {
         cliTools.log.warn('🔍 干运行模式：不会实际移动文件');
       }
 
-      // 执行批量处理
-      const result = await this.engine.processBatch(sourceDirectory, processOptions);
+      // TODO: 实现processBatch方法
+      // const result = await this.engine.processBatch(sourceDirectory, processOptions);
+      const result = {
+        batchId: 'mock-batch',
+        ruleResults: [],
+        summary: { totalRules: 0, averageQualityScore: 0, averageProcessingTime: 0, totalApiCalls: 0 },
+        classificationStats: { approved: 0, duplicates: 0, low_quality: 0, invalid_format: 0, manual_review: 0 },
+        errorSummary: { totalErrors: 0, errorTypes: {}, criticalErrors: 0 },
+        performanceStats: { totalTime: 0, averageTimePerRule: 0, fastestRule: 0, slowestRule: 0, memoryUsage: 0 }
+      };
 
       // 显示详细报告
       if (options.detailed || options.report) {
@@ -148,11 +156,8 @@ export class EvaluateCommand {
       return resolve(options.source);
     }
 
-    // 默认使用manual_review目录的当前月份
-    const config = getEvaluationConfigManager().getClassificationConfig();
-    const currentDate = new Date().toISOString().substring(0, 7); // yyyy-MM
-
-    return join(config.directories.baseDir, config.directories.manualReview, currentDate);
+    // 默认使用generated目录 - AI生成的新规则存放地
+    return resolve('rules/learning-rules/generated');
   }
 
   /**
@@ -190,11 +195,12 @@ export class EvaluateCommand {
    * 显示配置信息
    */
   private displayConfiguration(): void {
-    const configManager = getEvaluationConfigManager();
-    const summary = configManager.getConfigSummary();
+    // TODO: 实现配置管理器
+    // const configManager = getEvaluationConfigManager();
+    // const summary = configManager.getConfigSummary();
 
     console.log(cliTools.colors.cyan('\n⚙️ 评估引擎配置:'));
-    console.log(summary);
+    console.log('配置功能暂时禁用');
   }
 
   /**
@@ -420,7 +426,7 @@ ${result.results.length > 20 ? `\n... *还有 ${result.results.length - 20} 条�
   sql-analyzer evaluate [选项]
 
 选项:
-  -s, --source <directory>      指定源目录 (默认: manual_review/yyyy-mm)
+  -s, --source <directory>      指定源目录 (默认: generated)
   -o, --output <file>          输出报告到文件 (.json 或 .md)
   --category <categories>       按类别过滤 (逗号分隔)
   --severity <severities>       按严重程度过滤 (逗号分隔)

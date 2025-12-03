@@ -7,9 +7,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { getLLMService } from '../../core/llm-service.js';
+import { llmJsonParser } from '../../core/llm-json-parser.js';
 import { buildPrompt } from '../../utils/format/prompt-loader.js';
 import { checkRuleDuplicate } from './rule-duplicate-detector.js';
-import { llmJsonParser } from '../../core/llm-json-parser.js';
 import { info, error, warn } from '../../utils/logger.js';
 import { LogCategory } from '../../utils/logger.js';
 
@@ -73,7 +73,7 @@ export class RuleGenerator {
   private metrics: GenerationMetrics;
   private outputDir: string;
 
-  constructor(llmService: any, outputDir: string = 'rules/learning-rules/manual_review') {
+  constructor(llmService: any, outputDir: string = 'rules/learning-rules/generated') {
     this.llmService = llmService;
     this.metrics = {
       totalGenerated: 0,
@@ -94,31 +94,12 @@ export class RuleGenerator {
     const startTime = Date.now();
 
     try {
-      info(LogCategory.RULE_LEARNING, '开始生成规则', {
-        sql: testCase.sql.substring(0, 100),
-        databaseType: testCase.databaseType
-      });
-
-      // 调试信息：打印分析结果结构
-      console.log('=== 调试：分析结果结构 ===');
-      console.log('testCase.analysisResult keys:', Object.keys(testCase.analysisResult));
-      if (testCase.analysisResult.performance) {
-        console.log('performance keys:', Object.keys(testCase.analysisResult.performance));
-      }
-      if (testCase.analysisResult.security) {
-        console.log('security keys:', Object.keys(testCase.analysisResult.security));
-      }
-      if (testCase.analysisResult.standards) {
-        console.log('standards keys:', Object.keys(testCase.analysisResult.standards));
-      }
-
+      
+      
       // 1. 分析测试用例，识别可学习的模式
       const learningPatterns = await this.analyzeTestPatterns(testCase);
 
-      console.log('=== 调试：学习模式数量 ===');
-      console.log('learningPatterns length:', learningPatterns.length);
-      if (learningPatterns.length > 0) {
-        console.log('first pattern:', learningPatterns[0]);
+            if (learningPatterns.length > 0) {
       }
 
       if (learningPatterns.length === 0) {
@@ -192,32 +173,20 @@ export class RuleGenerator {
       sqlLocation: string;
     }> = [];
 
-    console.log('=== 调试：analyzeTestPatterns 开始 ===');
-    console.log('testCase.analysisResult 类型:', typeof testCase.analysisResult);
-    console.log('testCase.analysisResult 是否为数组:', Array.isArray(testCase.analysisResult));
-
     // 使用现有的LLM JSON解析器提取问题
     try {
       // 使用ES模块导入
       const { llmJsonParser } = await import('../../core/llm-json-parser.js');
 
-      console.log('=== 调试：开始解析 analysisResult ===');
-
       // 如果 analysisResult 是数组，取第一个元素
       let analysisData = testCase.analysisResult;
       if (Array.isArray(analysisData) && analysisData.length > 0) {
         analysisData = analysisData[0];
-        console.log('检测到数组格式，取第一个元素');
-      }
-
-      console.log('analysisData keys:', Object.keys(analysisData || {}));
+        }
 
       // 从各个维度中提取问题
       ['performance', 'security', 'standards'].forEach(dimension => {
-        console.log(`=== 调试：处理 ${dimension} 维度 ===`);
-
         let dimensionData = analysisData[dimension];
-        console.log(`${dimension} 原始数据类型:`, typeof dimensionData);
 
         if (!dimensionData) {
           console.log(`${dimension} 维度数据为空，跳过`);
@@ -273,6 +242,66 @@ export class RuleGenerator {
           }
         }
 
+        // 如果维度数据直接包含 issues，直接使用（优先级最高）
+        if (dimensionData.issues && Array.isArray(dimensionData.issues)) {
+          for (const issue of dimensionData.issues) {
+            patterns.push({
+              type: issue.title || issue.type || `${dimension}_issue`,
+              severity: issue.severity || 'medium',
+              description: issue.description || issue.summary || '',
+              category: dimension,
+              sqlLocation: issue.location || ''
+            });
+          }
+        }
+        // 如果 rawResponse 存在，尝试从中解析JSON
+        else if (dimensionData.rawResponse) {
+          console.log(`尝试从 ${dimension}.rawResponse 解析JSON`);
+          console.log(`${dimension}.rawResponse 长度:`, dimensionData.rawResponse.length);
+          console.log(`${dimension}.rawResponse 开头:`, dimensionData.rawResponse.substring(0, 200));
+
+          let extractedData = null;
+          try {
+            extractedData = llmJsonParser.extractJsonFromMarkdown(dimensionData.rawResponse);
+            console.log(`${dimension}.rawResponse 解析结果:`, extractedData ? '成功' : '失败');
+          } catch (parseError) {
+            console.error(`${dimension}.rawResponse 解析异常:`, parseError.message);
+          }
+
+          if (extractedData) {
+            console.log(`${dimension} 解析出的键:`, Object.keys(extractedData));
+            console.log(`${dimension} 是否有issues:`, !!extractedData.issues, Array.isArray(extractedData.issues) ? extractedData.issues.length : 'not array');
+          } else {
+            // 尝试直接解析原始字符串为JSON
+            try {
+              extractedData = JSON.parse(dimensionData.rawResponse);
+              console.log(`${dimension}.rawResponse 直接JSON解析成功`);
+              console.log(`${dimension} 直接解析出的键:`, Object.keys(extractedData || {}));
+              console.log(`${dimension} 直接解析是否有issues:`, !!(extractedData && extractedData.issues), Array.isArray(extractedData?.issues) ? extractedData.issues.length : 'not array');
+            } catch (directParseError) {
+              console.error(`${dimension}.rawResponse 直接JSON解析也失败:`, directParseError.message);
+            }
+          }
+
+          if (extractedData && extractedData.issues && Array.isArray(extractedData.issues)) {
+            console.log(`${dimension} 从 rawResponse 中提取到 ${extractedData.issues.length} 个问题`);
+            for (const issue of extractedData.issues) {
+              patterns.push({
+                type: issue.title || issue.type || `${dimension}_issue`,
+                severity: issue.severity || 'medium',
+                description: issue.description || issue.summary || '',
+                category: dimension,
+                sqlLocation: issue.location || ''
+              });
+            }
+          } else {
+            console.log(`${dimension}.rawResponse 中未找到有效的 issues 数组`);
+            // 添加调试信息
+            if (extractedData) {
+              console.log(`${dimension} 提取到的数据结构:`, JSON.stringify(extractedData, null, 2).substring(0, 500));
+            }
+          }
+        }
         // 如果 rawResponse 没找到，尝试从 summary 中解析
         else if (dimensionData.summary && typeof dimensionData.summary === 'string') {
           console.log(`尝试从 ${dimension}.summary 解析JSON`);
@@ -294,23 +323,9 @@ export class RuleGenerator {
             console.log(`${dimension}.summary 中未找到有效的 issues 数组`);
           }
         }
-
-        // 如果维度数据直接包含 issues，直接使用
-        else if (dimensionData.issues && Array.isArray(dimensionData.issues)) {
-          console.log(`${dimension} 直接包含 ${dimensionData.issues.length} 个问题`);
-          for (const issue of dimensionData.issues) {
-            patterns.push({
-              type: issue.title || issue.type || `${dimension}_issue`,
-              severity: issue.severity || 'medium',
-              description: issue.description || issue.summary || '',
-              category: dimension,
-              sqlLocation: issue.location || ''
-            });
-          }
-        }
-
+        
         // 如果维度数据本身是字符串，尝试直接解析
-        else if (typeof dimensionData === 'string') {
+        if (typeof dimensionData === 'string') {
           console.log(`${dimension} 是字符串，尝试直接解析JSON`);
           try {
             const parsedData = JSON.parse(dimensionData);
@@ -338,8 +353,6 @@ export class RuleGenerator {
       console.error('LLM JSON解析器导入或使用失败:', e.message);
     }
 
-    console.log('=== 调试：analyzeTestPatterns 结束 ===');
-    console.log('最终提取的 patterns 数量:', patterns.length);
 
     return patterns;
   }
@@ -352,18 +365,11 @@ export class RuleGenerator {
       // 构建规则生成提示词
       const prompt = this.buildRuleGenerationPrompt(testCase, pattern);
 
-      console.log(`=== 调试：为模式 "${pattern.type}" 生成规则 ===`);
-      console.log('LLM服务类型:', typeof this.llmService);
-      console.log('LLM服务方法:', this.llmService ? Object.keys(this.llmService) : 'null');
-      console.log('call方法存在:', this.llmService && typeof this.llmService.call === 'function');
 
       // 调用LLM生成规则
       let response = null;
       try {
-        console.log('准备调用LLM服务...');
         const llmResult = await this.llmService.call(prompt);
-        console.log('LLM调用成功:', llmResult.success);
-        console.log('LLM响应长度:', llmResult.content ? llmResult.content.length : 0);
 
         if (llmResult.success && llmResult.content) {
           response = llmResult.content;
@@ -377,45 +383,18 @@ export class RuleGenerator {
         throw llmError;
       }
 
-      // 解析响应 - 使用更安全的方式
+      // 解析响应 - 使用统一的llmJsonParser
       let ruleData = null;
       try {
-        console.log('开始解析LLM响应...');
-        console.log('LLM响应开头:', response.substring(0, 500));
-        console.log('LLM响应长度:', response.length);
-
-        // 先尝试直接JSON解析
-        try {
-          ruleData = JSON.parse(response);
-          console.log('直接JSON解析成功');
-        } catch (directParseError) {
-          console.log('直接JSON解析失败，尝试提取JSON:', directParseError.message);
-
-          // 如果直接解析失败，尝试从markdown中提取
-          const jsonMatch = response.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-          if (jsonMatch) {
-            console.log('找到markdown JSON块，长度:', jsonMatch[1].length);
-            console.log('JSON块开头:', jsonMatch[1].substring(0, 200));
-            ruleData = JSON.parse(jsonMatch[1]);
-            console.log('Markdown JSON提取成功');
-          } else {
-            // 尝试匹配任何JSON对象
-            const simpleJsonMatch = response.match(/\{[\s\S]*\}/);
-            if (simpleJsonMatch) {
-              console.log('找到简单JSON块，长度:', simpleJsonMatch[0].length);
-              ruleData = JSON.parse(simpleJsonMatch[0]);
-              console.log('简单JSON匹配成功');
-            }
-          }
-        }
+        // 使用统一的JSON解析器，直接从markdown中提取
+        ruleData = llmJsonParser.extractJsonFromMarkdown(response);
 
         if (!ruleData) {
-          console.warn('所有JSON解析方法都失败了');
+          console.warn('Markdown JSON提取失败，返回null');
           return null;
         }
 
-        console.log('最终解析的数据类型:', typeof ruleData);
-        console.log('解析的数据键:', Object.keys(ruleData || {}));
+        console.log('JSON提取成功，数据键:', Object.keys(ruleData || {}));
 
       } catch (parseError) {
         console.error('规则数据解析失败:', parseError.message);
@@ -869,7 +848,7 @@ export async function generateRulesFromHistory(
     }));
 
     // 批量生成规则
-    const rules = await batchGenerateRules(testCases, 'rules/learning-rules/manual_review');
+    const rules = await batchGenerateRules(testCases, 'rules/learning-rules/generated');
 
     return {
       length: rules.length,

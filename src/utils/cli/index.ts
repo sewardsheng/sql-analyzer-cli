@@ -160,31 +160,49 @@ export const prompt = {
 }
 
 /**
- * 命令执行工具 - 暂时简化实现
+ * 命令执行工具 - 安全实现，防止shell注入
  */
 export const exec = {
   /**
-   * 安全执行命令 - 暂时使用Node.js child_process
+   * 安全执行命令 - 使用数组参数避免shell注入
    */
   run: async (command: string, args?: string[]) => {
-    const { exec: cpExec } = await import('child_process')
+    const { spawn } = await import('child_process')
     return new Promise((resolve: any) => {
-      const cmd = args ? `${command} ${args.join(' ')}` : command
-      cpExec(cmd, (error: any, stdout: string, stderr: string) => {
-        if (error) {
-          resolve({
-            success: false,
-            stdout: stdout || '',
-            stderr: stderr || error.message,
-            error: error.message
-          })
-        } else {
-          resolve({
-            success: true,
-            stdout: stdout || '',
-            stderr: stderr || ''
-          })
-        }
+      // 使用spawn数组参数，避免shell注入
+      const child = spawn(command, args || [], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: false  // 明确禁用shell，避免安全风险
+      })
+
+      let stdout = ''
+      let stderr = ''
+
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString()
+      })
+
+      child.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString()
+      })
+
+      child.on('close', (code: number) => {
+        resolve({
+          success: code === 0,
+          stdout: stdout,
+          stderr: stderr,
+          code: code
+        })
+      })
+
+      child.on('error', (error: Error) => {
+        resolve({
+          success: false,
+          stdout: stdout,
+          stderr: stderr,
+          error: error.message,
+          code: -1
+        })
       })
     })
   },

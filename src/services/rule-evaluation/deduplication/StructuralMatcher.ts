@@ -127,7 +127,7 @@ export class StructuralMatcher {
       this.mergeConfig(config);
     }
     this.initializeWeights();
-    console.log('🏗️ 初始化结构匹配器');
+    // console.log('🏗️ 初始化结构匹配器'); // 静默初始化日志
   }
 
   /**

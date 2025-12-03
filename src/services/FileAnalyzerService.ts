@@ -5,7 +5,7 @@
 
 import fs from 'fs/promises';
 import { resolve, join, dirname, extname, basename, isAbsolute } from 'pathe';
-import { SQLAnalyzer } from '../core/SQLAnalyzer.js';
+import { ServiceContainer } from './factories/ServiceContainer.js';
 import { logError } from '../utils/logger.js';
 
 // 分析选项接口
@@ -42,12 +42,9 @@ export class FileAnalyzerService {
       ...options
     };
 
-    // 初始化SQL分析器
-    this.analyzer = new SQLAnalyzer({
-      enableCaching: this.options.enableCache,
-      enableKnowledgeBase: this.options.enableKnowledgeBase,
-      maxConcurrency: 3
-    });
+    // 使用ServiceContainer获取SQL分析器
+    const serviceContainer = ServiceContainer.getInstance();
+    this.analyzer = serviceContainer.getSQLAnalyzer();
 
     // 支持的文件扩展名
     this.supportedExtensions = ['.sql', '.SQL'];

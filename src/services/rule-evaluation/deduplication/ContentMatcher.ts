@@ -133,7 +133,7 @@ export class ContentMatcher {
       this.mergeConfig(config);
     }
     this.initializeDictionaries();
-    console.log('📝 初始化内容特征匹配器');
+    // console.log('📝 初始化内容特征匹配器'); // 静默初始化日志
   }
 
   /**

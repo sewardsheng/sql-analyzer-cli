@@ -110,3 +110,7 @@ out/
 
 # Debug
 .debug/
+
+# Evaluation reports
+evaluation-report*.json
+*-move-report.json

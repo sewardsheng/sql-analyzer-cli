@@ -11,6 +11,10 @@ import { dirname } from 'path';
 import { createValidationError } from '../../utils/api/api-error.js';
 import { formatSuccessResponse, formatErrorResponse } from '../../utils/api/response-formatter.js';
 import { config } from '../../config/index.js';
+import { ServiceContainer } from '../../services/factories/ServiceContainer.js';
+
+// 使用ServiceContainer统一管理服务
+const serviceContainer = ServiceContainer.getInstance();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,9 +30,7 @@ export function registerSystemRoutes(app) {
 */
 app.get('/health', async (c: any) => {
 try {
-const HealthServiceModule = await import('../../services/health-service.js');
-const HealthService = HealthServiceModule.default;
-const healthService = new HealthService();
+const healthService = serviceContainer.getHealthService();
 const results = await healthService.performAllChecks();
 const report = healthService.generateReport(results);
 
@@ -72,9 +74,7 @@ uptime: process.uptime()
 app.get('/health/check/:type', async (c: any) => {
 try {
 const { type } = c.req.param();
-const HealthServiceModule = await import('../../services/health-service.js');
-const HealthService = HealthServiceModule.default;
-const healthService = new HealthService();
+const healthService = serviceContainer.getHealthService();
 
 // 验证检查类型
 const validChecks = [
@@ -135,7 +135,8 @@ const configData = config.getAll();
 let knowledgeBaseStatus: { enabled: boolean; initialized: boolean; rulesCount: number; error?: string } = { enabled: false, initialized: false, rulesCount: 0 };
 if ( (config as any).knowledgeBase?.enabled) {
 try {
-const { knowledgeService } = await import('../../services/knowledge-service.js');
+const { KnowledgeService } = await import('../../services/knowledge-service.js');
+const knowledgeService = new KnowledgeService();
 knowledgeBaseStatus = await knowledgeService.getStatus();
 } catch (error: any) {
 knowledgeBaseStatus.error = error.message;
@@ -152,7 +153,7 @@ dateRange: { start: '', end: '' },
 averageDuration: 0
 };
 try {
-const { getHistoryService } = await import('../../services/history-service.js');
+const { getHistoryService } = await import('../../services/history-service-impl.js');
 const historyService = await getHistoryService();
 const result = await historyService.getHistoryStats();
 historyStats = {

@@ -75,6 +75,11 @@ if (manualReviewRules.length > 0) {
 await this.moveToManualReview(manualReviewRules);
 }
 
+// 移动被拒绝的规则到issues目录（如果存在）
+if (rejectedRules.length > 0) {
+await this.moveToIssues(rejectedRules);
+}
+
 // 更新统计
 this.updateStats(evaluatedRules.length, finalApproved.length, manualReviewRules.length, rejectedRules.length);
 
@@ -642,6 +647,122 @@ manualReview: 0,
 rejected: 0
 };
 
+}
+
+/**
+* 移动被拒绝的规则到issues目录
+* @param {Array} rules - 被拒绝的规则数组
+* @returns {Promise<void>}
+*/
+async moveToIssues(rules) {
+try {
+const issuesDir = path.join(process.cwd(), 'rules', 'learning-rules', 'issues');
+const monthDir = path.join(issuesDir, new Date().toISOString().substring(0, 7));
+
+// 确保目录存在
+await fs.mkdir(monthDir, { recursive: true });
+
+for (const rule of rules) {
+try {
+const fileName = this.generateRuleFileName(rule);
+const filePath = path.join(monthDir, fileName);
+
+// 构建被拒绝规则的文件内容
+const content = this.buildRejectedRuleContent(rule);
+
+// 写入文件
+await fs.writeFile(filePath, content, 'utf8');
+
+console.log(`[AutoApprover] 被拒绝规则已移动到issues: ${rule.title}`);
+
+} catch (error) {
+console.error(`[AutoApprover] 移动到issues失败 ${rule.title}: ${error.message}`);
+}
+}
+
+} catch (error) {
+console.error(`[AutoApprover] 移动到issues目录失败: ${error.message}`);
+}
+}
+
+/**
+* 构建被拒绝规则的文件内容
+* @param {Object} rule - 被拒绝的规则对象
+* @returns {string} 文件内容
+*/
+buildRejectedRuleContent(rule) {
+const content = `# ${rule.title}
+
+**自动拒绝时间**: ${new Date().toISOString()}
+**规则类别**: ${rule.category}
+**规则类型**: ${rule.type}
+**严重程度**: ${rule.severity}
+**置信度**: ${rule.confidence}
+**拒绝原因**: ${rule.rejectionReason || '质量不满足要求'}
+
+## 规则描述
+
+${rule.description || '无描述'}
+
+## 触发条件
+
+${rule.pattern || '无触发条件'}
+
+## 拒绝理由
+
+${this.generateRejectionReasons(rule)}
+
+## 质量评估结果
+
+${rule.evaluation ? JSON.stringify(rule.evaluation, null, 2) : '无评估结果'}
+
+---
+
+*此规则被自动审批系统拒绝，需要重新评估或修正*
+
+`;
+
+return content;
+}
+
+/**
+* 生成拒绝理由
+* @param {Object} rule - 规则对象
+* @returns {string} 拒绝理由
+*/
+generateRejectionReasons(rule) {
+const reasons = [];
+
+if (rule.evaluation) {
+const evaluation = rule.evaluation;
+
+if (!evaluation.shouldKeep) {
+reasons.push('- 评估结果不建议保留该规则');
+}
+
+if (evaluation.qualityScore < 70) {
+reasons.push(`- 质量分数过低 (${evaluation.qualityScore}/100)`);
+}
+
+if (evaluation.basicValidation?.issues?.length > 2) {
+reasons.push(`- 基础验证问题过多 (${evaluation.basicValidation.issues.length}个问题)`);
+}
+
+if (evaluation.llmEvaluation?.issues?.length > 0) {
+reasons.push('- LLM评估发现多个问题');
+reasons.push(...evaluation.llmEvaluation.issues.map(issue => `- ${issue}`));
+}
+}
+
+if (rule.confidence < 0.7) {
+reasons.push(`- 置信度过低 (${rule.confidence})`);
+}
+
+if (rule.category === 'security' && rule.severity !== 'critical' && rule.severity !== 'high') {
+reasons.push('- 安全规则严重程度不足');
+}
+
+return reasons.length > 0 ? reasons.join('\n') : '规则质量不满足审批要求';
 }
 
 /**

@@ -1,13 +1,42 @@
 /**
  * 端口管理工具
  * 自动检测端口占用并寻找可用端口
+ * 使用安全的spawn方式，避免shell注入
  */
 
 import { createServer } from 'net';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 
-const execAsync = promisify(exec);
+/**
+ * 安全执行系统命令，避免shell注入
+ */
+async function safeExec(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false  // 明确禁用shell，避免安全风险
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr?.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on('close', (code: number) => {
+      resolve({ stdout, stderr });
+    });
+
+    child.on('error', (error: Error) => {
+      resolve({ stdout: '', stderr: error.message });
+    });
+  });
+}
 
 /**
  * 检查端口是否被占用
@@ -16,15 +45,35 @@ const execAsync = promisify(exec);
  */
 export async function isPortOccupied(port: number): Promise<boolean> {
   try {
-    // 使用系统命令检查端口占用
-    const command = process.platform === 'win32'
-      ? `netstat -ano | findstr :${port}`
-      : `lsof -i :${port} || netstat -tlnp | grep :${port}`;
+    let result: { stdout: string; stderr: string };
 
-    const { stdout } = await execAsync(command);
+    if (process.platform === 'win32') {
+      // Windows: 使用netstat + findstr组合
+      const netstatResult = await safeExec('netstat', ['-ano']);
+      const findstrResult = await safeExec('findstr', [`:${port}`]);
+
+      result = {
+        stdout: netstatResult.stdout.split('\n')
+          .filter(line => line.includes(`:${port}`))
+          .join('\n'),
+        stderr: netstatResult.stderr + findstrResult.stderr
+      };
+    } else {
+      // Unix/Linux/macOS: 优先使用lsof，备选netstat
+      try {
+        result = await safeExec('lsof', ['-i', `:${port}`]);
+      } catch {
+        result = await safeExec('netstat', ['-tlnp']);
+        // 过滤特定端口的行
+        result.stdout = result.stdout.split('\n')
+          .filter(line => line.includes(`:${port}`))
+          .join('\n');
+      }
+    }
 
     // 如果输出包含端口号且包含LISTEN或LISTENING，则认为端口被占用
-    return stdout.includes(`${port}`) && (stdout.includes('LISTEN') || stdout.includes('LISTENING'));
+    return result.stdout.includes(`${port}`) &&
+           (result.stdout.includes('LISTEN') || result.stdout.includes('LISTENING'));
 
   } catch (error) {
     // 命令执行失败，认为端口未被占用

@@ -129,7 +129,7 @@ export interface ClassificationResult {
   targetPath: string;
 
   /** 分类类别 */
-  category: 'approved' | 'duplicate' | 'low_quality' | 'invalid_format';
+  category: 'approved' | 'duplicate' | 'low_quality' | 'invalid_format' | 'manual_review';
 
   /** 分类原因 */
   reason: string;
@@ -177,11 +177,11 @@ export interface EvaluationResult {
   classification: ClassificationResult;
 
   /** 总体评估状态 */
-  overallStatus: 'approved' | 'rejected' | 'needs_review';
+  overallStatus: 'approved' | 'rejected' | 'needs_review' | 'manual_review';
 
   /** 处理动作 */
   recommendedAction: {
-    action: 'move_to_approved' | 'move_to_issues' | 'manual_review' | 'discard';
+    action: 'move_to_approved' | 'move_to_issues' | 'move_to_manual_review' | 'manual_review' | 'discard';
     targetDirectory: string;
     priority: 'high' | 'medium' | 'low';
     estimatedEffort: number; // 分钟
@@ -248,6 +248,7 @@ export interface BatchEvaluationResult {
     duplicates: number;
     low_quality: number;
     invalid_format: number;
+    manual_review: number;
   };
 
   /** 错误汇总 */
